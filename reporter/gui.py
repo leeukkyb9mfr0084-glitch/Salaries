@@ -111,9 +111,6 @@ class App(customtkinter.CTk):
         self.populate_member_dropdown() # Populate dropdown for group membership form
         self.populate_plan_dropdown()   # Populate dropdown for group membership form
 
-        # State variables for tracking selected member
-        self.selected_member_id = None # Stores the ID of the currently selected member
-        self.selected_member_label_widget = None # Stores the label widget of the selected member for visual feedback
         self.display_membership_history(None) # Show placeholder message in history view
 
 
