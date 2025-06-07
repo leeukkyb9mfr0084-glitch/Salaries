@@ -50,10 +50,10 @@
 
 ## Phase 4: Finalization
 
-- [ ] **Task 4.1: Code Cleanup and Final Polish.**
+- [x] **Task 4.1: Code Cleanup and Final Polish.**
     - Review all code for clarity, add comments where necessary.
     - Ensure all forms have robust error handling for incorrect user input.
     - **Testing:** Ensure all tests pass cleanly by running `pytest` on the entire `tests/` directory.
 
-- [ ] **Task 4.2: Create `requirements.txt`.**
+- [x] **Task 4.2: Create `requirements.txt`.**
     - Generate a `requirements.txt` file listing all necessary Python packages (e.g., `customtkinter`, `pandas`, `pytest`).
