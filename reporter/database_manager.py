@@ -2,8 +2,12 @@ import sqlite3
 from datetime import datetime, timedelta
 
 DB_FILE = 'reporter/data/kranos_data.db'
+_TEST_IN_MEMORY_CONNECTION = None # Global for test connection
 
 def get_db_connection():
+    global _TEST_IN_MEMORY_CONNECTION
+    if DB_FILE == ":memory:" and _TEST_IN_MEMORY_CONNECTION:
+        return _TEST_IN_MEMORY_CONNECTION
     """Establishes and returns a connection to the SQLite database."""
     try:
         conn = sqlite3.connect(DB_FILE)
@@ -43,7 +47,7 @@ def add_member_to_db(name: str, phone: str, join_date: str = None) -> bool:
         print(f"Database error while adding member: {e}")
         return False
     finally:
-        if conn:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
 def _update_member_join_date_if_earlier(member_id: int, activity_start_date_str: str, cursor: sqlite3.Cursor):
@@ -98,7 +102,7 @@ def get_all_members() -> list:
         print(f"Database error while fetching members: {e}")
         return []  # Return empty list on error
     finally:
-        if conn:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
 def add_plan(name: str, duration_days: int, is_active: bool = True) -> int | None:
@@ -128,7 +132,7 @@ def add_plan(name: str, duration_days: int, is_active: bool = True) -> int | Non
         print(f"Database error while adding plan: {e}")
         return None
     finally:
-        if conn:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
 def update_plan(plan_id: int, name: str, duration_days: int) -> bool:
@@ -158,7 +162,7 @@ def update_plan(plan_id: int, name: str, duration_days: int) -> bool:
         print(f"Database error while updating plan {plan_id}: {e}")
         return False
     finally:
-        if conn:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
 def set_plan_active_status(plan_id: int, is_active: bool) -> bool:
@@ -184,7 +188,7 @@ def set_plan_active_status(plan_id: int, is_active: bool) -> bool:
         print(f"Database error while setting active status for plan {plan_id}: {e}")
         return False
     finally:
-        if conn:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
 def get_all_plans() -> list:
@@ -206,7 +210,7 @@ def get_all_plans() -> list:
         print(f"Database error while fetching active plans: {e}")
         return []
     finally:
-        if conn:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
 def get_all_plans_with_inactive() -> list:
@@ -229,7 +233,7 @@ def get_all_plans_with_inactive() -> list:
         print(f"Database error while fetching all plans (including inactive): {e}")
         return []
     finally:
-        if conn:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
 def add_group_membership_to_db(member_id: int, plan_id: int, payment_date: str,
@@ -286,7 +290,7 @@ def add_group_membership_to_db(member_id: int, plan_id: int, payment_date: str,
         print(f"Date format error: {ve}")
         return False
     finally:
-        if conn:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
 def get_all_activity_for_member(member_id: int) -> list:
@@ -339,7 +343,7 @@ def get_all_activity_for_member(member_id: int) -> list:
         print(f"Database error while fetching all activity for member {member_id}: {e}")
         return []
     finally:
-        if conn:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
 def get_pending_renewals(target_date_str: str) -> list:
@@ -386,7 +390,7 @@ def get_pending_renewals(target_date_str: str) -> list:
         print(f"Database error while fetching pending renewals: {e}")
         return []
     finally:
-        if conn:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
 def get_finance_report(year: int, month: int) -> float | None:
@@ -444,7 +448,7 @@ def get_finance_report(year: int, month: int) -> float | None:
         print(f"An unexpected error occurred in get_finance_report: {e}")
         return None
     finally:
-        if conn:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
 def get_member_by_phone(phone: str) -> tuple | None:
@@ -459,7 +463,7 @@ def get_member_by_phone(phone: str) -> tuple | None:
         print(f"Database error while fetching member by phone '{phone}': {e}")
         return None
     finally:
-        if conn:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
 def add_member_with_join_date(name: str, phone: str, join_date: str) -> int | None:
@@ -481,7 +485,30 @@ def add_member_with_join_date(name: str, phone: str, join_date: str) -> int | No
         print(f"Database error while adding member '{name}': {e}")
         return None
     finally:
-        if conn:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
+            conn.close()
+
+def get_plan_by_name_and_duration(plan_name: str, duration_months: int) -> tuple | None:
+    """
+    Retrieves a plan by its name and duration in months.
+    Converts duration_months to duration_days (assuming 30 days/month) for the query.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # Convert duration_months to duration_days for query
+        duration_days = duration_months * 30 # Consistent with migrate_data change
+        cursor.execute(
+            "SELECT plan_id, plan_name, duration_days, is_active FROM plans WHERE plan_name = ? AND duration_days = ?",
+            (plan_name, duration_days)
+        )
+        return cursor.fetchone()
+    except sqlite3.Error as e:
+        print(f"Database error while fetching plan '{plan_name}' with duration {duration_months} months: {e}")
+        return None
+    finally:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
 def get_or_create_plan_id(plan_name: str, duration_days: int) -> int | None:
@@ -508,7 +535,30 @@ def get_or_create_plan_id(plan_name: str, duration_days: int) -> int | None:
         print(f"Database error with plan '{plan_name}': {e}")
         return None
     finally:
-        if conn:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
+            conn.close()
+
+def get_group_memberships_by_member_id(member_id: int) -> list:
+    """Retrieves all group memberships for a given member ID."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT membership_id, member_id, plan_id, payment_date, start_date, end_date, amount_paid, payment_method
+            FROM group_memberships
+            WHERE member_id = ?
+            ORDER BY start_date DESC
+            """,
+            (member_id,)
+        )
+        return cursor.fetchall()
+    except sqlite3.Error as e:
+        print(f"Database error while fetching group memberships for member {member_id}: {e}")
+        return []
+    finally:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
 def add_pt_booking(member_id: int, start_date: str, sessions: int, amount_paid: float) -> bool:
@@ -534,7 +584,30 @@ def add_pt_booking(member_id: int, start_date: str, sessions: int, amount_paid: 
         print(f"Database error while adding PT booking for member {member_id}: {e}")
         return False
     finally:
-        if conn:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
+            conn.close()
+
+def get_pt_bookings_by_member_id(member_id: int) -> list:
+    """Retrieves all PT bookings for a given member ID."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT pt_booking_id, member_id, start_date, sessions, amount_paid
+            FROM pt_bookings
+            WHERE member_id = ?
+            ORDER BY start_date DESC
+            """,
+            (member_id,)
+        )
+        return cursor.fetchall()
+    except sqlite3.Error as e:
+        print(f"Database error while fetching PT bookings for member {member_id}: {e}")
+        return []
+    finally:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
 if __name__ == '__main__':
