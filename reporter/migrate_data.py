@@ -3,7 +3,8 @@ import os
 import sqlite3 # Import for specific error types
 
 # Make sure the main database file is initialized
-from reporter.database import create_database, DB_FILE
+from reporter.database import create_database
+from reporter.database_manager import DB_FILE # Corrected import
 
 # Import the necessary functions from the database manager
 from reporter.database_manager import (

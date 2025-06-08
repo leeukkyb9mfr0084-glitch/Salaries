@@ -910,8 +910,8 @@ class App(customtkinter.CTk):
             else:
                 # This typically means the phone number already exists (due to UNIQUE constraint in DB)
                 self.member_status_label.configure(text="Failed to add member. Phone number may already exist.", text_color="red")
-        # Refresh the PT member dropdown as well, in case a new member was intended for PT
-        self.populate_pt_member_dropdown()
+            # Refresh the PT member dropdown as well, in case a new member was intended for PT
+            self.populate_pt_member_dropdown()
         except Exception as e: # Catch any other unexpected errors from the database manager
             self.member_status_label.configure(text=f"An error occurred: {str(e)}", text_color="red")
 
