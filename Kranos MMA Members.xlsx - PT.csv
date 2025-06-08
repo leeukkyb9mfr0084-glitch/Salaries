@@ -1,0 +1,5 @@
+Client Name,Phone,Start Date,Session Count,Amount Paid
+Test User PT1,1231231230,01/01/24,10,"₹3,000"
+Test User 2,0987654321,10/03/2024,5,"₹1,500"
+Test User PT3,3213213210,05/04/2025,12,"₹3,600"
+Error User PT Date,4324324320,32/01/2024,10,"₹3,000"
