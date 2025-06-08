@@ -26,7 +26,8 @@ def create_database(db_name: str):
         CREATE TABLE IF NOT EXISTS plans (
             plan_id INTEGER PRIMARY KEY AUTOINCREMENT,
             plan_name TEXT NOT NULL UNIQUE,
-            duration_days INTEGER NOT NULL
+            duration_days INTEGER NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE
         );
         """)
 
@@ -75,14 +76,14 @@ def seed_initial_plans(conn: sqlite3.Connection):
         conn (sqlite3.Connection): The database connection object.
     """
     plans_to_seed = [
-        ("Monthly - Unrestricted", 30),
-        ("3 Months - Unrestricted", 90),
-        ("Annual - Unrestricted", 365)
+        ("Monthly - Unrestricted", 30, True),
+        ("3 Months - Unrestricted", 90, True),
+        ("Annual - Unrestricted", 365, True)
     ]
     try:
         cursor = conn.cursor()
-        for plan_name, duration_days in plans_to_seed:
-            cursor.execute("INSERT OR IGNORE INTO plans (plan_name, duration_days) VALUES (?, ?)", (plan_name, duration_days))
+        for plan_name, duration_days, is_active in plans_to_seed:
+            cursor.execute("INSERT OR IGNORE INTO plans (plan_name, duration_days, is_active) VALUES (?, ?, ?)", (plan_name, duration_days, is_active))
         conn.commit()
         print(f"Seeded {len(plans_to_seed)} initial plans.")
     except sqlite3.Error as e:

@@ -101,23 +101,132 @@ def get_all_members() -> list:
         if conn:
             conn.close()
 
+def add_plan(name: str, duration_days: int, is_active: bool = True) -> int | None:
+    """
+    Adds a new plan to the database.
+    Args:
+        name (str): The name of the plan.
+        duration_days (int): The duration of the plan in days.
+        is_active (bool): Whether the plan is active. Defaults to True.
+    Returns:
+        int | None: The ID of the newly added plan, or None if an error occurs.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO plans (plan_name, duration_days, is_active) VALUES (?, ?, ?)",
+            (name, duration_days, is_active)
+        )
+        conn.commit()
+        return cursor.lastrowid
+    except sqlite3.IntegrityError:
+        print(f"Error adding plan: Plan name '{name}' likely already exists.")
+        return None
+    except sqlite3.Error as e:
+        print(f"Database error while adding plan: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def update_plan(plan_id: int, name: str, duration_days: int) -> bool:
+    """
+    Updates an existing plan in the database.
+    Args:
+        plan_id (int): The ID of the plan to update.
+        name (str): The new name of the plan.
+        duration_days (int): The new duration of the plan in days.
+    Returns:
+        bool: True if the plan was updated successfully, False otherwise.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE plans SET plan_name = ?, duration_days = ? WHERE plan_id = ?",
+            (name, duration_days, plan_id)
+        )
+        conn.commit()
+        return cursor.rowcount > 0  # Check if any row was affected
+    except sqlite3.IntegrityError:
+        print(f"Error updating plan: New plan name '{name}' likely already exists for another plan.")
+        return False
+    except sqlite3.Error as e:
+        print(f"Database error while updating plan {plan_id}: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def set_plan_active_status(plan_id: int, is_active: bool) -> bool:
+    """
+    Sets the active status of a plan.
+    Args:
+        plan_id (int): The ID of the plan.
+        is_active (bool): The new active status (True for active, False for inactive).
+    Returns:
+        bool: True if the status was updated successfully, False otherwise.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE plans SET is_active = ? WHERE plan_id = ?",
+            (is_active, plan_id)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        print(f"Database error while setting active status for plan {plan_id}: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
 def get_all_plans() -> list:
     """
-    Retrieves all plans from the database.
+    Retrieves all active plans from the database.
+    Returns:
+        list: A list of tuples, where each tuple represents an active plan
+              (plan_id, plan_name, duration_days, is_active).
+              Returns an empty list if no active plans are found or an error occurs.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT plan_id, plan_name, duration_days, is_active FROM plans WHERE is_active = TRUE ORDER BY plan_name ASC")
+        plans = cursor.fetchall()
+        return plans
+    except sqlite3.Error as e:
+        print(f"Database error while fetching active plans: {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+def get_all_plans_with_inactive() -> list:
+    """
+    Retrieves all plans (including inactive) from the database.
     Returns:
         list: A list of tuples, where each tuple represents a plan
-              (plan_id, plan_name, duration_days).
+              (plan_id, plan_name, duration_days, is_active).
               Returns an empty list if no plans are found or an error occurs.
     """
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT plan_id, plan_name, duration_days FROM plans ORDER BY plan_name ASC")
+        # Assuming the is_active column was added in the previous step
+        cursor.execute("SELECT plan_id, plan_name, duration_days, is_active FROM plans ORDER BY plan_name ASC")
         plans = cursor.fetchall()
         return plans
     except sqlite3.Error as e:
-        print(f"Database error while fetching plans: {e}")
+        print(f"Database error while fetching all plans (including inactive): {e}")
         return []
     finally:
         if conn:

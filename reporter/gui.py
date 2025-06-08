@@ -21,14 +21,19 @@ class App(customtkinter.CTk):
 
         # Add tabs
         self.tab_view.add("Membership Management")
+        self.tab_view.add("Plan Management") # New Tab
         self.tab_view.add("Reporting")
 
         # Add placeholder content to tabs
         membership_tab = self.tab_view.tab("Membership Management")
+        plan_management_tab = self.tab_view.tab("Plan Management") # New Tab
         reporting_tab = self.tab_view.tab("Reporting")
 
         # --- Membership Management Tab ---
         self.setup_membership_tab(self.tab_view.tab("Membership Management"))
+
+        # --- Plan Management Tab ---
+        self.setup_plan_management_tab(plan_management_tab) # Setup for the new tab
 
     def populate_pt_member_dropdown(self):
         """Populates the PT booking member dropdown with all members."""
@@ -285,6 +290,154 @@ class App(customtkinter.CTk):
         self.populate_pt_member_dropdown() # Populate dropdown for PT booking form
 
         self.display_membership_history(None) # Show placeholder message in history view
+
+    def setup_plan_management_tab(self, tab):
+        """Configures the UI for the Plan Management tab."""
+        from reporter import database_manager # Local import for DB functions
+
+        tab.grid_columnconfigure(0, weight=1) # Configure grid for the tab
+        tab.grid_columnconfigure(1, weight=2)
+        tab.grid_rowconfigure(0, weight=1)
+
+        # --- Frame for Add/Edit Plan ---
+        self.plan_form_frame = CTkFrame(tab)
+        self.plan_form_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        self.plan_form_frame.grid_columnconfigure(1, weight=1)
+
+        CTkLabel(self.plan_form_frame, text="Add/Edit Plan", font=CTkFont(size=16, weight="bold")).grid(row=0, column=0, columnspan=2, padx=10, pady=10)
+
+        # Plan ID (hidden, for editing)
+        self.current_plan_id_var = StringVar(value="") # To store ID of plan being edited
+
+        # Plan Name
+        CTkLabel(self.plan_form_frame, text="Plan Name:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        self.plan_name_entry = CTkEntry(self.plan_form_frame)
+        self.plan_name_entry.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
+
+        # Duration
+        CTkLabel(self.plan_form_frame, text="Duration (days):").grid(row=2, column=0, padx=10, pady=5, sticky="w")
+        self.plan_duration_entry = CTkEntry(self.plan_form_frame)
+        self.plan_duration_entry.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
+
+        # Save Plan Button
+        self.save_plan_button = CTkButton(self.plan_form_frame, text="Save Plan", command=self.save_plan_action)
+        self.save_plan_button.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
+
+        # Status Label for plan operations
+        self.plan_status_label = CTkLabel(self.plan_form_frame, text="", font=CTkFont(size=12))
+        self.plan_status_label.grid(row=4, column=0, columnspan=2, padx=10, pady=5)
+
+        # --- Frame for Displaying Plans ---
+        self.plans_display_frame = CTkScrollableFrame(tab)
+        self.plans_display_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+
+        # Initial load of plans
+        self.load_plans_display()
+
+    def load_plans_display(self):
+        """Loads and displays all plans in the plans_display_frame."""
+        from reporter import database_manager # Local import
+        # Clear existing widgets
+        for widget in self.plans_display_frame.winfo_children():
+            widget.destroy()
+
+        plans = database_manager.get_all_plans_with_inactive() # Fetch all plans
+
+        if not plans:
+            CTkLabel(self.plans_display_frame, text="No plans found.").pack(padx=10, pady=10)
+            return
+
+        for i, plan_data in enumerate(plans):
+            plan_id, name, duration, is_active = plan_data
+            status_text = "Active" if is_active else "Inactive"
+
+            plan_item_frame = CTkFrame(self.plans_display_frame, fg_color="transparent")
+            plan_item_frame.pack(fill="x", expand=True, pady=2)
+
+            info_text = f"Name: {name} | Duration: {duration} days | Status: {status_text}"
+            CTkLabel(plan_item_frame, text=info_text, anchor="w").pack(side="left", padx=5, expand=True, fill="x")
+
+            edit_button = CTkButton(plan_item_frame, text="Edit", width=60,
+                                     command=lambda p_id=plan_id, p_name=name, p_duration=duration: self.edit_plan_action(p_id, p_name, p_duration))
+            edit_button.pack(side="right", padx=5)
+
+            toggle_text = "Deactivate" if is_active else "Activate"
+            toggle_button = CTkButton(plan_item_frame, text=toggle_text, width=90,
+                                       command=lambda p_id=plan_id, current_status=is_active: self.toggle_plan_status_action(p_id, current_status))
+            toggle_button.pack(side="right", padx=5)
+
+            if i < len(plans) - 1:
+                sep = CTkFrame(self.plans_display_frame, height=1, fg_color="gray70")
+                sep.pack(fill="x", padx=5, pady=2)
+
+    def save_plan_action(self):
+        """Saves a new plan or updates an existing one."""
+        from reporter import database_manager # Local import
+
+        plan_name = self.plan_name_entry.get().strip()
+        duration_str = self.plan_duration_entry.get().strip()
+        plan_id_to_update = self.current_plan_id_var.get()
+
+        if not plan_name or not duration_str:
+            self.plan_status_label.configure(text="Error: Plan Name and Duration cannot be empty.", text_color="red")
+            return
+
+        try:
+            duration_days = int(duration_str)
+            if duration_days <= 0:
+                self.plan_status_label.configure(text="Error: Duration must be a positive integer.", text_color="red")
+                return
+        except ValueError:
+            self.plan_status_label.configure(text="Error: Duration must be a valid integer.", text_color="red")
+            return
+
+        success = False
+        if plan_id_to_update: # Editing existing plan
+            plan_id = int(plan_id_to_update)
+            success = database_manager.update_plan(plan_id, plan_name, duration_days)
+            message = "Plan updated successfully!" if success else "Failed to update plan. Name might exist."
+        else: # Adding new plan
+            # When adding a new plan, it's active by default (as per database_manager.add_plan)
+            new_plan_id = database_manager.add_plan(plan_name, duration_days) # is_active defaults to True
+            if new_plan_id:
+                success = True
+            message = "Plan added successfully!" if success else "Failed to add plan. Name might exist."
+
+        if success:
+            self.plan_status_label.configure(text=message, text_color="green")
+            self.clear_plan_form()
+            self.load_plans_display()
+            self.populate_plan_dropdown() # Update plan dropdown in membership tab
+        else:
+            self.plan_status_label.configure(text=message, text_color="red")
+
+    def edit_plan_action(self, plan_id, name, duration):
+        """Populates the plan form for editing."""
+        self.current_plan_id_var.set(str(plan_id))
+        self.plan_name_entry.delete(0, "end")
+        self.plan_name_entry.insert(0, name)
+        self.plan_duration_entry.delete(0, "end")
+        self.plan_duration_entry.insert(0, str(duration))
+        self.plan_status_label.configure(text="") # Clear status
+
+    def toggle_plan_status_action(self, plan_id, current_status):
+        """Activates or deactivates a plan."""
+        from reporter import database_manager # Local import
+        new_status = not current_status
+        success = database_manager.set_plan_active_status(plan_id, new_status)
+        if success:
+            self.plan_status_label.configure(text=f"Plan status changed to {'Active' if new_status else 'Inactive'}.", text_color="green")
+            self.load_plans_display()
+            self.populate_plan_dropdown() # Update plan dropdown in membership tab
+        else:
+            self.plan_status_label.configure(text="Failed to update plan status.", text_color="red")
+
+    def clear_plan_form(self):
+        """Clears the plan add/edit form."""
+        self.current_plan_id_var.set("")
+        self.plan_name_entry.delete(0, "end")
+        self.plan_duration_entry.delete(0, "end")
+        self.plan_status_label.configure(text="")
 
 
     def setup_reporting_tab(self, tab):
