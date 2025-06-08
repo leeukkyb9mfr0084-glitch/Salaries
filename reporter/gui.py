@@ -4,6 +4,10 @@ class App(customtkinter.CTk):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # Initialize selection state variables to None
+        self.selected_member_id = None
+        self.selected_member_label_widget = None
+
         self.title("Kranos MMA Reporter")
         self.geometry("800x600")
 
