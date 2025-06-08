@@ -86,7 +86,7 @@ class App(customtkinter.CTk):
         """Sets up the frame for adding personal training bookings."""
         self.pt_booking_frame = CTkFrame(parent_frame, corner_radius=0, fg_color="transparent")
         # self.pt_booking_frame.grid(row=2, column=0, sticky="nsew", padx=20, pady=10) # Using pack instead
-        self.pt_booking_frame.pack(fill="x", expand=False, padx=20, pady=(10,0))
+        self.pt_booking_frame.grid(row=2, column=0, padx=5, pady=10, sticky="new")
 
 
         CTkLabel(self.pt_booking_frame, text="Add Personal Training Booking", font=CTkFont(size=16, weight="bold")).pack(pady=(0,10), anchor="w")
