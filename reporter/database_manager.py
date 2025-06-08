@@ -273,6 +273,92 @@ def get_finance_report(year: int, month: int) -> float | None:
         if conn:
             conn.close()
 
+def get_member_by_phone(phone: str) -> tuple | None:
+    """Retrieves a member's ID by their phone number."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT member_id, client_name FROM members WHERE phone = ?", (phone,))
+        return cursor.fetchone()
+    except sqlite3.Error as e:
+        print(f"Database error while fetching member by phone '{phone}': {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def add_member_with_join_date(name: str, phone: str, join_date: str) -> int | None:
+    """Adds a new member with a specific join date and returns their ID."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO members (client_name, phone, join_date) VALUES (?, ?, ?)",
+            (name, phone, join_date)
+        )
+        conn.commit()
+        return cursor.lastrowid
+    except sqlite3.IntegrityError:
+        # This means the phone number already exists, which is fine.
+        return None # We'll fetch the ID separately in the migration script.
+    except sqlite3.Error as e:
+        print(f"Database error while adding member '{name}': {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def get_or_create_plan_id(plan_name: str, duration_days: int) -> int | None:
+    """Retrieves the ID of a plan, creating it if it doesn't exist."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # Check if the plan already exists
+        cursor.execute("SELECT plan_id FROM plans WHERE plan_name = ?", (plan_name,))
+        result = cursor.fetchone()
+        if result:
+            return result[0]
+        else:
+            # If not, create it
+            cursor.execute(
+                "INSERT INTO plans (plan_name, duration_days) VALUES (?, ?)",
+                (plan_name, duration_days)
+            )
+            conn.commit()
+            print(f"Created new plan: {plan_name}")
+            return cursor.lastrowid
+    except sqlite3.Error as e:
+        print(f"Database error with plan '{plan_name}': {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def add_pt_booking(member_id: int, start_date: str, sessions: int, amount_paid: float) -> bool:
+    """Adds a personal training booking to the database."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO pt_bookings (member_id, start_date, sessions, amount_paid)
+            VALUES (?, ?, ?, ?)
+            """,
+            (member_id, start_date, sessions, amount_paid)
+        )
+        conn.commit()
+        return True
+    except sqlite3.Error as e:
+        print(f"Database error while adding PT booking for member {member_id}: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
 if __name__ == '__main__':
     # Example Usage (and for basic testing)
     print("Attempting to initialize DB (if not already done by database.py main)")
