@@ -7,8 +7,8 @@ from datetime import datetime, timedelta # Ensure timedelta is imported
 # Modules to be tested
 from reporter.database_manager import (
     add_member_to_db, get_all_members, get_db_connection,
-    get_all_plans, add_group_membership_to_db, get_memberships_for_member,
-    get_pending_renewals, get_finance_report
+    get_all_plans, add_group_membership_to_db, get_all_activity_for_member, # <- Renamed
+    get_pending_renewals, get_finance_report, add_pt_booking # <- Added add_pt_booking
 )
 # Module needed for setting up test DB
 from reporter.database import create_database, seed_initial_plans
@@ -78,7 +78,9 @@ def test_add_member_successful(db_conn):
 
     # Check join_date format (YYYY-MM-DD) and that it's today
     today_date_str = datetime.now().strftime('%Y-%m-%d')
-    assert member[2] == today_date_str, f"Expected join_date '{today_date_str}', got '{member[2]}'."
+    # Assert that join_date is initially NULL (or None when fetched)
+    # as per new logic where join_date is set by first activity.
+    assert member[2] is None, f"Expected join_date to be None/NULL initially, got '{member[2]}'."
 
 def test_add_member_duplicate_phone(db_conn):
     """Tests adding a member with a phone number that already exists."""
@@ -224,57 +226,61 @@ def test_add_group_membership(db_conn):
     assert gm_end_date == expected_end_date_str, \
         f"End date mismatch. Expected {expected_end_date_str}, got {gm_end_date}."
 
-def test_get_memberships_for_member(db_conn):
-    """Tests retrieval of membership history for specific members."""
-    # 1. Add Members
-    member_a_id = add_member_to_db("Member A History", "1001001001")
-    assert member_a_id is True # add_member_to_db returns True on success
-    member_b_id = add_member_to_db("Member B History", "2002002002")
-    assert member_b_id is True
-
-    # Retrieve actual IDs
-    cursor = db_conn.cursor()
-    cursor.execute("SELECT member_id FROM members WHERE phone = '1001001001'")
-    member_a_id = cursor.fetchone()[0]
-    cursor.execute("SELECT member_id FROM members WHERE phone = '2002002002'")
-    member_b_id = cursor.fetchone()[0]
-
-    # 2. Get Plans (ensure they are seeded by fixture)
-    plans = get_all_plans()
-    assert len(plans) >= 2, "Need at least two plans for this test."
-    plan1 = plans[0] # (plan_id, plan_name, duration_days)
-    plan2 = plans[1]
-
-    # 3. Add Group Memberships
-    # Member A - Membership 1
-    add_group_membership_to_db(member_a_id, plan1[0], "2023-01-01", "2023-01-01", 50, "CashA1")
-    # Member A - Membership 2 (ordered earlier by start_date to test sorting)
-    add_group_membership_to_db(member_a_id, plan2[0], "2022-12-01", "2022-12-01", 60, "CardA2")
-
-    # Member B - Membership 1
-    add_group_membership_to_db(member_b_id, plan1[0], "2023-02-01", "2023-02-10", 70, "CashB1")
-
-    # 4. Test for Member A
-    history_a = get_memberships_for_member(member_a_id)
-    assert len(history_a) == 2, "Member A should have 2 membership records."
-    # Results are ordered by start_date DESC
-    assert history_a[0][0] == plan1[1] # Plan name of the latest membership (2023-01-01)
-    assert history_a[0][2] == "2023-01-01" # Start date
-    assert history_a[0][4] == 50 # Amount paid
-    assert history_a[0][5] == "CashA1" # Payment method
-
-    assert history_a[1][0] == plan2[1] # Plan name of the older membership (2022-12-01)
-    assert history_a[1][2] == "2022-12-01" # Start date
-    assert history_a[1][4] == 60 # Amount paid
-    assert history_a[1][5] == "CardA2" # Payment method
-
-    # 5. Test for Member B
-    history_b = get_memberships_for_member(member_b_id)
-    assert len(history_b) == 1, "Member B should have 1 membership record."
-    assert history_b[0][0] == plan1[1] # Plan name
-    assert history_b[0][2] == "2023-02-10" # Start date
-    assert history_b[0][4] == 70 # Amount paid
-    assert history_b[0][5] == "CashB1" # Payment method
+# This test is replaced by test_get_all_activity_for_member
+# def test_get_memberships_for_member(db_conn):
+#     """Tests retrieval of membership history for specific members."""
+#     # 1. Add Members
+#     member_a_id = add_member_to_db("Member A History", "1001001001")
+#     assert member_a_id is True # add_member_to_db returns True on success
+#     member_b_id = add_member_to_db("Member B History", "2002002002")
+#     assert member_b_id is True
+#
+#     # Retrieve actual IDs
+#     cursor = db_conn.cursor()
+#     cursor.execute("SELECT member_id FROM members WHERE phone = '1001001001'")
+#     member_a_id = cursor.fetchone()[0]
+#     cursor.execute("SELECT member_id FROM members WHERE phone = '2002002002'")
+#     member_b_id = cursor.fetchone()[0]
+#
+#     # 2. Get Plans (ensure they are seeded by fixture)
+#     plans = get_all_plans()
+#     assert len(plans) >= 2, "Need at least two plans for this test."
+#     plan1 = plans[0] # (plan_id, plan_name, duration_days)
+#     plan2 = plans[1]
+#
+#     # 3. Add Group Memberships
+#     # Member A - Membership 1
+#     add_group_membership_to_db(member_a_id, plan1[0], "2023-01-01", "2023-01-01", 50, "CashA1")
+#     # Member A - Membership 2 (ordered earlier by start_date to test sorting)
+#     add_group_membership_to_db(member_a_id, plan2[0], "2022-12-01", "2022-12-01", 60, "CardA2")
+#
+#     # Member B - Membership 1
+#     add_group_membership_to_db(member_b_id, plan1[0], "2023-02-01", "2023-02-10", 70, "CashB1")
+#
+#     # 4. Test for Member A
+#     history_a = get_all_activity_for_member(member_a_id) # Changed to new function
+#     # ... assertions would need to be updated for new data structure and combined activities
+#     assert len(history_a) == 2, "Member A should have 2 membership records."
+#     # Results are ordered by start_date DESC
+#     # This needs to be updated based on the new structure of get_all_activity_for_member
+#     # For example, history_a[0][0] is now activity_type
+#     # assert history_a[0][1] == plan1[1] # name_or_description
+#     # assert history_a[0][3] == "2023-01-01" # start_date
+#     # assert history_a[0][5] == 50 # amount_paid
+#     # assert history_a[0][6] == "CashA1" # payment_method_or_sessions
+#
+#     # assert history_a[1][1] == plan2[1]
+#     # assert history_a[1][3] == "2022-12-01"
+#     # assert history_a[1][5] == 60
+#     # assert history_a[1][6] == "CardA2"
+#
+#     # 5. Test for Member B
+#     history_b = get_all_activity_for_member(member_b_id) # Changed to new function
+#     assert len(history_b) == 1, "Member B should have 1 membership record."
+#     # assert history_b[0][1] == plan1[1]
+#     # assert history_b[0][3] == "2023-02-10"
+#     # assert history_b[0][5] == 70
+#     # assert history_b[0][6] == "CashB1"
 
 def test_get_memberships_for_member_none(db_conn):
     """Tests retrieving memberships for a member who has none."""
@@ -285,8 +291,135 @@ def test_get_memberships_for_member_none(db_conn):
     cursor.execute("SELECT member_id FROM members WHERE phone = '3003003003'")
     member_c_id = cursor.fetchone()[0]
 
-    history_c = get_memberships_for_member(member_c_id)
-    assert len(history_c) == 0, "Member C should have no membership history."
+    history_c = get_all_activity_for_member(member_c_id) # Use new function name
+    assert len(history_c) == 0, "Member C should have no activity history."
+
+
+# --- New and Updated Tests ---
+
+def test_add_pt_booking(db_conn):
+    """Tests adding a PT booking and verifies the inserted data."""
+    # 1. Add a test member
+    member_name = "PT User"
+    member_phone = "PT123456"
+    assert add_member_to_db(member_name, member_phone) is True
+
+    cursor = db_conn.cursor()
+    cursor.execute("SELECT member_id FROM members WHERE phone = ?", (member_phone,))
+    member_id_row = cursor.fetchone()
+    assert member_id_row is not None, "Test member for PT booking not found."
+    member_id = member_id_row[0]
+
+    # 2. Define PT booking details
+    start_date_str = "2024-03-01"
+    sessions = 10
+    amount_paid = 500.00
+
+    # 3. Call add_pt_booking
+    success = add_pt_booking(member_id, start_date_str, sessions, amount_paid)
+    assert success is True, "add_pt_booking should return True on success."
+
+    # 4. Verify directly in the database
+    cursor.execute(
+        "SELECT member_id, start_date, sessions, amount_paid FROM pt_bookings WHERE member_id = ?",
+        (member_id,)
+    )
+    pt_record = cursor.fetchone()
+    assert pt_record is not None, "PT booking record not found."
+
+    (db_member_id, db_start_date, db_sessions, db_amount_paid) = pt_record
+    assert db_member_id == member_id
+    assert db_start_date == start_date_str
+    assert db_sessions == sessions
+    assert db_amount_paid == amount_paid
+
+    # 5. Verify join_date update (as per join_date standardization)
+    cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
+    member_join_date = cursor.fetchone()[0]
+    assert member_join_date == start_date_str, "Member join_date should be updated to PT start_date."
+
+
+def test_get_all_activity_for_member(db_conn):
+    """Tests retrieval of all activities (group and PT) for a member."""
+    # 1. Add Member
+    member_name = "Activity User"
+    member_phone = "ACT001"
+    assert add_member_to_db(member_name, member_phone) is True
+    cursor = db_conn.cursor()
+    cursor.execute("SELECT member_id FROM members WHERE phone = ?", (member_phone,))
+    member_id = cursor.fetchone()[0]
+
+    # 2. Get a Plan
+    plans = get_all_plans()
+    assert len(plans) > 0, "No plans found."
+    test_plan = plans[0] # (plan_id, plan_name, duration_days)
+    plan_id = test_plan[0]
+    plan_name = test_plan[1]
+
+    # 3. Add Group Membership
+    gm_start_date = "2024-02-15"
+    gm_payment_date = "2024-02-10"
+    gm_amount = 120.0
+    gm_method = "Visa"
+    assert add_group_membership_to_db(member_id, plan_id, gm_payment_date, gm_start_date, gm_amount, gm_method)
+
+    # 4. Add PT Booking
+    pt_start_date = "2024-03-05" # Later than GM for ordering
+    pt_sessions = 8
+    pt_amount = 450.0
+    assert add_pt_booking(member_id, pt_start_date, pt_sessions, pt_amount)
+
+    # Add another PT Booking with an earlier date to test ordering
+    pt_early_start_date = "2024-01-20"
+    pt_early_sessions = 5
+    pt_early_amount = 300.0
+    assert add_pt_booking(member_id, pt_early_start_date, pt_early_sessions, pt_early_amount)
+
+
+    # 5. Call get_all_activity_for_member
+    activities = get_all_activity_for_member(member_id)
+    assert len(activities) == 3, "Expected 3 activities for the member."
+
+    # Expected structure: (activity_type, name_or_description, payment_date, start_date, end_date, amount_paid, payment_method_or_sessions, activity_id)
+
+    # Check ordering (by start_date DESC)
+    assert activities[0][3] == pt_start_date # PT booking March 05
+    assert activities[1][3] == gm_start_date # Group membership Feb 15
+    assert activities[2][3] == pt_early_start_date # PT booking Jan 20
+
+    # Verify content of the latest PT booking (activities[0])
+    pt_latest_activity = activities[0]
+    assert pt_latest_activity[0] == "Personal Training"
+    assert pt_latest_activity[1] == "PT Session" # name_or_description
+    assert pt_latest_activity[2] == pt_start_date # payment_date (same as start_date for PT)
+    assert pt_latest_activity[3] == pt_start_date # start_date
+    assert pt_latest_activity[4] is None # end_date
+    assert pt_latest_activity[5] == pt_amount # amount_paid
+    assert pt_latest_activity[6] == f"{pt_sessions} sessions" # payment_method_or_sessions
+    assert pt_latest_activity[7] is not None # activity_id (booking_id)
+
+    # Verify content of the Group Membership (activities[1])
+    gm_activity = activities[1]
+    assert gm_activity[0] == "Group Class"
+    assert gm_activity[1] == plan_name # name_or_description (plan_name)
+    assert gm_activity[2] == gm_payment_date # payment_date
+    assert gm_activity[3] == gm_start_date # start_date
+    assert gm_activity[4] is not None # end_date (should be calculated)
+    assert gm_activity[5] == gm_amount # amount_paid
+    assert gm_activity[6] == gm_method # payment_method_or_sessions
+    assert gm_activity[7] is not None # activity_id (membership_id)
+
+    # Verify content of the earliest PT booking (activities[2])
+    pt_early_activity = activities[2]
+    assert pt_early_activity[0] == "Personal Training"
+    assert pt_early_activity[1] == "PT Session"
+    assert pt_early_activity[2] == pt_early_start_date
+    assert pt_early_activity[3] == pt_early_start_date
+    assert pt_early_activity[4] is None
+    assert pt_early_activity[5] == pt_early_amount
+    assert pt_early_activity[6] == f"{pt_early_sessions} sessions"
+    assert pt_early_activity[7] is not None
+
 
 def test_get_pending_renewals(db_conn):
     """Tests retrieval of pending renewals for the current month."""
@@ -479,6 +612,151 @@ def test_get_finance_report_no_transactions(db_conn):
     total_revenue_ancient = get_finance_report(1900, 1)
     assert total_revenue_ancient == 0.0, \
          f"Expected 0.0 for an ancient month (1900-01), got {total_revenue_ancient}"
+
+
+def test_get_finance_report_with_pt_bookings(db_conn):
+    """Tests get_finance_report including revenue from PT bookings."""
+    # 1. Add Members and Plans
+    member_f1_id = add_member_to_db("Finance User PT1", "FPT001")
+    assert member_f1_id is True
+    member_f2_id = add_member_to_db("Finance User PT2", "FPT002")
+    assert member_f2_id is True
+
+    cursor = db_conn.cursor()
+    cursor.execute("SELECT member_id FROM members WHERE phone = 'FPT001'")
+    member_f1_id = cursor.fetchone()[0]
+    cursor.execute("SELECT member_id FROM members WHERE phone = 'FPT002'")
+    member_f2_id = cursor.fetchone()[0]
+
+    plans = get_all_plans()
+    plan_any = plans[0]
+
+    # 2. Determine Target Month/Year (e.g., previous month)
+    today = datetime.today()
+    first_day_current_month = today.replace(day=1)
+    last_day_previous_month = first_day_current_month - timedelta(days=1)
+    target_year = last_day_previous_month.year
+    target_month = last_day_previous_month.month
+
+    target_month_date1 = last_day_previous_month.replace(day=10).strftime('%Y-%m-%d')
+    target_month_date2 = last_day_previous_month.replace(day=20).strftime('%Y-%m-%d')
+
+    other_month_date = (last_day_previous_month.replace(day=1) - timedelta(days=15)).strftime('%Y-%m-%d') # Month before target
+
+    # 3. Add Group Memberships
+    # In target month
+    assert add_group_membership_to_db(member_f1_id, plan_any[0], target_month_date1, target_month_date1, 100.00, "GM_Cash1")
+    # Outside target month
+    assert add_group_membership_to_db(member_f2_id, plan_any[0], other_month_date, other_month_date, 50.00, "GM_Cash2")
+
+    # 4. Add PT Bookings
+    # In target month (using start_date as payment recognition date)
+    assert add_pt_booking(member_f1_id, target_month_date2, 10, 200.00) # 200.00
+    assert add_pt_booking(member_f2_id, target_month_date1, 5, 150.00)  # 150.00
+    # Outside target month
+    assert add_pt_booking(member_f1_id, other_month_date, 8, 180.00)
+
+    # 5. Calculate Expected Total
+    # From Group Memberships in target month: 100.00
+    # From PT Bookings in target month: 200.00 + 150.00 = 350.00
+    expected_total_revenue = 100.00 + 350.00 # = 450.00
+
+    # 6. Call get_finance_report
+    actual_total_revenue = get_finance_report(target_year, target_month)
+    assert actual_total_revenue == expected_total_revenue, \
+        f"Expected total revenue {expected_total_revenue} for {target_year}-{target_month}, got {actual_total_revenue}"
+
+
+def test_join_date_standardization_new_member_then_group_membership(db_conn):
+    """Scenario 1: New member, then group membership. Join date becomes GM start date."""
+    member_phone = "JD_GM01"
+    assert add_member_to_db("JoinDate User GM", member_phone) is True
+
+    cursor = db_conn.cursor()
+    cursor.execute("SELECT member_id, join_date FROM members WHERE phone = ?", (member_phone,))
+    member_id, initial_join_date = cursor.fetchone()
+    assert initial_join_date is None, "Join date should be NULL on initial member add."
+
+    plans = get_all_plans()
+    plan_id = plans[0][0]
+    gm_start_date = "2024-04-01"
+    assert add_group_membership_to_db(member_id, plan_id, gm_start_date, gm_start_date, 50, "Cash")
+
+    cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
+    updated_join_date = cursor.fetchone()[0]
+    assert updated_join_date == gm_start_date, "Join date should be updated to group membership start date."
+
+
+def test_join_date_standardization_new_member_then_pt_booking(db_conn):
+    """Scenario 2: New member, then PT booking. Join date becomes PT start date."""
+    member_phone = "JD_PT01"
+    assert add_member_to_db("JoinDate User PT", member_phone) is True
+
+    cursor = db_conn.cursor()
+    cursor.execute("SELECT member_id, join_date FROM members WHERE phone = ?", (member_phone,))
+    member_id, initial_join_date = cursor.fetchone()
+    assert initial_join_date is None, "Join date should be NULL on initial member add."
+
+    pt_start_date = "2024-05-10"
+    assert add_pt_booking(member_id, pt_start_date, 10, 300)
+
+    cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
+    updated_join_date = cursor.fetchone()[0]
+    assert updated_join_date == pt_start_date, "Join date should be updated to PT booking start date."
+
+
+def test_join_date_standardization_existing_member_earlier_activity(db_conn):
+    """Scenario 3: Existing member, new activity earlier than current join_date."""
+    member_phone = "JD_EARLY01"
+    # Add member with an initial join_date (e.g. from a hypothetical import or older logic)
+    # For this test, let's simulate it by first adding a PT booking
+    assert add_member_to_db("JoinDate User Early", member_phone) is True
+    cursor = db_conn.cursor()
+    cursor.execute("SELECT member_id FROM members WHERE phone = ?", (member_phone,))
+    member_id = cursor.fetchone()[0]
+
+    initial_activity_date = "2023-03-15"
+    assert add_pt_booking(member_id, initial_activity_date, 5, 250) # This will set join_date to 2023-03-15
+
+    cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
+    current_join_date = cursor.fetchone()[0]
+    assert current_join_date == initial_activity_date
+
+    # Now add a group membership with an earlier start date
+    plans = get_all_plans()
+    plan_id = plans[0][0]
+    earlier_gm_start_date = "2023-03-01"
+    assert add_group_membership_to_db(member_id, plan_id, earlier_gm_start_date, earlier_gm_start_date, 50, "Cash")
+
+    cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
+    updated_join_date = cursor.fetchone()[0]
+    assert updated_join_date == earlier_gm_start_date, "Join date should be updated to the earlier group membership start date."
+
+
+def test_join_date_standardization_existing_member_later_activity(db_conn):
+    """Scenario 4: Existing member, new activity later than current join_date."""
+    member_phone = "JD_LATER01"
+    assert add_member_to_db("JoinDate User Later", member_phone) is True
+    cursor = db_conn.cursor()
+    cursor.execute("SELECT member_id FROM members WHERE phone = ?", (member_phone,))
+    member_id = cursor.fetchone()[0]
+
+    initial_activity_date = "2023-04-01"
+    plans = get_all_plans()
+    plan_id = plans[0][0]
+    assert add_group_membership_to_db(member_id, plan_id, initial_activity_date, initial_activity_date, 60, "Card") # Sets join_date
+
+    cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
+    current_join_date = cursor.fetchone()[0]
+    assert current_join_date == initial_activity_date
+
+    # Add a PT booking with a later start date
+    later_pt_start_date = "2023-04-10"
+    assert add_pt_booking(member_id, later_pt_start_date, 8, 280)
+
+    cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
+    final_join_date = cursor.fetchone()[0]
+    assert final_join_date == initial_activity_date, "Join date should remain the earlier date."
 
 
 if __name__ == '__main__':

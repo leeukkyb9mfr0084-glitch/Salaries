@@ -13,23 +13,22 @@ def get_db_connection():
         print(f"Error connecting to database {DB_FILE}: {e}")
         raise  # Re-raise the exception if connection fails
 
-def add_member_to_db(name: str, phone: str) -> bool:
+def add_member_to_db(name: str, phone: str, join_date: str = None) -> bool:
     """
     Adds a new member to the database.
     Args:
         name (str): The name of the member.
         phone (str): The phone number of the member (must be unique).
+        join_date (str, optional): The join date in 'YYYY-MM-DD' format. Defaults to None (inserted as NULL).
     Returns:
         bool: True if the member was added successfully, False otherwise.
-    Raises:
-        sqlite3.IntegrityError: If the phone number already exists (implicitly via UNIQUE constraint).
-                                 Or we can catch it and return False.
     """
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        join_date = datetime.now().strftime('%Y-%m-%d')
+        # If join_date is not provided, it will be inserted as NULL,
+        # which is the default behavior for a nullable column if not specified or set to None.
         cursor.execute(
             "INSERT INTO members (client_name, phone, join_date) VALUES (?, ?, ?)",
             (name, phone, join_date)
@@ -46,6 +45,39 @@ def add_member_to_db(name: str, phone: str) -> bool:
     finally:
         if conn:
             conn.close()
+
+def _update_member_join_date_if_earlier(member_id: int, activity_start_date_str: str, cursor: sqlite3.Cursor):
+    """
+    Updates the member's join_date if the activity_start_date is earlier than the current join_date or if join_date is NULL.
+    Args:
+        member_id (int): The ID of the member.
+        activity_start_date_str (str): The start date of the new activity ('YYYY-MM-DD').
+        cursor (sqlite3.Cursor): The database cursor to use for operations.
+    """
+    try:
+        activity_start_date = datetime.strptime(activity_start_date_str, '%Y-%m-%d').date()
+
+        cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
+        result = cursor.fetchone()
+
+        if result:
+            current_join_date_str = result[0]
+            update_needed = False
+            if current_join_date_str is None:
+                update_needed = True
+            else:
+                current_join_date = datetime.strptime(current_join_date_str, '%Y-%m-%d').date()
+                if activity_start_date < current_join_date:
+                    update_needed = True
+
+            if update_needed:
+                cursor.execute("UPDATE members SET join_date = ? WHERE member_id = ?", (activity_start_date_str, member_id))
+                # print(f"Updated join_date for member {member_id} to {activity_start_date_str}") # For debugging
+    except sqlite3.Error as e:
+        print(f"Error in _update_member_join_date_if_earlier for member {member_id}: {e}")
+    except ValueError as ve: # Catches date parsing errors
+        print(f"Date parsing error in _update_member_join_date_if_earlier: {ve}")
+
 
 def get_all_members() -> list:
     """
@@ -132,6 +164,10 @@ def add_group_membership_to_db(member_id: int, plan_id: int, payment_date: str,
             """,
             (member_id, plan_id, payment_date, start_date, end_date_str, amount_paid, payment_method)
         )
+
+        # Update member's join date if this membership's start date is earlier
+        _update_member_join_date_if_earlier(member_id, start_date, cursor)
+
         conn.commit()
         return True
     except sqlite3.Error as e:
@@ -144,15 +180,15 @@ def add_group_membership_to_db(member_id: int, plan_id: int, payment_date: str,
         if conn:
             conn.close()
 
-def get_memberships_for_member(member_id: int) -> list:
+def get_all_activity_for_member(member_id: int) -> list:
     """
-    Retrieves all group membership records for a given member, joined with plan names.
+    Retrieves all group memberships and PT bookings for a given member.
     Args:
         member_id (int): The ID of the member.
     Returns:
-        list: A list of tuples, where each tuple contains:
-              (plan_name, payment_date, start_date, end_date, amount_paid, payment_method, membership_id)
-              Ordered by start_date descending. Returns empty list on error or if no memberships.
+        list: A list of tuples, each representing an activity.
+              Structure: (activity_type, name_or_description, payment_date, start_date, end_date, amount_paid, payment_method_or_sessions, activity_id)
+              Ordered by start_date descending. Returns empty list on error or if no activities.
     """
     conn = None
     try:
@@ -160,22 +196,38 @@ def get_memberships_for_member(member_id: int) -> list:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT
-                p.plan_name,
+                'Group Class' AS activity_type,
+                p.plan_name AS name_or_description,
                 gm.payment_date,
                 gm.start_date,
                 gm.end_date,
                 gm.amount_paid,
-                gm.payment_method,
-                gm.membership_id
+                gm.payment_method AS payment_method_or_sessions,
+                gm.membership_id AS activity_id
             FROM group_memberships gm
             JOIN plans p ON gm.plan_id = p.plan_id
             WHERE gm.member_id = ?
-            ORDER BY gm.start_date DESC
-        """, (member_id,))
-        memberships = cursor.fetchall()
-        return memberships
+
+            UNION ALL
+
+            SELECT
+                'Personal Training' AS activity_type,
+                'PT Session' AS name_or_description, /* Placeholder description */
+                pt.start_date AS payment_date, /* Assuming payment is on start date */
+                pt.start_date,
+                NULL AS end_date, /* PT sessions don't have an end date in the same way */
+                pt.amount_paid,
+                CAST(pt.sessions AS TEXT) || ' sessions' AS payment_method_or_sessions,
+                pt.pt_booking_id AS activity_id
+            FROM pt_bookings pt
+            WHERE pt.member_id = ?
+
+            ORDER BY start_date DESC
+        """, (member_id, member_id))
+        activities = cursor.fetchall()
+        return activities
     except sqlite3.Error as e:
-        print(f"Database error while fetching memberships for member {member_id}: {e}")
+        print(f"Database error while fetching all activity for member {member_id}: {e}")
         return []
     finally:
         if conn:
@@ -238,6 +290,9 @@ def get_finance_report(year: int, month: int) -> float | None:
         float | None: The total sum of amount_paid, or None if no transactions or an error occurs.
     """
     conn = None
+    total_revenue_group = 0.0
+    total_revenue_pt = 0.0
+
     try:
         if not (1 <= month <= 12):
             print("Error: Month must be between 1 and 12.")
@@ -245,23 +300,33 @@ def get_finance_report(year: int, month: int) -> float | None:
 
         # Format month to ensure two digits (e.g., '01', '02', ..., '12')
         month_str = f"{month:02d}"
-        date_prefix = f"{year}-{month_str}-" # e.g., "2023-07-"
+        date_prefix = f"{year}-{month_str}-"  # e.g., "2023-07-"
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # Calculate total revenue from group memberships
         cursor.execute("""
             SELECT SUM(amount_paid)
             FROM group_memberships
             WHERE payment_date LIKE ?
-        """, (date_prefix + '%',)) # LIKE 'YYYY-MM-%'
+        """, (date_prefix + '%',))  # LIKE 'YYYY-MM-%'
+        result_group = cursor.fetchone()
+        if result_group and result_group[0] is not None:
+            total_revenue_group = float(result_group[0])
 
-        result = cursor.fetchone()
+        # Calculate total revenue from PT bookings
+        # Assuming pt_bookings.start_date is used for revenue recognition month
+        cursor.execute("""
+            SELECT SUM(amount_paid)
+            FROM pt_bookings
+            WHERE start_date LIKE ?
+        """, (date_prefix + '%',))  # LIKE 'YYYY-MM-%'
+        result_pt = cursor.fetchone()
+        if result_pt and result_pt[0] is not None:
+            total_revenue_pt = float(result_pt[0])
 
-        if result and result[0] is not None:
-            return float(result[0])
-        else:
-            return 0.0 # Return 0.0 if no transactions found for that month
+        return total_revenue_group + total_revenue_pt
 
     except sqlite3.Error as e:
         print(f"Database error while generating finance report for {year}-{month}: {e}")
@@ -350,6 +415,10 @@ def add_pt_booking(member_id: int, start_date: str, sessions: int, amount_paid: 
             """,
             (member_id, start_date, sessions, amount_paid)
         )
+
+        # Update member's join date if this booking's start date is earlier
+        _update_member_join_date_if_earlier(member_id, start_date, cursor)
+
         conn.commit()
         return True
     except sqlite3.Error as e:

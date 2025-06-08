@@ -1,4 +1,8 @@
 import customtkinter
+from tkinter import StringVar # Explicitly import StringVar
+from datetime import datetime # Explicitly import datetime
+from customtkinter import CTkFrame, CTkLabel, CTkEntry, CTkButton, CTkOptionMenu, CTkFont, CTkScrollableFrame
+
 
 class App(customtkinter.CTk):
     def __init__(self, *args, **kwargs):
@@ -26,6 +30,165 @@ class App(customtkinter.CTk):
         # --- Membership Management Tab ---
         self.setup_membership_tab(self.tab_view.tab("Membership Management"))
 
+    def populate_pt_member_dropdown(self):
+        """Populates the PT booking member dropdown with all members."""
+        # This method assumes self.member_name_to_id is populated by populate_member_dropdown
+        # which is called during setup_membership_tab.
+        # If this assumption changes, self.member_name_to_id might need its own population logic here.
+        from reporter.database_manager import get_all_members # Local import
+
+        all_members = get_all_members()
+        if not all_members:
+            self.pt_member_dropdown.configure(values=["No members found"])
+            self.pt_member_dropdown_var.set("No members found")
+            return
+
+        # Using the same naming convention as populate_member_dropdown for consistency,
+        # but this dropdown will use "Name (Phone)" for display to be more user-friendly
+        # in the context of PT bookings, as member ID is less relevant here.
+        # self.member_name_to_id should already be populated.
+        # If not, or if a different mapping is needed (e.g. name_phone to id), it should be created here.
+
+        # For PT booking, let's display "Name (Phone)" and map this string to member_id
+        # This requires a slightly different approach than the group membership's "Name (ID: id)"
+        # We can reuse self.member_name_to_id if it's populated with a general "display_string" -> id,
+        # or create a specific one for this dropdown.
+        # For now, let's assume self.populate_member_dropdown() in setup_membership_tab
+        # has already populated self.member_name_to_id with "Name (ID: id)" : id.
+        # We will use the same self.member_name_to_id for retrieving ID upon saving.
+
+        member_display_values = []
+        # We need to ensure self.member_name_to_id is populated before this runs.
+        # It's populated by self.populate_member_dropdown called in setup_membership_tab.
+        # The keys of self.member_name_to_id are "Name (ID: id)".
+        # We can use these directly or re-fetch members if a different format is strictly needed.
+        # For simplicity, let's use the existing self.member_name_to_id keys for the dropdown.
+
+        member_display_values = list(self.member_name_to_id.keys())
+
+        if not member_display_values:
+            member_display_values = ["No members loaded"] # Should ideally not happen if populate_member_dropdown ran
+
+        self.pt_member_dropdown.configure(values=member_display_values)
+        if member_display_values and member_display_values[0] != "No members loaded":
+            self.pt_member_dropdown_var.set(member_display_values[0]) # Default to first member
+        elif member_display_values: # Handles "No members loaded" case
+            self.pt_member_dropdown_var.set(member_display_values[0])
+        else: # Fallback if list is somehow empty after checks
+            self.pt_member_dropdown_var.set("Error loading members")
+
+    def setup_pt_booking_frame(self, parent_frame):
+        """Sets up the frame for adding personal training bookings."""
+        self.pt_booking_frame = CTkFrame(parent_frame, corner_radius=0, fg_color="transparent")
+        # self.pt_booking_frame.grid(row=2, column=0, sticky="nsew", padx=20, pady=10) # Using pack instead
+        self.pt_booking_frame.pack(fill="x", expand=False, padx=20, pady=(10,0))
+
+
+        CTkLabel(self.pt_booking_frame, text="Add Personal Training Booking", font=CTkFont(size=16, weight="bold")).pack(pady=(0,10), anchor="w")
+
+        # Member selection
+        CTkLabel(self.pt_booking_frame, text="Select Member:").pack(anchor="w")
+        self.pt_member_dropdown_var = StringVar()
+        self.pt_member_dropdown = CTkOptionMenu(self.pt_booking_frame, variable=self.pt_member_dropdown_var, values=["Loading..."])
+        self.pt_member_dropdown.pack(fill="x", pady=(0,5))
+
+        # Start Date
+        CTkLabel(self.pt_booking_frame, text="Start Date (YYYY-MM-DD):").pack(anchor="w")
+        self.pt_start_date_entry = CTkEntry(self.pt_booking_frame, placeholder_text="YYYY-MM-DD")
+        self.pt_start_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d'))
+        self.pt_start_date_entry.pack(fill="x", pady=(0,5))
+
+        # Number of Sessions
+        CTkLabel(self.pt_booking_frame, text="Number of Sessions:").pack(anchor="w")
+        self.pt_sessions_entry = CTkEntry(self.pt_booking_frame, placeholder_text="e.g., 10")
+        self.pt_sessions_entry.pack(fill="x", pady=(0,5))
+
+        # Amount Paid
+        CTkLabel(self.pt_booking_frame, text="Amount Paid:").pack(anchor="w")
+        self.pt_amount_paid_entry = CTkEntry(self.pt_booking_frame, placeholder_text="e.g., 500.00")
+        self.pt_amount_paid_entry.pack(fill="x", pady=(0,10))
+
+        # Save Button
+        self.save_pt_booking_button = CTkButton(self.pt_booking_frame, text="Save PT Booking", command=self.save_pt_booking_action)
+        self.save_pt_booking_button.pack(fill="x", pady=(0,5))
+
+        # Status Label
+        self.pt_booking_status_label = CTkLabel(self.pt_booking_frame, text="", font=CTkFont(size=12))
+        self.pt_booking_status_label.pack(anchor="w")
+
+    def save_pt_booking_action(self):
+        """Handles the save PT booking button click event with validation."""
+        from reporter import database_manager # For add_pt_booking
+        from datetime import datetime
+
+        selected_member_display = self.pt_member_dropdown_var.get()
+        start_date_str = self.pt_start_date_entry.get().strip()
+        sessions_str = self.pt_sessions_entry.get().strip()
+        amount_paid_str = self.pt_amount_paid_entry.get().strip()
+
+        # --- Input Validation ---
+        # Validate member selection
+        if not selected_member_display or selected_member_display in ["Loading...", "No members found", "No members loaded", "Error loading members"]:
+            self.pt_booking_status_label.configure(text="Error: Please select a valid member.", text_color="red")
+            return
+
+        # Retrieve member_id using the (potentially shared) member_name_to_id map
+        # This map is populated by populate_member_dropdown and stores "Name (ID: id)" -> id
+        member_id = self.member_name_to_id.get(selected_member_display)
+        if not member_id:
+            self.pt_booking_status_label.configure(text="Error: Could not find member ID. Please refresh.", text_color="red")
+            return
+
+        # Check that all fields are filled
+        if not start_date_str or not sessions_str or not amount_paid_str:
+            self.pt_booking_status_label.configure(text="Error: All fields must be filled.", text_color="red")
+            return
+
+        # Validate start_date_str format (YYYY-MM-DD)
+        try:
+            datetime.strptime(start_date_str, '%Y-%m-%d')
+        except ValueError:
+            self.pt_booking_status_label.configure(text="Error: Invalid Start Date format. Use YYYY-MM-DD.", text_color="red")
+            return
+
+        # Validate sessions_str is a positive integer
+        try:
+            sessions = int(sessions_str)
+            if sessions <= 0:
+                self.pt_booking_status_label.configure(text="Error: Number of Sessions must be a positive integer.", text_color="red")
+                return
+        except ValueError:
+            self.pt_booking_status_label.configure(text="Error: Number of Sessions must be an integer.", text_color="red")
+            return
+
+        # Validate amount_paid_str is a positive number
+        try:
+            amount_paid = float(amount_paid_str)
+            if amount_paid <= 0:
+                self.pt_booking_status_label.configure(text="Error: Amount Paid must be a positive number.", text_color="red")
+                return
+        except ValueError:
+            self.pt_booking_status_label.configure(text="Error: Amount Paid must be a valid number.", text_color="red")
+            return
+
+        # If validation passes, call database_manager.add_pt_booking
+        try:
+            success = database_manager.add_pt_booking(member_id, start_date_str, sessions, amount_paid)
+            if success:
+                self.pt_booking_status_label.configure(text="Success: PT Booking added.", text_color="green")
+                # Clear input fields on success
+                self.pt_start_date_entry.delete(0, "end")
+                self.pt_start_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d'))
+                self.pt_sessions_entry.delete(0, "end")
+                self.pt_amount_paid_entry.delete(0, "end")
+                # Optionally reset dropdown, or leave as is for quick re-entry for same member
+                # self.pt_member_dropdown_var.set(list(self.member_name_to_id.keys())[0]) # Reset to first member
+            else:
+                self.pt_booking_status_label.configure(text="Error: Failed to save PT Booking. Check logs.", text_color="red")
+        except Exception as e:
+            self.pt_booking_status_label.configure(text=f"Error: An unexpected error occurred: {e}", text_color="red")
+
+
         # --- Reporting Tab ---
         self.setup_reporting_tab(self.tab_view.tab("Reporting"))
 
@@ -34,7 +197,7 @@ class App(customtkinter.CTk):
         # Import database functions locally within methods where they are needed
         # to avoid potential circular imports and keep dependencies clear.
         from reporter.database_manager import get_all_members # add_member_to_db is used in an action method
-        from customtkinter import CTkScrollableFrame, CTkEntry, CTkLabel, CTkButton, CTkFont
+        # CTk* elements are now imported globally
 
         # Configure grid layout for the tab
         # tab.grid_columnconfigure(0, weight=1) # For the add member frame
@@ -86,6 +249,11 @@ class App(customtkinter.CTk):
         # This frame is set up by a separate method for better organization.
         self.setup_group_membership_frame(forms_frame) # Pass the 'forms_frame' as parent
 
+        # --- Add Personal Training Booking Frame ---
+        # This frame is set up by a separate method.
+        self.setup_pt_booking_frame(forms_frame) # Pass the 'forms_frame' as parent
+
+
         # --- Column 1: Display Area ---
         # This frame is for displaying member lists and membership history.
         display_frame = customtkinter.CTkFrame(main_management_frame)
@@ -114,6 +282,7 @@ class App(customtkinter.CTk):
         self.display_all_members()      # Populate the list of all members
         self.populate_member_dropdown() # Populate dropdown for group membership form
         self.populate_plan_dropdown()   # Populate dropdown for group membership form
+        self.populate_pt_member_dropdown() # Populate dropdown for PT booking form
 
         self.display_membership_history(None) # Show placeholder message in history view
 
@@ -121,9 +290,9 @@ class App(customtkinter.CTk):
     def setup_reporting_tab(self, tab):
         """Configures the UI for the Reporting tab."""
         # Import UI elements and database functions locally
-        from customtkinter import CTkFrame, CTkButton, CTkLabel, CTkScrollableFrame, CTkFont
         # from reporter.database_manager import get_pending_renewals # Used in action method
-        from datetime import datetime # Not strictly needed here, but good for context
+        # from datetime import datetime # Not strictly needed here, but good for context
+        # CTk* elements are now imported globally
 
         # Configure grid layout for the reporting tab
         tab.grid_columnconfigure(0, weight=1) # Single column that expands
@@ -265,8 +434,7 @@ class App(customtkinter.CTk):
         """Sets up the UI for adding group memberships."""
         # Local imports for UI elements and database functions
         # from reporter.database_manager import get_all_plans, add_group_membership_to_db, get_all_members # Used in actions or populating
-        from customtkinter import CTkOptionMenu, CTkEntry, CTkLabel, CTkButton, CTkFont
-        from datetime import datetime
+        # CTk* elements and datetime are now imported globally
 
         # Frame to contain all elements for adding a group membership
         group_membership_frame = customtkinter.CTkFrame(parent_frame)
@@ -508,38 +676,42 @@ class App(customtkinter.CTk):
         self.display_membership_history(member_id)
 
     def display_membership_history(self, member_id):
-        """Displays membership history for the given member_id in its scrollable frame."""
-        from reporter.database_manager import get_memberships_for_member # Local import
+        """Displays all activity (group memberships and PT bookings) for the given member_id."""
+        from reporter.database_manager import get_all_activity_for_member # Updated function import
 
         # Clear any existing history records from the frame
         for widget in self.membership_history_frame.winfo_children():
             widget.destroy()
 
-        # If no member_id is provided (e.g., no member selected), display a placeholder message
         if member_id is None:
-            no_history_label = customtkinter.CTkLabel(self.membership_history_frame, text="Select a member to see their history.")
+            no_history_label = customtkinter.CTkLabel(self.membership_history_frame, text="Select a member to see their activity history.")
             no_history_label.pack(padx=10, pady=10)
             return
 
-        # Fetch membership records for the selected member
-        history_records = get_memberships_for_member(member_id)
+        history_records = get_all_activity_for_member(member_id)
         if not history_records:
-            # Display a message if no history is found for the selected member
-            no_records_label = customtkinter.CTkLabel(self.membership_history_frame, text="No membership history found for this member.")
+            no_records_label = customtkinter.CTkLabel(self.membership_history_frame, text="No activity history found for this member.")
             no_records_label.pack(padx=10, pady=10)
             return
 
-        # Display each history record
         for i, record in enumerate(history_records):
-            # Record format: (plan_name, payment_date, start_date, end_date, amount_paid, payment_method, membership_id)
-            plan_name, payment_date, start_date, end_date, amount_paid, payment_method, _ = record
-            history_text = (f"Plan: {plan_name} | Paid: {amount_paid:.2f} ({payment_method})\n"
-                            f"From: {start_date} To: {end_date} (Paid on: {payment_date})")
+            # New tuple structure:
+            # (activity_type, name_or_description, payment_date, start_date, end_date, amount_paid, payment_method_or_sessions, activity_id)
+            activity_type, name_or_description, payment_date, start_date, end_date, amount_paid, payment_method_or_sessions, _ = record
+
+            history_text = ""
+            if activity_type == 'Group Class':
+                history_text = (f"Type: {activity_type} - Plan: {name_or_description} | Paid: {amount_paid:.2f} ({payment_method_or_sessions})\n"
+                                f"From: {start_date} To: {end_date if end_date else 'N/A'} (Paid on: {payment_date})")
+            elif activity_type == 'Personal Training':
+                history_text = (f"Type: {activity_type} - Sessions: {payment_method_or_sessions} | Paid: {amount_paid:.2f}\n"
+                                f"Date: {start_date} (Paid on: {payment_date})")
+            else:
+                history_text = "Unknown activity type."
 
             history_label = customtkinter.CTkLabel(self.membership_history_frame, text=history_text, anchor="w", justify="left")
             history_label.pack(padx=5, pady=3, fill="x", expand=True)
 
-            # Add a visual separator between history entries, except for the last one
             if i < len(history_records) - 1:
                 sep = customtkinter.CTkFrame(self.membership_history_frame, height=1, fg_color="gray70")
                 sep.pack(fill="x", padx=5, pady=2)
@@ -570,9 +742,11 @@ class App(customtkinter.CTk):
 
         # Attempt to add member to the database
         try:
+            # Call add_member_to_db without join_date; it will default to NULL in the DB
+            # The join_date will be updated when the first activity is recorded.
             success = add_member_to_db(name, phone)
             if success:
-                self.member_status_label.configure(text="Member added successfully!", text_color="green")
+                self.member_status_label.configure(text="Member added successfully! Join date will be set with first activity.", text_color="green")
                 # Clear input fields after successful submission
                 self.name_entry.delete(0, 'end')
                 self.phone_entry.delete(0, 'end')
@@ -583,6 +757,8 @@ class App(customtkinter.CTk):
             else:
                 # This typically means the phone number already exists (due to UNIQUE constraint in DB)
                 self.member_status_label.configure(text="Failed to add member. Phone number may already exist.", text_color="red")
+        # Refresh the PT member dropdown as well, in case a new member was intended for PT
+        self.populate_pt_member_dropdown()
         except Exception as e: # Catch any other unexpected errors from the database manager
             self.member_status_label.configure(text=f"An error occurred: {str(e)}", text_color="red")
 
