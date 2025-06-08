@@ -600,17 +600,17 @@ if __name__ == '__main__':
         )
         print(f"Added group membership for {all_members[0][1]}: {gm_success}")
 
-        print("\n--- Testing get_memberships_for_member ---")
+        print("\n--- Testing get_all_activity_for_member ---")
         if gm_success:
-            member_history = get_memberships_for_member(test_member_id)
+            member_history = get_all_activity_for_member(test_member_id)
             if member_history:
-                print(f"Membership history for member ID {test_member_id}:")
+                print(f"Activity history for member ID {test_member_id}:")
                 for record in member_history:
                     print(record)
             else:
-                print(f"No membership history found for member ID {test_member_id}, or an error occurred.")
+                print(f"No activity history found for member ID {test_member_id}, or an error occurred.")
         else:
-            print("Skipping get_memberships_for_member test as prerequisite gm add failed.")
+            print("Skipping get_all_activity_for_member test as prerequisite gm add failed.")
 
         # Example of trying to add with missing fields (handled by DB constraints or GUI validation later)
         # try:
@@ -633,6 +633,7 @@ if __name__ == '__main__':
         print(f"No pending renewals found for {datetime.strptime(today_for_renewal_test, '%Y-%m-%d').strftime('%B %Y')}, or an error occurred.")
 
     print("\n--- Testing get_finance_report ---")
+    import calendar
     # This test in main is also limited. More robust testing in test_database_manager.py
     last_month_test_date = datetime.now().replace(day=1) - timedelta(days=1)
     lm_year, lm_month = last_month_test_date.year, last_month_test_date.month
