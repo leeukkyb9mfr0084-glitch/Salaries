@@ -57,7 +57,8 @@ def app_instance(setup_teardown_test_db):
          patch('customtkinter.CTkScrollableFrame'), \
          patch('customtkinter.CTkTabview'), \
          patch('tkinter.StringVar'), \
-         patch('tkcalendar.DateEntry'):
+         patch('tkcalendar.DateEntry'), \
+         patch('tkinter.Tk', new_callable=MagicMock):  # Prevent main Tk window init
 
         # Instantiate the App. It will use the monkeypatched DB_FILE.
         app = App()

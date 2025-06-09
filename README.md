@@ -49,31 +49,21 @@ CREATE TABLE IF NOT EXISTS plans (
 );
 ```
 
-**`group_memberships` Table**
+**`transactions` Table**
 ```sql
-CREATE TABLE IF NOT EXISTS group_memberships (
-    membership_id INTEGER PRIMARY KEY AUTOINCREMENT,
+CREATE TABLE IF NOT EXISTS transactions (
+    transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
     member_id INTEGER NOT NULL,
-    plan_id INTEGER NOT NULL,
-    payment_date TEXT NOT NULL,
+    transaction_type TEXT NOT NULL,
+    plan_id INTEGER,
+    payment_date TEXT,
     start_date TEXT NOT NULL,
-    end_date TEXT NOT NULL,
+    end_date TEXT,
     amount_paid REAL NOT NULL,
     payment_method TEXT,
+    sessions INTEGER,
     FOREIGN KEY (member_id) REFERENCES members (member_id),
     FOREIGN KEY (plan_id) REFERENCES plans (plan_id)
-);
-```
-
-**`pt_bookings` Table**
-```sql
-CREATE TABLE IF NOT EXISTS pt_bookings (
-    pt_booking_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    member_id INTEGER NOT NULL,
-    start_date TEXT NOT NULL,
-    sessions INTEGER NOT NULL,
-    amount_paid REAL NOT NULL,
-    FOREIGN KEY (member_id) REFERENCES members (member_id)
 );
 ```
 
@@ -105,11 +95,13 @@ CREATE TABLE IF NOT EXISTS pt_bookings (
 ## Data Migration
 The `migrate_data.py` script is provided to import existing member data from CSV files into the database.
 
+**Warning: Running the migration script is a destructive operation. It will permanently delete all existing data from the members, plans, and transactions tables before importing data from the CSV files.**
+
 * **Functionality**:
     * Reads member data from `Kranos MMA Members.xlsx - GC.csv` for group classes and `Kranos MMA Members.xlsx - PT.csv` for personal training.
     * Creates new members if they don't exist based on their phone number.
     * Creates new plans if they don't exist.
-    * Populates the `group_memberships` and `pt_bookings` tables with the data from the CSV files.
+    * Populates the `transactions` table with the data from the CSV files (previously `group_memberships` and `pt_bookings`).
 * **How to Run**:
     Execute the script directly from your terminal:
     ```bash

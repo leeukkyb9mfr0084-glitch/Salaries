@@ -1,0 +1,20 @@
+.venv/
+__pycache__/
+*.pyc
+reporter/__pycache__/
+reporter/data/kranos_data.db
+# Keep kranos_data_old.db for migration testing if needed, but exclude current db
+# Add other common Python ignores
+*.log
+*.pot
+*.mo
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.tox/
+htmlcov/
+.coverage
+*.sqlite3
+*.db-journal # SQLite journal files
