@@ -1051,3 +1051,128 @@ if __name__ == '__main__':
     # You would need to invoke pytest functionalities or run them manually.
     # It's generally better to use `python -m pytest` from the root /app directory.
     print("To run these tests, navigate to the root '/app' directory and run: python -m pytest")
+
+
+# --- Tests for get_transactions_with_member_details ---
+
+def setup_test_data_for_history_filters(conn: sqlite3.Connection):
+    """Helper function to populate the database with specific data for testing history filters."""
+    cursor = conn.cursor()
+    # Clear existing data to ensure a clean slate for these specific tests
+    cursor.execute("DELETE FROM transactions")
+    cursor.execute("DELETE FROM members")
+    cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('members', 'transactions')") # Reset auto-increment
+    conn.commit()
+
+    # Member 1: Alice (for name, phone, join_date tests)
+    cursor.execute("INSERT INTO members (client_name, phone, join_date) VALUES (?, ?, ?)",
+                   ("Alice Wonderland", "111-222-3333", "2023-01-01"))
+    m_id_alice = cursor.lastrowid
+
+    # Member 2: Bob (for name, phone, join_date tests)
+    cursor.execute("INSERT INTO members (client_name, phone, join_date) VALUES (?, ?, ?)",
+                   ("Bob The Builder", "222-333-4444", "2023-02-15"))
+    m_id_bob = cursor.lastrowid
+
+    # Member 3: Alice Other (for name filter distinction)
+    cursor.execute("INSERT INTO members (client_name, phone, join_date) VALUES (?, ?, ?)",
+                   ("Alice Other", "111-444-5555", "2023-01-01")) # Same join date as Alice Wonderland
+    m_id_alice_other = cursor.lastrowid
+
+    # Member 4: Charlie (no transactions)
+    cursor.execute("INSERT INTO members (client_name, phone, join_date) VALUES (?, ?, ?)",
+                   ("Charlie NoTrans", "333-555-6666", "2023-03-01"))
+
+
+    # Transactions
+    # Alice Wonderland
+    cursor.execute("INSERT INTO transactions (member_id, transaction_type, amount_paid, start_date, payment_date) VALUES (?, ?, ?, ?, ?)",
+                   (m_id_alice, "Group Class", 50.00, "2023-01-10", "2023-01-10")) # T1
+    cursor.execute("INSERT INTO transactions (member_id, transaction_type, amount_paid, start_date, payment_date, sessions) VALUES (?, ?, ?, ?, ?, ?)",
+                   (m_id_alice, "Personal Training", 70.00, "2023-03-05", "2023-03-05", 10)) # T2
+
+    # Bob The Builder
+    cursor.execute("INSERT INTO transactions (member_id, transaction_type, amount_paid, start_date, payment_date) VALUES (?, ?, ?, ?, ?)",
+                   (m_id_bob, "Group Class", 60.00, "2023-02-20", "2023-02-20")) # T3
+
+    # Alice Other
+    cursor.execute("INSERT INTO transactions (member_id, transaction_type, amount_paid, start_date, payment_date) VALUES (?, ?, ?, ?, ?)",
+                   (m_id_alice_other, "Group Class", 55.00, "2023-01-15", "2023-01-15")) # T4
+
+    conn.commit()
+
+
+def test_get_transactions_with_member_details_no_filters(db_conn):
+    setup_test_data_for_history_filters(db_conn)
+    # Import here to ensure DB_FILE is patched by db_conn fixture first
+    from reporter.database_manager import get_transactions_with_member_details
+    results = get_transactions_with_member_details()
+    assert len(results) == 4, "Should return all 4 transactions"
+
+def test_get_transactions_with_member_details_name_filter(db_conn):
+    setup_test_data_for_history_filters(db_conn)
+    from reporter.database_manager import get_transactions_with_member_details
+
+    results_alice = get_transactions_with_member_details(name_filter="Alice")
+    assert len(results_alice) == 3, "Should return 3 transactions for 'Alice' (Alice Wonderland, Alice Other)"
+    for record in results_alice:
+        assert "Alice" in record[10], "Client name should contain 'Alice'" # client_name is index 10
+
+    results_bob = get_transactions_with_member_details(name_filter="Bob The Builder")
+    assert len(results_bob) == 1, "Should return 1 transaction for 'Bob The Builder'"
+    assert results_bob[0][10] == "Bob The Builder"
+
+def test_get_transactions_with_member_details_phone_filter(db_conn):
+    setup_test_data_for_history_filters(db_conn)
+    from reporter.database_manager import get_transactions_with_member_details
+
+    results = get_transactions_with_member_details(phone_filter="111-222-3333") # Alice Wonderland
+    assert len(results) == 2, "Should return 2 transactions for Alice Wonderland's phone"
+    assert results[0][11] == "111-222-3333" # phone is index 11
+
+    results_partial = get_transactions_with_member_details(phone_filter="111") # Alice W and Alice O
+    assert len(results_partial) == 3, "Should return 3 transactions for phones starting with '111'"
+
+def test_get_transactions_with_member_details_join_date_filter(db_conn):
+    setup_test_data_for_history_filters(db_conn)
+    from reporter.database_manager import get_transactions_with_member_details
+
+    results = get_transactions_with_member_details(join_date_filter="2023-01-01") # Alice W and Alice O
+    assert len(results) == 3, "Should return 3 transactions for members joined on 2023-01-01"
+    for record in results:
+        assert record[12] == "2023-01-01" # join_date is index 12
+
+def test_get_transactions_with_member_details_combined_filters(db_conn):
+    setup_test_data_for_history_filters(db_conn)
+    from reporter.database_manager import get_transactions_with_member_details
+
+    # Name and Phone
+    results = get_transactions_with_member_details(name_filter="Alice", phone_filter="111-444-5555") # Alice Other
+    assert len(results) == 1, "Should return 1 transaction for Alice Other by name and phone"
+    assert results[0][10] == "Alice Other"
+    assert results[0][11] == "111-444-5555"
+
+    # Name and Join Date
+    results = get_transactions_with_member_details(name_filter="Bob", join_date_filter="2023-02-15") # Bob
+    assert len(results) == 1, "Should return 1 transaction for Bob by name and join date"
+    assert results[0][10] == "Bob The Builder"
+
+def test_get_transactions_with_member_details_invalid_date_format_filter(db_conn):
+    setup_test_data_for_history_filters(db_conn)
+    from reporter.database_manager import get_transactions_with_member_details
+    # This should ignore the invalid date filter and return all transactions
+    results = get_transactions_with_member_details(join_date_filter="01/01/2023")
+    assert len(results) == 4, "Should ignore invalid date format and return all transactions"
+
+def test_get_transactions_with_member_details_no_results(db_conn):
+    setup_test_data_for_history_filters(db_conn)
+    from reporter.database_manager import get_transactions_with_member_details
+
+    results = get_transactions_with_member_details(name_filter="NonExistentName")
+    assert len(results) == 0, "Should return 0 transactions for a non-existent name"
+
+    results = get_transactions_with_member_details(join_date_filter="1900-01-01")
+    assert len(results) == 0, "Should return 0 transactions for a non-existent join date"
+
+    results = get_transactions_with_member_details(name_filter="Alice", phone_filter="999-999-9999") # Alice exists, but not this phone
+    assert len(results) == 0, "Should return 0 transactions for existing name but non-existent phone"

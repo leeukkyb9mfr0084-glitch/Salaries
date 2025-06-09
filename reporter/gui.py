@@ -1,7 +1,8 @@
 import customtkinter
 from tkinter import StringVar # Explicitly import StringVar
-from datetime import datetime # Explicitly import datetime
+from datetime import datetime, date # Explicitly import datetime and date
 from customtkinter import CTkFrame, CTkLabel, CTkEntry, CTkButton, CTkOptionMenu, CTkFont, CTkScrollableFrame
+from tkcalendar import DateEntry
 
 
 class App(customtkinter.CTk):
@@ -30,172 +31,162 @@ class App(customtkinter.CTk):
         reporting_tab = self.tab_view.tab("Reporting")
 
         # --- Membership Management Tab ---
-        self.setup_membership_tab(self.tab_view.tab("Membership Management"))
+        membership_tab = self.tab_view.tab("Membership Management")
+        # self.membership_sub_tabview is created here but will be gridded in setup_membership_tab
+        self.membership_sub_tabview = customtkinter.CTkTabview(membership_tab)
+
+        self.add_member_sub_tab = self.membership_sub_tabview.add("Add Member")
+        self.add_membership_sub_tab = self.membership_sub_tabview.add("Add Membership") # Will be used in next task
+
+        self.setup_membership_tab(membership_tab) # Pass the main tab
 
         # --- Plan Management Tab ---
         self.setup_plan_management_tab(plan_management_tab) # Setup for the new tab
 
-    def populate_pt_member_dropdown(self):
-        """Populates the PT booking member dropdown with all members."""
-        # This method assumes self.member_name_to_id is populated by populate_member_dropdown
-        # which is called during setup_membership_tab.
-        # If this assumption changes, self.member_name_to_id might need its own population logic here.
-        from reporter.database_manager import get_all_members # Local import
+        # --- Membership History Tab ---
+        history_tab = self.tab_view.add("Membership History")
+        self.setup_membership_history_tab(history_tab)
 
-        all_members = get_all_members()
-        if not all_members:
-            self.pt_member_dropdown.configure(values=["No members found"])
-            self.pt_member_dropdown_var.set("No members found")
-            return
+    # def populate_pt_member_dropdown(self): # REMOVED
+    #     pass
+    # def setup_pt_booking_frame(self, parent_frame): # REMOVED
+    #    pass
+    # def save_pt_booking_action(self): # REMOVED
+    #     pass
 
-        # Using the same naming convention as populate_member_dropdown for consistency,
-        # but this dropdown will use "Name (Phone)" for display to be more user-friendly
-        # in the context of PT bookings, as member ID is less relevant here.
-        # self.member_name_to_id should already be populated.
-        # If not, or if a different mapping is needed (e.g. name_phone to id), it should be created here.
-
-        # For PT booking, let's display "Name (Phone)" and map this string to member_id
-        # This requires a slightly different approach than the group membership's "Name (ID: id)"
-        # We can reuse self.member_name_to_id if it's populated with a general "display_string" -> id,
-        # or create a specific one for this dropdown.
-        # For now, let's assume self.populate_member_dropdown() in setup_membership_tab
-        # has already populated self.member_name_to_id with "Name (ID: id)" : id.
-        # We will use the same self.member_name_to_id for retrieving ID upon saving.
-
-        member_display_values = []
-        # We need to ensure self.member_name_to_id is populated before this runs.
-        # It's populated by self.populate_member_dropdown called in setup_membership_tab.
-        # The keys of self.member_name_to_id are "Name (ID: id)".
-        # We can use these directly or re-fetch members if a different format is strictly needed.
-        # For simplicity, let's use the existing self.member_name_to_id keys for the dropdown.
-
-        member_display_values = list(self.member_name_to_id.keys())
-
-        if not member_display_values:
-            member_display_values = ["No members loaded"] # Should ideally not happen if populate_member_dropdown ran
-
-        self.pt_member_dropdown.configure(values=member_display_values)
-        if member_display_values and member_display_values[0] != "No members loaded":
-            self.pt_member_dropdown_var.set(member_display_values[0]) # Default to first member
-        elif member_display_values: # Handles "No members loaded" case
-            self.pt_member_dropdown_var.set(member_display_values[0])
-        else: # Fallback if list is somehow empty after checks
-            self.pt_member_dropdown_var.set("Error loading members")
-
-    def setup_pt_booking_frame(self, parent_frame):
-        """Sets up the frame for adding personal training bookings."""
-        self.pt_booking_frame = CTkFrame(parent_frame, corner_radius=0, fg_color="transparent")
-        # self.pt_booking_frame.grid(row=2, column=0, sticky="nsew", padx=20, pady=10) # Using pack instead
-        self.pt_booking_frame.grid(row=2, column=0, padx=5, pady=10, sticky="new")
-
-
-        CTkLabel(self.pt_booking_frame, text="Add Personal Training Booking", font=CTkFont(size=16, weight="bold")).pack(pady=(0,10), anchor="w")
-
-        # Member selection
-        CTkLabel(self.pt_booking_frame, text="Select Member:").pack(anchor="w")
-        self.pt_member_dropdown_var = StringVar()
-        self.pt_member_dropdown = CTkOptionMenu(self.pt_booking_frame, variable=self.pt_member_dropdown_var, values=["Loading..."])
-        self.pt_member_dropdown.pack(fill="x", pady=(0,5))
-
-        # Start Date
-        CTkLabel(self.pt_booking_frame, text="Start Date (YYYY-MM-DD):").pack(anchor="w")
-        self.pt_start_date_entry = CTkEntry(self.pt_booking_frame, placeholder_text="YYYY-MM-DD")
-        self.pt_start_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d'))
-        self.pt_start_date_entry.pack(fill="x", pady=(0,5))
-
-        # Number of Sessions
-        CTkLabel(self.pt_booking_frame, text="Number of Sessions:").pack(anchor="w")
-        self.pt_sessions_entry = CTkEntry(self.pt_booking_frame, placeholder_text="e.g., 10")
-        self.pt_sessions_entry.pack(fill="x", pady=(0,5))
-
-        # Amount Paid
-        CTkLabel(self.pt_booking_frame, text="Amount Paid:").pack(anchor="w")
-        self.pt_amount_paid_entry = CTkEntry(self.pt_booking_frame, placeholder_text="e.g., 500.00")
-        self.pt_amount_paid_entry.pack(fill="x", pady=(0,10))
-
-        # Save Button
-        self.save_pt_booking_button = CTkButton(self.pt_booking_frame, text="Save PT Booking", command=self.save_pt_booking_action)
-        self.save_pt_booking_button.pack(fill="x", pady=(0,5))
-
-        # Status Label
-        self.pt_booking_status_label = CTkLabel(self.pt_booking_frame, text="", font=CTkFont(size=12))
-        self.pt_booking_status_label.pack(anchor="w")
-
-    def save_pt_booking_action(self):
-        """Handles the save PT booking button click event with validation."""
-        from reporter import database_manager # For add_pt_booking
-        from datetime import datetime
-
-        selected_member_display = self.pt_member_dropdown_var.get()
-        start_date_str = self.pt_start_date_entry.get().strip()
-        sessions_str = self.pt_sessions_entry.get().strip()
-        amount_paid_str = self.pt_amount_paid_entry.get().strip()
-
-        # --- Input Validation ---
-        # Validate member selection
-        if not selected_member_display or selected_member_display in ["Loading...", "No members found", "No members loaded", "Error loading members"]:
-            self.pt_booking_status_label.configure(text="Error: Please select a valid member.", text_color="red")
-            return
-
-        # Retrieve member_id using the (potentially shared) member_name_to_id map
-        # This map is populated by populate_member_dropdown and stores "Name (ID: id)" -> id
-        member_id = self.member_name_to_id.get(selected_member_display)
-        if not member_id:
-            self.pt_booking_status_label.configure(text="Error: Could not find member ID. Please refresh.", text_color="red")
-            return
-
-        # Check that all fields are filled
-        if not start_date_str or not sessions_str or not amount_paid_str:
-            self.pt_booking_status_label.configure(text="Error: All fields must be filled.", text_color="red")
-            return
-
-        # Validate start_date_str format (YYYY-MM-DD)
-        try:
-            datetime.strptime(start_date_str, '%Y-%m-%d')
-        except ValueError:
-            self.pt_booking_status_label.configure(text="Error: Invalid Start Date format. Use YYYY-MM-DD.", text_color="red")
-            return
-
-        # Validate sessions_str is a positive integer
-        try:
-            sessions = int(sessions_str)
-            if sessions <= 0:
-                self.pt_booking_status_label.configure(text="Error: Number of Sessions must be a positive integer.", text_color="red")
-                return
-        except ValueError:
-            self.pt_booking_status_label.configure(text="Error: Number of Sessions must be an integer.", text_color="red")
-            return
-
-        # Validate amount_paid_str is a positive number
-        try:
-            amount_paid = float(amount_paid_str)
-            if amount_paid <= 0:
-                self.pt_booking_status_label.configure(text="Error: Amount Paid must be a positive number.", text_color="red")
-                return
-        except ValueError:
-            self.pt_booking_status_label.configure(text="Error: Amount Paid must be a valid number.", text_color="red")
-            return
-
-        # If validation passes, call database_manager.add_pt_booking
-        try:
-            success = database_manager.add_pt_booking(member_id, start_date_str, sessions, amount_paid)
-            if success:
-                self.pt_booking_status_label.configure(text="Success: PT Booking added.", text_color="green")
-                # Clear input fields on success
-                self.pt_start_date_entry.delete(0, "end")
-                self.pt_start_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d'))
-                self.pt_sessions_entry.delete(0, "end")
-                self.pt_amount_paid_entry.delete(0, "end")
-                # Optionally reset dropdown, or leave as is for quick re-entry for same member
-                # self.pt_member_dropdown_var.set(list(self.member_name_to_id.keys())[0]) # Reset to first member
-            else:
-                self.pt_booking_status_label.configure(text="Error: Failed to save PT Booking. Check logs.", text_color="red")
-        except Exception as e:
-            self.pt_booking_status_label.configure(text=f"Error: An unexpected error occurred: {e}", text_color="red")
-
-
-        # --- Reporting Tab ---
+    # --- Reporting Tab ---
         self.setup_reporting_tab(self.tab_view.tab("Reporting"))
+
+    def setup_membership_history_tab(self, tab):
+        """Configures the UI for the Membership History tab."""
+        from reporter.database_manager import get_transactions_with_member_details # Local import
+
+        tab.grid_columnconfigure(0, weight=1)
+        tab.grid_rowconfigure(1, weight=1) # Allow scrollable frame to expand
+
+        # Main frame for the history tab
+        history_main_frame = CTkFrame(tab, fg_color="transparent")
+        history_main_frame.pack(expand=True, fill="both", padx=5, pady=5)
+        history_main_frame.grid_columnconfigure(0, weight=1)
+        history_main_frame.grid_rowconfigure(1, weight=1) # For the scrollable display area
+
+        # Filter Controls Frame
+        filter_controls_frame = CTkFrame(history_main_frame)
+        filter_controls_frame.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
+        # Configure columns for filter_controls_frame to distribute space
+        filter_controls_frame.grid_columnconfigure(0, weight=1) # Name filter
+        filter_controls_frame.grid_columnconfigure(1, weight=1) # Phone filter
+        filter_controls_frame.grid_columnconfigure(2, weight=1) # Date filter
+        filter_controls_frame.grid_columnconfigure(3, weight=0) # Filter button
+        filter_controls_frame.grid_columnconfigure(4, weight=0) # Clear button
+
+        # Name Filter
+        CTkLabel(filter_controls_frame, text="Filter by Name:").grid(row=0, column=0, padx=(0,5), pady=5, sticky="w")
+        self.history_name_filter_entry = CTkEntry(filter_controls_frame, placeholder_text="Name")
+        self.history_name_filter_entry.grid(row=1, column=0, padx=(0,5), pady=5, sticky="ew")
+
+        # Phone Filter
+        CTkLabel(filter_controls_frame, text="Filter by Phone:").grid(row=0, column=1, padx=5, pady=5, sticky="w")
+        self.history_phone_filter_entry = CTkEntry(filter_controls_frame, placeholder_text="Phone")
+        self.history_phone_filter_entry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+
+        # Join Date Filter
+        CTkLabel(filter_controls_frame, text="Filter by Join Date:").grid(row=0, column=2, padx=5, pady=5, sticky="w")
+        self.history_join_date_picker = DateEntry(filter_controls_frame,
+                                                  date_pattern='y-mm-dd',
+                                                  font=CTkFont(size=12),
+                                                  borderwidth=2)
+        # No default date for filter, allow it to be empty.
+        # The DateEntry widget itself will be empty by default.
+        self.history_join_date_picker.grid(row=1, column=2, padx=5, pady=5, sticky="ew")
+
+        # Filter Button
+        self.history_filter_button = CTkButton(filter_controls_frame, text="Filter", command=self.apply_history_filters)
+        self.history_filter_button.grid(row=1, column=3, padx=5, pady=5)
+
+        # Clear Filters Button
+        self.history_clear_button = CTkButton(filter_controls_frame, text="Clear", command=self.clear_history_filters)
+        self.history_clear_button.grid(row=1, column=4, padx=5, pady=5)
+
+        # Display Area for Transaction Records
+        self.history_scrollable_frame = CTkScrollableFrame(history_main_frame)
+        self.history_scrollable_frame.grid(row=1, column=0, padx=10, pady=(0,10), sticky="nsew")
+
+        self.refresh_membership_history_display() # Initial data load
+
+    def refresh_membership_history_display(self):
+        """Refreshes the transaction history display based on current filters."""
+        from reporter.database_manager import get_transactions_with_member_details # Ensure import
+
+        name_filter = self.history_name_filter_entry.get().strip() if hasattr(self, 'history_name_filter_entry') else None
+        phone_filter = self.history_phone_filter_entry.get().strip() if hasattr(self, 'history_phone_filter_entry') else None
+
+        join_date_str = ""
+        if hasattr(self, 'history_join_date_picker'):
+            join_date_str = self.history_join_date_picker.get() # This gets the string representation
+
+        join_date_filter = join_date_str.strip() if join_date_str else None
+
+
+        # Clear empty strings to None for database function
+        name_filter = name_filter if name_filter else None
+        phone_filter = phone_filter if phone_filter else None
+        join_date_filter = join_date_filter if join_date_filter else None
+
+        transactions = get_transactions_with_member_details(
+            name_filter=name_filter,
+            phone_filter=phone_filter,
+            join_date_filter=join_date_filter
+        )
+
+        for widget in self.history_scrollable_frame.winfo_children():
+            widget.destroy()
+
+        if not transactions:
+            CTkLabel(self.history_scrollable_frame, text="No transaction records found.").pack(pady=10)
+            return
+
+        for i, record in enumerate(transactions):
+            # record structure: (t.*, m.client_name, m.phone, m.join_date)
+            # Assuming t.* includes: transaction_id, member_id, transaction_type, plan_id,
+            # payment_date, start_date, end_date, amount_paid, payment_method, sessions
+            # Indices for m.client_name, m.phone, m.join_date will be after transaction table columns.
+            # Let's assume transaction table has 10 columns (0-9), so client_name is 10, phone is 11, join_date is 12
+
+            transaction_id, member_id, transaction_type, plan_id, payment_date, start_date, end_date, amount_paid, payment_method, sessions, client_name, phone, join_date = record
+
+            detail_text = f"Name: {client_name} (Ph: {phone}, Joined: {join_date})\n" \
+                          f"Type: {transaction_type} | Amount: ${amount_paid:.2f} | Paid: {payment_date}\n" \
+                          f"Active: {start_date} to {end_date if end_date else 'N/A'}"
+            if transaction_type == "Group Class":
+                # Fetch plan name if needed, or assume plan_id is sufficient for now
+                detail_text += f" | Plan ID: {plan_id}"
+                if payment_method: detail_text += f" | Method: {payment_method}"
+            elif transaction_type == "Personal Training":
+                detail_text += f" | Sessions: {sessions if sessions else 'N/A'}"
+
+            record_label = CTkLabel(self.history_scrollable_frame, text=detail_text, anchor="w", justify="left")
+            record_label.pack(padx=5, pady=3, fill="x", expand=True)
+            if i < len(transactions) - 1:
+                sep = CTkFrame(self.history_scrollable_frame, height=1, fg_color="gray70")
+                sep.pack(fill="x", padx=5, pady=2)
+
+    def apply_history_filters(self):
+        """Applies the filters from the history tab and refreshes the display."""
+        self.refresh_membership_history_display()
+
+    def clear_history_filters(self):
+        """Clears all filter entries in the history tab and refreshes the display."""
+        if hasattr(self, 'history_name_filter_entry'): self.history_name_filter_entry.delete(0, "end")
+        if hasattr(self, 'history_phone_filter_entry'): self.history_phone_filter_entry.delete(0, "end")
+        if hasattr(self, 'history_join_date_picker'):
+            # For tkcalendar DateEntry, clearing is done by setting an empty string
+            # or by deleting the content of its underlying Entry widget.
+            self.history_join_date_picker.delete(0, "end")
+            # Alternatively, if it had an associated StringVar: self.history_join_date_var.set("")
+            # Or, if set_date(None) was a reliable way to clear it: self.history_join_date_picker.set_date(None)
+            # Using delete(0, "end") is common for Entry-like widgets.
+        self.refresh_membership_history_display()
 
     def setup_membership_tab(self, tab):
         """Configures the UI for the Membership Management tab."""
@@ -204,68 +195,164 @@ class App(customtkinter.CTk):
         from reporter.database_manager import get_all_members # add_member_to_db is used in an action method
         # CTk* elements are now imported globally
 
-        # Configure grid layout for the tab
-        # tab.grid_columnconfigure(0, weight=1) # For the add member frame
-        # tab.grid_columnconfigure(1, weight=2) # For the display members frame
-        # tab.grid_rowconfigure(0, weight=1) # For Add Member and Add Group Membership
-        # tab.grid_rowconfigure(1, weight=1) # For Display All Members (if it spans rows or is separate)
+        # Top-level frame for the Membership Management tab
+        # This frame will be split into two columns:
+        # Column 0: Sub-tabs for "Add Member", "Add Membership"
+        # Column 1: Display area for "All Members" and "Membership History"
+        top_level_frame = customtkinter.CTkFrame(tab, fg_color="transparent")
+        top_level_frame.pack(expand=True, fill="both") # Fill the entire 'tab'
+        top_level_frame.grid_columnconfigure(0, weight=1) # Column for sub-tabs (e.g., Add Member)
+        top_level_frame.grid_columnconfigure(1, weight=2) # Column for display area (e.g., All Members list), give more space
+        top_level_frame.grid_rowconfigure(0, weight=1)    # Single row to contain both columns
 
-        # Main frame for the membership management tab, divides into forms and display areas.
-        main_management_frame = customtkinter.CTkFrame(tab)
-        main_management_frame.pack(expand=True, fill="both", padx=5, pady=5)
-        main_management_frame.grid_columnconfigure(0, weight=1) # Column for input forms
-        main_management_frame.grid_columnconfigure(1, weight=1) # Column for displaying member data
-        main_management_frame.grid_rowconfigure(0, weight=0)    # Row for Add Member form
-        main_management_frame.grid_rowconfigure(1, weight=0)    # Row for Add Group Membership form
-        main_management_frame.grid_rowconfigure(2, weight=1)    # Spacer row, allows display frame to expand if needed
+        # Grid the self.membership_sub_tabview (created in __init__) into column 0 of top_level_frame
+        # Its master is 'tab' (the main "Membership Management" tab from CTkTabview).
+        self.membership_sub_tabview.grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
 
-        # --- Column 0: Input Forms ---
-        # This frame will contain all individual input forms (Add Member, Add Group Membership)
-        forms_frame = customtkinter.CTkScrollableFrame(main_management_frame, fg_color="transparent")
-        forms_frame.grid(row=0, column=0, rowspan=3, padx=5, pady=5, sticky="nsew") # Spans multiple rows in parent grid
-        forms_frame.grid_columnconfigure(0, weight=1) # Ensure forms within this frame can expand horizontally
 
-        # 1. Frame for Adding New Members
-        # This section creates the UI elements for adding a new member.
-        add_member_frame = customtkinter.CTkFrame(forms_frame)
-        add_member_frame.grid(row=0, column=0, padx=5, pady=5, sticky="new") # Aligns to North-East-West
-        add_member_frame.grid_columnconfigure(1, weight=1) # Allows entry fields to expand
+        # --- "Add Member" Sub-tab Content (goes into self.add_member_sub_tab) ---
+        # self.add_member_sub_tab is a tab (a frame) within self.membership_sub_tabview.
 
-        add_member_title = CTkLabel(add_member_frame, text="Add New Member", font=CTkFont(weight="bold"))
+        # Frame for Adding New Members, this is the main content of the "Add Member" sub-tab
+        self.add_member_frame = customtkinter.CTkFrame(self.add_member_sub_tab) # Parent is the "Add Member" sub-tab
+        self.add_member_frame.pack(expand=True, fill="both", padx=10, pady=10) # Use pack to fill the sub-tab
+
+        # Configure grid for content within add_member_frame (e.g., labels, entries)
+        self.add_member_frame.grid_columnconfigure(1, weight=1) # Allows entry fields to expand
+
+        add_member_title = CTkLabel(self.add_member_frame, text="Add New Member", font=CTkFont(weight="bold"))
         add_member_title.grid(row=0, column=0, columnspan=2, padx=10, pady=(10,15))
 
-        name_label = CTkLabel(add_member_frame, text="Name:")
-        name_label.grid(row=1, column=0, padx=10, pady=5, sticky="w") # Aligns label to the west (left)
-        self.name_entry = CTkEntry(add_member_frame) # Entry field for member's name
-        self.name_entry.grid(row=1, column=1, padx=10, pady=5, sticky="ew") # Expands East-West (horizontally)
+        name_label = CTkLabel(self.add_member_frame, text="Name:")
+        name_label.grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        self.name_entry = CTkEntry(self.add_member_frame)
+        self.name_entry.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
 
-        phone_label = CTkLabel(add_member_frame, text="Phone:")
+        phone_label = CTkLabel(self.add_member_frame, text="Phone:")
         phone_label.grid(row=2, column=0, padx=10, pady=5, sticky="w")
-        self.phone_entry = CTkEntry(add_member_frame) # Entry field for member's phone
+        self.phone_entry = CTkEntry(self.add_member_frame)
         self.phone_entry.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
 
-        save_button = CTkButton(add_member_frame, text="Save Member", command=self.save_member_action)
-        save_button.grid(row=3, column=0, columnspan=2, padx=10, pady=10) # Spans two columns for centering
+        save_button = CTkButton(self.add_member_frame, text="Save Member", command=self.save_member_action)
+        save_button.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
 
-        self.member_status_label = CTkLabel(add_member_frame, text="", text_color="red") # Displays status/errors
+        self.member_status_label = CTkLabel(self.add_member_frame, text="", text_color="red")
         self.member_status_label.grid(row=4, column=0, columnspan=2, padx=10, pady=5)
 
-        # --- Add Group Membership Frame ---
-        # This frame is set up by a separate method for better organization.
-        self.setup_group_membership_frame(forms_frame) # Pass the 'forms_frame' as parent
+        # --- Add Group Membership & PT Booking Frames ---
+        # These will be moved to the "Add Membership" sub-tab (self.add_membership_sub_tab) in Task 2.
+        # For now, their direct setup calls from here are commented out.
+        # The methods setup_group_membership_frame and setup_pt_booking_frame still exist
+        # but are not called from setup_membership_tab for now.
+        # self.setup_group_membership_frame(self.add_membership_sub_tab) # Example for next task
+        # self.setup_pt_booking_frame(self.add_membership_sub_tab) # Example for next task
 
-        # --- Add Personal Training Booking Frame ---
-        # This frame is set up by a separate method.
-        self.setup_pt_booking_frame(forms_frame) # Pass the 'forms_frame' as parent
+        # --- "Add Membership" Sub-tab Content (goes into self.add_membership_sub_tab) ---
+        self.add_membership_frame = customtkinter.CTkFrame(self.add_membership_sub_tab)
+        self.add_membership_frame.pack(expand=True, fill="both", padx=10, pady=10)
+        self.add_membership_frame.grid_columnconfigure(1, weight=1) # For entry widgets to expand
+
+        # Title for the "Add Membership" form
+        add_membership_title = CTkLabel(self.add_membership_frame, text="Add or Update Membership", font=CTkFont(weight="bold"))
+        add_membership_title.grid(row=0, column=0, columnspan=2, padx=10, pady=(10,15))
+
+        # Membership Type Dropdown
+        self.membership_type_label = CTkLabel(self.add_membership_frame, text="Membership Type:") # Made it self. for potential access
+        self.membership_type_label.grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        self.membership_type_var = StringVar(value="Group Class")
+        self.membership_type_dropdown = CTkOptionMenu(self.add_membership_frame,
+                                                      variable=self.membership_type_var,
+                                                      values=["Group Class", "Personal Training"],
+                                                      command=self.on_membership_type_change)
+        self.membership_type_dropdown.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
+
+        # --- Unified Form Fields ---
+        self.current_form_row = 2 # Start gridding new fields from this row (tracks the next available row)
+
+        # Member Dropdown
+        self.member_label = CTkLabel(self.add_membership_frame, text="Select Member:")
+        self.member_label.grid(row=self.current_form_row, column=0, padx=10, pady=5, sticky="w")
+        self.membership_member_dropdown_var = customtkinter.StringVar(value="Select Member")
+        self.membership_member_dropdown = CTkOptionMenu(self.add_membership_frame, variable=self.membership_member_dropdown_var, values=["Loading..."])
+        self.membership_member_dropdown.grid(row=self.current_form_row, column=1, padx=10, pady=5, sticky="ew")
+        self.member_name_to_id = {}
+        self.current_form_row += 1
+
+        # Plan Dropdown (for Group Class) - Store its row for show/hide
+        self.plan_label = CTkLabel(self.add_membership_frame, text="Select Plan:")
+        self.membership_plan_dropdown_var = customtkinter.StringVar(value="Select Plan")
+        self.membership_plan_dropdown = CTkOptionMenu(self.add_membership_frame, variable=self.membership_plan_dropdown_var, values=["Loading..."])
+        self.plan_name_to_id = {}
+        self.current_plan_row = self.current_form_row # Actual row this will occupy when visible
+        # Initial gridding for plan_label and membership_plan_dropdown will be handled by on_membership_type_change
+        self.current_form_row += 1
+
+        # Number of Sessions Entry (for Personal Training) - Store its row for show/hide
+        self.sessions_label = CTkLabel(self.add_membership_frame, text="Number of Sessions:")
+        self.pt_sessions_entry = CTkEntry(self.add_membership_frame, placeholder_text="e.g., 10")
+        self.current_sessions_row = self.current_plan_row # PT sessions will occupy the same row as GC Plan
+        # Initial gridding for sessions_label and pt_sessions_entry will be handled by on_membership_type_change
+        # Note: current_form_row is not incremented here if they share a row. If they need separate rows, adjust.
+
+        # Payment Date Entry - Store its row for show/hide
+        self.payment_date_label = CTkLabel(self.add_membership_frame, text="Payment Date:")
+        self.payment_date_picker = DateEntry(self.add_membership_frame,
+                                             date_pattern='y-mm-dd',
+                                             font=CTkFont(size=12), # Basic font styling
+                                             borderwidth=2)
+        self.payment_date_picker.set_date(date.today())
+        self.current_payment_date_row = self.current_form_row
+        # Initial gridding for payment_date_label and payment_date_picker handled by on_membership_type_change
+        self.current_form_row += 1
+
+        # Start Date Entry (Always Visible)
+        self.start_date_label = CTkLabel(self.add_membership_frame, text="Start Date:")
+        self.start_date_label.grid(row=self.current_form_row, column=0, padx=10, pady=5, sticky="w")
+        self.start_date_picker = DateEntry(self.add_membership_frame,
+                                           date_pattern='y-mm-dd',
+                                           font=CTkFont(size=12),
+                                           borderwidth=2)
+        self.start_date_picker.set_date(date.today())
+        self.start_date_picker.grid(row=self.current_form_row, column=1, padx=10, pady=5, sticky="ew")
+        self.current_form_row += 1
+
+        # Amount Paid Entry (Always Visible)
+        self.amount_paid_label = CTkLabel(self.add_membership_frame, text="Amount Paid:")
+        self.amount_paid_label.grid(row=self.current_form_row, column=0, padx=10, pady=5, sticky="w")
+        self.amount_paid_entry = CTkEntry(self.add_membership_frame, placeholder_text="e.g., 1500.00")
+        self.amount_paid_entry.grid(row=self.current_form_row, column=1, padx=10, pady=5, sticky="ew")
+        self.current_form_row += 1
+
+        # Payment Method Entry - Store its row for show/hide
+        self.payment_method_label = CTkLabel(self.add_membership_frame, text="Payment Method:")
+        self.payment_method_entry = CTkEntry(self.add_membership_frame, placeholder_text="e.g., GPay, Cash")
+        self.current_payment_method_row = self.current_form_row
+        # Initial gridding for payment_method_label and payment_method_entry handled by on_membership_type_change
+        self.current_form_row += 1
+
+        # Save Button
+        self.save_membership_button = CTkButton(self.add_membership_frame, text="Save Membership", command=self.save_membership_action)
+        self.save_membership_button.grid(row=self.current_form_row, column=0, columnspan=2, padx=10, pady=20)
+        self.current_form_row += 1
+
+        # Status Label
+        self.membership_status_label = CTkLabel(self.add_membership_frame, text="", text_color="red") # Renamed
+        self.membership_status_label.grid(row=self.current_form_row, column=0, columnspan=2, padx=10, pady=5)
+
+        # Call on_membership_type_change to set initial visibility of fields
+        self.on_membership_type_change(self.membership_type_var.get())
 
 
-        # --- Column 1: Display Area ---
+        # --- Column 1: Display Area (within top_level_frame) ---
         # This frame is for displaying member lists and membership history.
-        display_frame = customtkinter.CTkFrame(main_management_frame)
-        display_frame.grid(row=0, column=1, rowspan=3, padx=5, pady=5, sticky="nsew") # Spans rows and fills space
-        display_frame.grid_rowconfigure(1, weight=0) # New row for filter_controls_frame
-        display_frame.grid_rowconfigure(2, weight=1) # Allows the members_scrollable_frame to expand vertically (was row 1)
-        display_frame.grid_rowconfigure(4, weight=1) # Allows the membership_history_frame to expand vertically (was row 3)
+        # It's parented to top_level_frame and placed in column 1.
+        display_frame = customtkinter.CTkFrame(top_level_frame)
+        display_frame.grid(row=0, column=1, padx=5, pady=5, sticky="nsew") # Gridded into column 1 of top_level_frame
+
+        # Configure grid for content within display_frame
+        display_frame.grid_rowconfigure(1, weight=0) # For filter_controls_frame
+        display_frame.grid_rowconfigure(2, weight=1) # Allows members_scrollable_frame to expand
+        display_frame.grid_rowconfigure(4, weight=1) # Allows membership_history_frame to expand
         display_frame.grid_columnconfigure(0, weight=1) # Allows content within to expand horizontally
 
         # Title for the "All Members" list
@@ -292,21 +379,21 @@ class App(customtkinter.CTk):
 
         # Scrollable frame to display the list of all members
         self.members_scrollable_frame = CTkScrollableFrame(display_frame)
-        self.members_scrollable_frame.grid(row=2, column=0, padx=10, pady=(0,10), sticky="nsew") # Moved to row=2
+        self.members_scrollable_frame.grid(row=2, column=0, padx=10, pady=(0,10), sticky="nsew")
 
         # --- Membership History Frame (Below All Members) ---
         history_title = CTkLabel(display_frame, text="Membership History", font=CTkFont(weight="bold"))
-        history_title.grid(row=3, column=0, padx=10, pady=(10,0), sticky="ew") # Moved to row=3
+        history_title.grid(row=3, column=0, padx=10, pady=(10,0), sticky="ew")
 
         # Scrollable frame to display history for a selected member
         self.membership_history_frame = CTkScrollableFrame(display_frame)
-        self.membership_history_frame.grid(row=4, column=0, padx=10, pady=10, sticky="nsew") # Moved to row=4
+        self.membership_history_frame.grid(row=4, column=0, padx=10, pady=10, sticky="nsew")
 
         # Initialize data displays
         self.display_all_members()      # Populate the list of all members
-        self.populate_member_dropdown() # Populate dropdown for group membership form
-        self.populate_plan_dropdown()   # Populate dropdown for group membership form
-        self.populate_pt_member_dropdown() # Populate dropdown for PT booking form
+        self.populate_member_dropdown() # Populate the unified member dropdown
+        self.populate_plan_dropdown()   # Populate plan dropdown (used by Group Class)
+        # self.populate_pt_member_dropdown() # REMOVE THIS CALL - PT dropdown is gone
 
         self.display_membership_history(None) # Show placeholder message in history view
 
@@ -615,87 +702,74 @@ class App(customtkinter.CTk):
                 text_color="red"
             )
 
-    def setup_group_membership_frame(self, parent_frame):
-        """Sets up the UI for adding group memberships."""
-        # Local imports for UI elements and database functions
-        # from reporter.database_manager import get_all_plans, add_group_membership_to_db, get_all_members # Used in actions or populating
-        # CTk* elements and datetime are now imported globally
+    # def setup_group_membership_frame(self, parent_frame): # Method removed
+    #     pass
+    # def setup_pt_booking_frame(self, parent_frame): # Method removed
+    #    pass
 
-        # Frame to contain all elements for adding a group membership
-        group_membership_frame = customtkinter.CTkFrame(parent_frame)
-        group_membership_frame.grid(row=1, column=0, padx=5, pady=10, sticky="new") # Position below add_member_frame
-        group_membership_frame.grid_columnconfigure(1, weight=1) # Allow entry fields to expand
-        self.group_membership_frame = group_membership_frame # Store reference if needed
 
-        title = CTkLabel(group_membership_frame, text="Add Group Membership", font=CTkFont(weight="bold"))
-        title.grid(row=0, column=0, columnspan=2, padx=10, pady=(10, 15))
+    def on_membership_type_change(self, selection):
+        """Shows/hides form fields based on selected membership type."""
+        # Ensure all widgets are treated as instance variables (e.g., self.plan_label)
+        if selection == "Group Class":
+            self.plan_label.grid(row=self.current_plan_row, column=0, padx=10, pady=5, sticky="w")
+            self.membership_plan_dropdown.grid(row=self.current_plan_row, column=1, padx=10, pady=5, sticky="ew")
 
-        # Member Dropdown: Allows selection of an existing member
-        member_label = CTkLabel(group_membership_frame, text="Select Member:")
-        member_label.grid(row=1, column=0, padx=10, pady=5, sticky="w")
-        self.membership_member_dropdown_var = customtkinter.StringVar(value="Select Member") # Control variable for dropdown
-        self.membership_member_dropdown = CTkOptionMenu(group_membership_frame, variable=self.membership_member_dropdown_var, values=[])
-        self.membership_member_dropdown.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
-        self.member_name_to_id = {} # Dictionary to map displayed member names to their IDs
+            self.payment_date_label.grid(row=self.current_payment_date_row, column=0, padx=10, pady=5, sticky="w")
+            self.payment_date_picker.grid(row=self.current_payment_date_row, column=1, padx=10, pady=5, sticky="ew")
 
-        # Plan Dropdown: Allows selection of a membership plan
-        plan_label = CTkLabel(group_membership_frame, text="Select Plan:")
-        plan_label.grid(row=2, column=0, padx=10, pady=5, sticky="w")
-        self.membership_plan_dropdown_var = customtkinter.StringVar(value="Select Plan") # Control variable for dropdown
-        self.membership_plan_dropdown = CTkOptionMenu(group_membership_frame, variable=self.membership_plan_dropdown_var, values=[])
-        self.membership_plan_dropdown.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
-        self.plan_name_to_id = {} # Dictionary to map displayed plan names to their IDs
+            self.payment_method_label.grid(row=self.current_payment_method_row, column=0, padx=10, pady=5, sticky="w")
+            self.payment_method_entry.grid(row=self.current_payment_method_row, column=1, padx=10, pady=5, sticky="ew")
 
-        # Payment Date Entry: For recording the date of payment
-        payment_date_label = CTkLabel(group_membership_frame, text="Payment Date (YYYY-MM-DD):")
-        payment_date_label.grid(row=3, column=0, padx=10, pady=5, sticky="w")
-        self.payment_date_entry = CTkEntry(group_membership_frame)
-        self.payment_date_entry.grid(row=3, column=1, padx=10, pady=5, sticky="ew")
-        self.payment_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d')) # Default to today's date
+            # Hide PT specific fields
+            if hasattr(self, 'sessions_label'): self.sessions_label.grid_remove()
+            if hasattr(self, 'pt_sessions_entry'): self.pt_sessions_entry.grid_remove()
 
-        # Start Date Entry: For recording the membership start date
-        start_date_label = CTkLabel(group_membership_frame, text="Start Date (YYYY-MM-DD):")
-        start_date_label.grid(row=4, column=0, padx=10, pady=5, sticky="w")
-        self.start_date_entry = CTkEntry(group_membership_frame)
-        self.start_date_entry.grid(row=4, column=1, padx=10, pady=5, sticky="ew")
-        self.start_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d')) # Default to today's date
+        elif selection == "Personal Training":
+            if hasattr(self, 'plan_label'): self.plan_label.grid_remove()
+            if hasattr(self, 'membership_plan_dropdown'): self.membership_plan_dropdown.grid_remove()
 
-        # Amount Paid Entry: For recording the amount paid
-        amount_paid_label = CTkLabel(group_membership_frame, text="Amount Paid:")
-        amount_paid_label.grid(row=5, column=0, padx=10, pady=5, sticky="w")
-        self.amount_paid_entry = CTkEntry(group_membership_frame)
-        self.amount_paid_entry.grid(row=5, column=1, padx=10, pady=5, sticky="ew")
+            # Payment date might be hidden or considered same as start date for PT
+            if hasattr(self, 'payment_date_label'): self.payment_date_label.grid_remove()
+            if hasattr(self, 'payment_date_picker'): self.payment_date_picker.grid_remove()
 
-        # Payment Method Entry: For recording the method of payment
-        payment_method_label = CTkLabel(group_membership_frame, text="Payment Method:")
-        payment_method_label.grid(row=6, column=0, padx=10, pady=5, sticky="w")
-        self.payment_method_entry = CTkEntry(group_membership_frame)
-        self.payment_method_entry.grid(row=6, column=1, padx=10, pady=5, sticky="ew")
+            if hasattr(self, 'payment_method_label'): self.payment_method_label.grid_remove()
+            if hasattr(self, 'payment_method_entry'): self.payment_method_entry.grid_remove()
 
-        # Save Button: Triggers the action to save the group membership
-        save_gm_button = CTkButton(group_membership_frame, text="Save Membership", command=self.save_group_membership_action)
-        save_gm_button.grid(row=7, column=0, columnspan=2, padx=10, pady=10)
+            # Show PT specific fields
+            self.sessions_label.grid(row=self.current_sessions_row, column=0, padx=10, pady=5, sticky="w")
+            self.pt_sessions_entry.grid(row=self.current_sessions_row, column=1, padx=10, pady=5, sticky="ew")
 
-        # Status Label: Displays feedback or error messages for this form
-        self.group_membership_status_label = CTkLabel(group_membership_frame, text="", text_color="red")
-        self.group_membership_status_label.grid(row=8, column=0, columnspan=2, padx=10, pady=5)
+        # Ensure common fields remain visible (they are gridded during setup and not removed here)
+        # self.start_date_label.grid()
+        # self.start_date_entry.grid()
+        # self.amount_paid_label.grid()
+        # self.amount_paid_entry.grid()
 
     def populate_member_dropdown(self):
-        """Populates the member selection dropdown with data from the database."""
+        """Populates the member selection dropdown with data from the database.
+        This dropdown is now used in the unified 'Add Membership' form."""
         from reporter.database_manager import get_all_members # Local import
         members = get_all_members()
-        # Create a mapping from a display string "Name (ID: id)" to the member's ID
-        self.member_name_to_id = {f"{m[1]} (ID: {m[0]})": m[0] for m in members}
+        self.member_name_to_id = {f"{m[1]} (ID: {m[0]})": m[0] for m in members} # Ensure self.member_name_to_id is populated
         member_names_display = list(self.member_name_to_id.keys())
 
+        # Ensure the dropdown variable and widget are initialized (should be done in setup_membership_tab)
+        if not hasattr(self, 'membership_member_dropdown_var'):
+            self.membership_member_dropdown_var = customtkinter.StringVar()
+        if not hasattr(self, 'membership_member_dropdown'):
+             # This should not happen if setup is correct
+            print("Error: membership_member_dropdown not initialized before populating.")
+            return
+
         if not member_names_display:
-            member_names_display = ["No members available"] # Placeholder if no members
+            member_names_display = ["No members available"]
             self.membership_member_dropdown_var.set(member_names_display[0])
         else:
-            # Set default selection to the first member or a generic prompt
+            # Set default selection to the first member or a generic prompt if list is not empty
             self.membership_member_dropdown_var.set(member_names_display[0])
-        # Update the dropdown menu with the new list of names
         self.membership_member_dropdown.configure(values=member_names_display)
+
 
     def populate_plan_dropdown(self):
         """Populates the plan selection dropdown with data from the database."""
@@ -714,87 +788,141 @@ class App(customtkinter.CTk):
         # Update the dropdown menu with the new list of plan names
         self.membership_plan_dropdown.configure(values=plan_names_display)
 
-    def save_group_membership_action(self):
-        """Handles the save group membership button click event with validation."""
-        from reporter.database_manager import add_transaction # Updated import to add_transaction
+    def save_membership_action(self): # Renamed from save_group_membership_action
+        """Handles the save membership button click event with validation based on membership type."""
+        from reporter.database_manager import add_transaction
         from datetime import datetime
 
-        # Get selected values from dropdowns
+        membership_type = self.membership_type_var.get()
         selected_member_display_name = self.membership_member_dropdown_var.get()
-        selected_plan_name = self.membership_plan_dropdown_var.get()
-
-        # Retrieve corresponding IDs using the mappings
         member_id = self.member_name_to_id.get(selected_member_display_name)
-        plan_id = self.plan_name_to_id.get(selected_plan_name)
 
-        # Get values from entry fields
-        payment_date_str = self.payment_date_entry.get().strip()
-        start_date_str = self.start_date_entry.get().strip()
-        amount_paid_str = self.amount_paid_entry.get().strip()
-        payment_method = self.payment_method_entry.get().strip()
-
-        # --- Input Validation ---
-        # Validate member selection
-        if not member_id or selected_member_display_name == "No members available" or selected_member_display_name == "Select Member":
-            self.group_membership_status_label.configure(text="Error: Please select a valid member.", text_color="red")
-            return
-        # Validate plan selection
-        if not plan_id or selected_plan_name == "No plans available" or selected_plan_name == "Select Plan":
-            self.group_membership_status_label.configure(text="Error: Please select a valid plan.", text_color="red")
-            return
-        # Validate presence of all date and text fields
-        if not payment_date_str or not start_date_str or not amount_paid_str or not payment_method:
-            self.group_membership_status_label.configure(text="Error: All fields must be filled.", text_color="red")
-            return
-
-        # Validate date formats
+        # Get dates from DateEntry pickers
         try:
-            datetime.strptime(payment_date_str, '%Y-%m-%d')
+            start_date_obj = self.start_date_picker.get_date()
+            start_date_str = start_date_obj.strftime('%Y-%m-%d')
+        except ValueError: # Handle case where DateEntry might be empty or invalid (though less likely with DateEntry)
+            self.membership_status_label.configure(text="Error: Invalid Start Date.", text_color="red")
+            return
+
+        amount_paid_str = self.amount_paid_entry.get().strip()
+
+        # --- Basic Validation ---
+        if not member_id or selected_member_display_name in ["No members available", "Select Member", "Loading..."]:
+            self.membership_status_label.configure(text="Error: Please select a valid member.", text_color="red")
+            return
+
+        if not start_date_str:
+            self.membership_status_label.configure(text="Error: Start Date cannot be empty.", text_color="red")
+            return
+        try:
             datetime.strptime(start_date_str, '%Y-%m-%d')
         except ValueError:
-            self.group_membership_status_label.configure(text="Error: Invalid date format. Use YYYY-MM-DD.", text_color="red")
+            self.membership_status_label.configure(text="Error: Invalid Start Date format. Use YYYY-MM-DD.", text_color="red")
             return
 
-        # Validate amount paid (must be a positive number)
         try:
             amount_paid = float(amount_paid_str)
-            if amount_paid <= 0: # Amount should be greater than zero
-                self.group_membership_status_label.configure(text="Error: Amount paid must be a positive value.", text_color="red")
+            if amount_paid < 0: # Allow zero amount for free memberships, but not negative
+                self.membership_status_label.configure(text="Error: Amount Paid cannot be negative.", text_color="red")
                 return
         except ValueError:
-            self.group_membership_status_label.configure(text="Error: Invalid amount. Must be a number.", text_color="red")
+            self.membership_status_label.configure(text="Error: Invalid Amount Paid. Must be a number.", text_color="red")
             return
 
-        # Attempt to add to database
+        success = False
         try:
-            # Updated to use add_transaction for 'Group Class'
-            success = add_transaction(
-                transaction_type="Group Class",
-                member_id=member_id,
-                plan_id=plan_id,
-                payment_date=payment_date_str,
-                start_date=start_date_str,
-                amount_paid=amount_paid,
-                payment_method=payment_method
-                # sessions=None is implied by add_transaction's default if not provided
-            )
+            if membership_type == "Group Class":
+                selected_plan_display_name = self.membership_plan_dropdown_var.get()
+                plan_id = self.plan_name_to_id.get(selected_plan_display_name)
+                try:
+                    payment_date_obj = self.payment_date_picker.get_date()
+                    payment_date_str = payment_date_obj.strftime('%Y-%m-%d')
+                except ValueError:
+                    self.membership_status_label.configure(text="Error: Invalid Payment Date.", text_color="red")
+                    return
+                payment_method = self.payment_method_entry.get().strip()
+
+                if not plan_id or selected_plan_display_name in ["No plans available", "Select Plan", "Loading..."]:
+                    self.membership_status_label.configure(text="Error: Please select a valid plan.", text_color="red")
+                    return
+                if not payment_date_str:
+                    self.membership_status_label.configure(text="Error: Payment Date cannot be empty for Group Class.", text_color="red")
+                    return
+                try:
+                    datetime.strptime(payment_date_str, '%Y-%m-%d')
+                except ValueError:
+                    self.membership_status_label.configure(text="Error: Invalid Payment Date format. Use YYYY-MM-DD.", text_color="red")
+                    return
+                if not payment_method:
+                    self.membership_status_label.configure(text="Error: Payment Method cannot be empty for Group Class.", text_color="red")
+                    return
+
+                success = add_transaction(
+                    transaction_type="Group Class",
+                    member_id=member_id,
+                    plan_id=plan_id,
+                    payment_date=payment_date_str,
+                    start_date=start_date_str,
+                    amount_paid=amount_paid,
+                    payment_method=payment_method
+                )
+            elif membership_type == "Personal Training":
+                sessions_str = self.pt_sessions_entry.get().strip()
+                if not sessions_str:
+                    self.membership_status_label.configure(text="Error: Number of Sessions cannot be empty for PT.", text_color="red")
+                    return
+                try:
+                    sessions = int(sessions_str)
+                    if sessions <= 0:
+                        self.membership_status_label.configure(text="Error: Number of Sessions must be a positive integer.", text_color="red")
+                        return
+                except ValueError:
+                    self.membership_status_label.configure(text="Error: Number of Sessions must be an integer.", text_color="red")
+                    return
+
+                # For PT, payment_date is the start_date, payment_method is not explicitly collected here (can be added if needed)
+                success = add_transaction(
+                    transaction_type="Personal Training",
+                    member_id=member_id,
+                    plan_id=None,
+                    payment_date=start_date_str, # PT payment often same as start
+                    start_date=start_date_str,
+                    amount_paid=amount_paid,
+                    payment_method="N/A", # Or some default / collected if UI is changed
+                    sessions=sessions
+                )
+            else:
+                self.membership_status_label.configure(text="Error: Unknown membership type selected.", text_color="red")
+                return
+
             if success:
-                self.group_membership_status_label.configure(text="Group membership added successfully!", text_color="green")
-                # Clear input fields after successful submission
-                self.payment_date_entry.delete(0, 'end')
-                self.payment_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d')) # Reset to today
-                self.start_date_entry.delete(0, 'end')
-                self.start_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d')) # Reset to today
+                self.membership_status_label.configure(text=f"{membership_type} membership added successfully!", text_color="green")
+                # Clear common fields
+                self.start_date_picker.set_date(date.today())
                 self.amount_paid_entry.delete(0, 'end')
-                self.payment_method_entry.delete(0, 'end')
-                # Refresh membership history if the current selected member is the one this was added for
+                # Clear type-specific fields
+                if membership_type == "Group Class":
+                    self.payment_date_picker.set_date(date.today())
+                    self.payment_method_entry.delete(0, 'end')
+                    # Optionally reset plan dropdown
+                    if self.plan_name_to_id:
+                         self.membership_plan_dropdown_var.set(list(self.plan_name_to_id.keys())[0])
+                elif membership_type == "Personal Training":
+                    self.pt_sessions_entry.delete(0, 'end')
+
+                # Optionally reset member dropdown
+                if self.member_name_to_id:
+                    self.membership_member_dropdown_var.set(list(self.member_name_to_id.keys())[0])
+
                 if self.selected_member_id == member_id:
                     self.display_membership_history(member_id)
             else:
-                # This could be due to database constraints or other issues caught in database_manager
-                self.group_membership_status_label.configure(text="Failed to add group membership. Check logs or input.", text_color="red")
-        except Exception as e: # Catch any other unexpected errors
-            self.group_membership_status_label.configure(text=f"An error occurred: {str(e)}", text_color="red")
+                self.membership_status_label.configure(text="Failed to add membership. Check logs or input.", text_color="red")
+
+        except Exception as e:
+            self.membership_status_label.configure(text=f"An error occurred: {str(e)}", text_color="red")
+
 
     def display_all_members(self, name_filter=None, phone_filter=None):
         """Clears and re-populates the scrollable frame with member data. Makes member labels clickable."""

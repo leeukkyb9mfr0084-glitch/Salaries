@@ -553,6 +553,63 @@ def get_or_create_plan_id(plan_name: str, duration_days: int) -> int | None:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
+def get_transactions_with_member_details(name_filter: str = None, phone_filter: str = None, join_date_filter: str = None) -> list:
+    """
+    Retrieves all transactions joined with member details, with optional filters.
+    Args:
+        name_filter (str, optional): Filter for client_name (case-insensitive LIKE).
+        phone_filter (str, optional): Filter for phone number (case-insensitive LIKE).
+        join_date_filter (str, optional): Filter for join_date (exact match 'YYYY-MM-DD').
+    Returns:
+        list: A list of tuples, where each tuple represents a transaction joined with member details.
+              The columns from 'transactions' table come first, then 'client_name', 'phone', 'join_date'.
+              Returns an empty list if no transactions are found or an error occurs.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        query_params = []
+        sql = """
+            SELECT t.*, m.client_name, m.phone, m.join_date
+            FROM transactions t
+            JOIN members m ON t.member_id = m.member_id
+        """
+
+        conditions = []
+        if name_filter:
+            conditions.append("m.client_name LIKE ?")
+            query_params.append(f"%{name_filter}%")
+        if phone_filter:
+            conditions.append("m.phone LIKE ?")
+            query_params.append(f"%{phone_filter}%")
+        if join_date_filter:
+            # Ensure date is in correct format before querying, or handle potential ValueError
+            try:
+                datetime.strptime(join_date_filter, '%Y-%m-%d') # Validate date format
+                conditions.append("m.join_date = ?")
+                query_params.append(join_date_filter)
+            except ValueError:
+                print(f"Warning: Invalid join_date_filter format '{join_date_filter}'. Should be YYYY-MM-DD. Filter ignored.")
+                # Optionally, you could choose to return an empty list or raise an error here
+                # For now, the filter is just ignored if the format is wrong.
+
+        if conditions:
+            sql += " WHERE " + " AND ".join(conditions)
+
+        sql += " ORDER BY t.transaction_id DESC" # Or t.payment_date DESC, t.start_date DESC, etc.
+
+        cursor.execute(sql, query_params)
+        transactions = cursor.fetchall()
+        return transactions
+    except sqlite3.Error as e:
+        print(f"Database error while fetching transactions with member details: {e}")
+        return []
+    finally:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
+            conn.close()
+
 # def get_group_memberships_by_member_id(member_id: int) -> list:
 #     """Retrieves all group memberships for a given member ID."""
 #     conn = None
