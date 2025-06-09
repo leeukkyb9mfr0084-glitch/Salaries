@@ -453,7 +453,13 @@ class App(customtkinter.CTk):
                 plan_id_or_sessions_display = str(sessions) if sessions else "N/A"
 
             # Format amount_paid to 2 decimal places
-            amount_paid_formatted = f"{amount_paid:.2f}" if amount_paid is not None else "0.00"
+            if amount_paid is not None:
+                try:
+                    amount_paid_formatted = f"{float(amount_paid):.2f}"
+                except ValueError:
+                    amount_paid_formatted = "Error: Invalid Amount"
+            else:
+                amount_paid_formatted = "0.00"
             end_date_display = end_date if end_date else "N/A"
 
             values_tuple = (client_name, phone, join_date, transaction_type,
