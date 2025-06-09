@@ -28,7 +28,6 @@ def migrate_test_db(monkeypatch):
     monkeypatch.setattr("reporter.database_manager.DB_FILE", TEST_DB_FILE_MIGRATE) # Critical for consistency
     # The create_database function in reporter.database module takes db_name as a parameter,
     # so it does not need its own DB_FILE to be patched, as long as it's called with the correct test db path.
-    # monkeypatch.setattr("reporter.database.DB_FILE", TEST_DB_FILE_MIGRATE) # This line caused AttributeError
 
     # Create schema in the test DB file
     create_database(db_name=TEST_DB_FILE_MIGRATE)
@@ -46,9 +45,9 @@ def migrate_test_db(monkeypatch):
 
 
 def test_migration_clears_tables(migrate_test_db): # Uses the fixture
-    """
+    '''
     Tests if process_gc_data correctly clears the relevant tables using a file-based test DB.
-    """
+    '''
     test_db_path = migrate_test_db # Get the path from the fixture
 
     # Connect to the test DB to pre-populate data
@@ -130,10 +129,3 @@ def test_migration_clears_tables(migrate_test_db): # Uses the fixture
 
     # Cleanup (assertion connection, fixture handles file deletion)
     conn_assert.close()
-
-# Example of how to run this test with pytest:
-# Ensure pytest is installed: pip install pytest
-# Navigate to the root of the project (e.g., the directory containing 'reporter')
-# Run: pytest
-# Or specifically for this file: pytest reporter/tests/test_migrate_data.py
-# pytest.main() # This call is removed as it's not standard for test suite files.
