@@ -800,6 +800,11 @@ class App(customtkinter.CTk):
         """Clears and re-populates the scrollable frame with member data. Makes member labels clickable."""
         from reporter.database_manager import get_all_members # Local import
 
+        # Check if the previously selected label widget still exists; if not, clear the reference
+        if self.selected_member_label_widget and not self.selected_member_label_widget.winfo_exists():
+            self.selected_member_id = None
+            self.selected_member_label_widget = None
+
         # Clear existing widgets in the frame before repopulating
         for widget in self.members_scrollable_frame.winfo_children():
             widget.destroy()
@@ -857,7 +862,12 @@ class App(customtkinter.CTk):
         """Handles click on a member label to display their membership history and highlight selection."""
         # If a different member was previously selected, reset its appearance
         if self.selected_member_label_widget and self.selected_member_label_widget != label_widget:
-            self.selected_member_label_widget.configure(fg_color="transparent") # Reset to default background
+            # Ensure the old widget still exists before trying to configure it
+            if self.selected_member_label_widget.winfo_exists():
+                self.selected_member_label_widget.configure(fg_color="transparent") # Reset to default background
+            else:
+                # If the old widget no longer exists, clear the reference
+                self.selected_member_label_widget = None
 
         # Update the selected member ID and the widget reference
         self.selected_member_id = member_id
