@@ -1,4 +1,5 @@
 import customtkinter
+from tkinter import ttk # Import ttk
 from typing import Optional, List # For type hinting, List can be replaced by list in Python 3.9+
 from tkinter import StringVar # Explicitly import StringVar
 from datetime import datetime, date # Explicitly import datetime and date
@@ -230,7 +231,7 @@ class App(customtkinter.CTk):
 
         # Initialize selection state variables to None
         self.selected_member_id = None
-        self.selected_member_label_widget = None
+        # self.selected_member_label_widget = None # Removed as it's no longer used with Treeview
 
         self.title("Kranos MMA Reporter")
         self.geometry("800x600")
@@ -271,6 +272,33 @@ class App(customtkinter.CTk):
 
     # --- Reporting Tab ---
         self.setup_reporting_tab(self.tab_view.tab("Reporting"))
+
+    def _bind_mouse_scroll(self, widget):
+        """Binds mouse wheel and trackpad scroll to a scrollable widget."""
+        def on_scroll(event):
+            # For Windows/Linux, delta is a multiple of 120. For macOS, it's a smaller number.
+            if event.num == 5 or event.delta < 0:
+                widget._canvas.yview_scroll(1, "units")
+            elif event.num == 4 or event.delta > 0:
+                widget._canvas.yview_scroll(-1, "units")
+
+        # Bind for cross-platform mouse wheel scrolling
+        # Using bind_all on the widget itself, not the top-level window,
+        # to ensure it only scrolls when the mouse is over that specific widget.
+        widget.bind_all("<MouseWheel>", on_scroll) # For Windows/Linux
+        widget.bind_all("<Button-4>", on_scroll) # For Linux (Scroll Up)
+        widget.bind_all("<Button-5>", on_scroll) # For Linux (Scroll Down)
+        # macOS trackpad scrolling is often handled by <MouseWheel> as well with modern Tk/customTkinter
+        # If specific trackpad pinch/zoom or other gestures are needed, that's a more complex topic.
+        # The provided snippet uses bind_all, which might capture events globally.
+        # It's generally better to bind to the specific widget if possible, e.g., widget.bind(...).
+        # However, CTkScrollableFrame might need bind_all on its canvas or similar.
+        # Let's stick to the provided snippet for now and refine if issues arise.
+        # The snippet uses widget.bind_all, this means the scroll will happen
+        # regardless of where the mouse is.
+        # A better approach for future would be widget.bind("<Enter>", lambda e: widget.focus_set())
+        # and then widget.bind("<MouseWheel>", on_scroll) to ensure scroll only when mouse is over widget.
+        # For now, implementing as per the issue's snippet.
 
     def setup_membership_history_tab(self, tab):
         """Configures the UI for the Membership History tab."""
@@ -324,8 +352,54 @@ class App(customtkinter.CTk):
         self.history_clear_button.grid(row=1, column=4, padx=5, pady=5)
 
         # Display Area for Transaction Records
-        self.history_scrollable_frame = CTkScrollableFrame(history_main_frame)
-        self.history_scrollable_frame.grid(row=1, column=0, padx=10, pady=(0,10), sticky="nsew")
+        # Container for the Treeview and its scrollbar
+        history_tree_container = CTkFrame(history_main_frame)
+        history_tree_container.grid(row=1, column=0, padx=10, pady=(0,10), sticky="nsew")
+        history_tree_container.grid_rowconfigure(0, weight=1)
+        history_tree_container.grid_rowconfigure(1, weight=0) # For horizontal scrollbar
+        history_tree_container.grid_columnconfigure(0, weight=1) # Treeview takes most space
+        history_tree_container.grid_columnconfigure(1, weight=0) # Scrollbar
+
+        history_columns = ('client_name', 'phone', 'join_date', 'transaction_type',
+                           'amount_paid', 'payment_date', 'start_date', 'end_date',
+                           'plan_id_or_sessions', 'payment_method')
+
+        self.history_tree = ttk.Treeview(history_tree_container, columns=history_columns, show='headings', selectmode='browse', style="Treeview")
+
+        self.history_tree.heading('client_name', text='Name')
+        self.history_tree.heading('phone', text='Phone')
+        self.history_tree.heading('join_date', text='Joined')
+        self.history_tree.heading('transaction_type', text='Type')
+        self.history_tree.heading('amount_paid', text='Amount ($)')
+        self.history_tree.heading('payment_date', text='Paid Date')
+        self.history_tree.heading('start_date', text='Start Date')
+        self.history_tree.heading('end_date', text='End Date')
+        self.history_tree.heading('plan_id_or_sessions', text='Plan/Sessions')
+        self.history_tree.heading('payment_method', text='Pay Method')
+
+        # Setting column widths (adjust as needed for optimal display)
+        self.history_tree.column('client_name', width=120)
+        self.history_tree.column('phone', width=90)
+        self.history_tree.column('join_date', width=80, anchor='center')
+        self.history_tree.column('transaction_type', width=100)
+        self.history_tree.column('amount_paid', width=70, anchor='e')
+        self.history_tree.column('payment_date', width=80, anchor='center')
+        self.history_tree.column('start_date', width=80, anchor='center')
+        self.history_tree.column('end_date', width=80, anchor='center')
+        self.history_tree.column('plan_id_or_sessions', width=100, anchor='center')
+        self.history_tree.column('payment_method', width=90)
+
+        self.history_tree.grid(row=0, column=0, sticky="nsew")
+
+        history_tree_scrollbar_y = ttk.Scrollbar(history_tree_container, orient="vertical", command=self.history_tree.yview)
+        self.history_tree.configure(yscrollcommand=history_tree_scrollbar_y.set)
+        history_tree_scrollbar_y.grid(row=0, column=1, sticky="ns")
+
+        # Add horizontal scrollbar as there are many columns
+        history_tree_scrollbar_x = ttk.Scrollbar(history_tree_container, orient="horizontal", command=self.history_tree.xview)
+        self.history_tree.configure(xscrollcommand=history_tree_scrollbar_x.set)
+        history_tree_scrollbar_x.grid(row=1, column=0, sticky="ew") # Below the tree, spans its width
+        # self._bind_mouse_scroll(self.history_tree) # Treeview with scrollbars usually handles this
 
         initial_transactions = self.controller.get_filtered_transaction_history(None, None, None) # Initial data load
         self.refresh_membership_history_display(initial_transactions)
@@ -355,37 +429,38 @@ class App(customtkinter.CTk):
         #     join_date_filter=join_date_filter
         # )
 
-        for widget in self.history_scrollable_frame.winfo_children():
-            widget.destroy()
+        for item in self.history_tree.get_children():
+            self.history_tree.delete(item)
 
         if not transactions:
-            CTkLabel(self.history_scrollable_frame, text="No transaction records found.").pack(pady=10)
+            # Optional: Display a message if the tree is empty
+            # self.history_tree.insert('', 'end', values=("No transaction records found.",) + ("",)*(len(self.history_tree['columns'])-1))
             return
 
-        for i, record in enumerate(transactions):
-            # record structure: (t.*, m.client_name, m.phone, m.join_date)
-            # Assuming t.* includes: transaction_id, member_id, transaction_type, plan_id,
-            # payment_date, start_date, end_date, amount_paid, payment_method, sessions
-            # Indices for m.client_name, m.phone, m.join_date will be after transaction table columns.
-            # Let's assume transaction table has 10 columns (0-9), so client_name is 10, phone is 11, join_date is 12
+        for record in transactions:
+            # Original record structure from DB:
+            # (t.transaction_id, t.member_id, t.transaction_type, t.plan_id, t.payment_date,
+            #  t.start_date, t.end_date, t.amount_paid, t.payment_method, t.sessions,
+            #  m.client_name, m.phone, m.join_date)
+            # Indices: client_name=10, phone=11, join_date=12
 
-            transaction_id, member_id, transaction_type, plan_id, payment_date, start_date, end_date, amount_paid, payment_method, sessions, client_name, phone, join_date = record
+            transaction_id, member_id, transaction_type, plan_id, payment_date,            start_date, end_date, amount_paid, payment_method_db, sessions,            client_name, phone, join_date = record
 
-            detail_text = f"Name: {client_name} (Ph: {phone}, Joined: {join_date})\n" \
-                          f"Type: {transaction_type} | Amount: ${amount_paid:.2f} | Paid: {payment_date}\n" \
-                          f"Active: {start_date} to {end_date if end_date else 'N/A'}"
+            plan_id_or_sessions_display = ""
             if transaction_type == "Group Class":
-                # Fetch plan name if needed, or assume plan_id is sufficient for now
-                detail_text += f" | Plan ID: {plan_id}"
-                if payment_method: detail_text += f" | Method: {payment_method}"
+                plan_id_or_sessions_display = str(plan_id) if plan_id else "N/A"
             elif transaction_type == "Personal Training":
-                detail_text += f" | Sessions: {sessions if sessions else 'N/A'}"
+                plan_id_or_sessions_display = str(sessions) if sessions else "N/A"
 
-            record_label = CTkLabel(self.history_scrollable_frame, text=detail_text, anchor="w", justify="left")
-            record_label.pack(padx=5, pady=3, fill="x", expand=True)
-            if i < len(transactions) - 1:
-                sep = CTkFrame(self.history_scrollable_frame, height=1, fg_color="gray70")
-                sep.pack(fill="x", padx=5, pady=2)
+            # Format amount_paid to 2 decimal places
+            amount_paid_formatted = f"{amount_paid:.2f}" if amount_paid is not None else "0.00"
+            end_date_display = end_date if end_date else "N/A"
+
+            values_tuple = (client_name, phone, join_date, transaction_type,
+                            amount_paid_formatted, payment_date, start_date, end_date_display,
+                            plan_id_or_sessions_display, payment_method_db)
+
+            self.history_tree.insert('', 'end', values=values_tuple)
 
     def apply_history_filters(self):
         """Applies the filters from the history tab and refreshes the display."""
@@ -427,6 +502,14 @@ class App(customtkinter.CTk):
         top_level_frame.grid_columnconfigure(0, weight=1) # Column for sub-tabs (e.g., Add Member)
         top_level_frame.grid_columnconfigure(1, weight=2) # Column for display area (e.g., All Members list), give more space
         top_level_frame.grid_rowconfigure(0, weight=1)    # Single row to contain both columns
+
+        # Style Configuration for Treeview
+        style = ttk.Style()
+        style.theme_use("default") # Or another theme like "clam", "alt"
+        style.configure("Treeview", background="#2a2d2e", foreground="white", fieldbackground="#2a2d2e", borderwidth=0, rowheight=25) # Added rowheight
+        style.map('Treeview', background=[('selected', '#22559b')])
+        style.configure("Treeview.Heading", background="#2a2d2e", foreground="white", relief="flat") # Style for headings
+        style.map("Treeview.Heading", background=[('active', '#3c3f41')]) # Style for heading hover (optional)
 
         # ADD THESE LINES HERE
         self.membership_sub_tabview = customtkinter.CTkTabview(top_level_frame)
@@ -582,6 +665,7 @@ class App(customtkinter.CTk):
         display_frame.grid_rowconfigure(2, weight=1) # Allows members_scrollable_frame to expand
         display_frame.grid_rowconfigure(4, weight=1) # Allows membership_history_frame to expand
         display_frame.grid_columnconfigure(0, weight=1) # Allows content within to expand horizontally
+        display_frame.grid_columnconfigure(1, weight=0) # For scrollbar
 
         # Title for the "All Members" list
         display_title = CTkLabel(display_frame, text="All Members", font=CTkFont(weight="bold"))
@@ -606,16 +690,81 @@ class App(customtkinter.CTk):
         self.clear_button.grid(row=0, column=3, padx=(5,0), pady=5)
 
         # Scrollable frame to display the list of all members
-        self.members_scrollable_frame = CTkScrollableFrame(display_frame)
-        self.members_scrollable_frame.grid(row=2, column=0, padx=10, pady=(0,10), sticky="nsew")
+        # self.members_scrollable_frame = CTkScrollableFrame(display_frame) # Old
+        # self.members_scrollable_frame.grid(row=2, column=0, padx=10, pady=(0,10), sticky="nsew") # Old
+        # self._bind_mouse_scroll(self.members_scrollable_frame) # Old
+
+        member_columns = ('id', 'name', 'phone', 'join_date')
+        self.members_tree = ttk.Treeview(display_frame, columns=member_columns, show='headings', selectmode='browse', style="Treeview")
+
+        self.members_tree.heading('id', text='ID')
+        self.members_tree.heading('name', text='Name')
+        self.members_tree.heading('phone', text='Phone')
+        self.members_tree.heading('join_date', text='Join Date')
+
+        # Adjust column widths (optional, but good for appearance)
+        self.members_tree.column('id', width=50, anchor='center')
+        self.members_tree.column('name', width=150)
+        self.members_tree.column('phone', width=100)
+        self.members_tree.column('join_date', width=100, anchor='center')
+
+        self.members_tree.grid(row=2, column=0, padx=10, pady=(0,10), sticky="nsew")
+
+        # Add a scrollbar for the Treeview (important for when content exceeds viewable area)
+        members_tree_scrollbar = ttk.Scrollbar(display_frame, orient="vertical", command=self.members_tree.yview)
+        self.members_tree.configure(yscrollcommand=members_tree_scrollbar.set)
+        members_tree_scrollbar.grid(row=2, column=1, padx=(0,10), pady=(0,10), sticky="ns") # Place scrollbar next to tree
 
         # --- Membership History Frame (Below All Members) ---
         history_title = CTkLabel(display_frame, text="Membership History", font=CTkFont(weight="bold"))
         history_title.grid(row=3, column=0, padx=10, pady=(10,0), sticky="ew")
 
         # Scrollable frame to display history for a selected member
-        self.membership_history_frame = CTkScrollableFrame(display_frame)
-        self.membership_history_frame.grid(row=4, column=0, padx=10, pady=10, sticky="nsew")
+        # Container for the member-specific history Treeview and its scrollbar
+        member_history_tree_container = CTkFrame(display_frame) # display_frame is the parent
+        member_history_tree_container.grid(row=4, column=0, padx=10, pady=10, sticky="nsew")
+        # display_frame.grid_rowconfigure(4, weight=1) # This was already set in setup_membership_tab
+
+        member_history_tree_container.grid_rowconfigure(0, weight=1)
+        member_history_tree_container.grid_columnconfigure(0, weight=1) # Treeview
+        member_history_tree_container.grid_columnconfigure(1, weight=0) # Scrollbar Y
+        member_history_tree_container.grid_rowconfigure(1, weight=0)    # Scrollbar X
+
+        member_history_columns = ('activity_type', 'description', 'payment_date',
+                                  'start_date', 'end_date', 'amount_paid',
+                                  'method_or_sessions')
+
+        self.member_specific_history_tree = ttk.Treeview(member_history_tree_container, columns=member_history_columns, show='headings', selectmode='browse', style="Treeview")
+
+        self.member_specific_history_tree.heading('activity_type', text='Type')
+        self.member_specific_history_tree.heading('description', text='Plan/Details')
+        self.member_specific_history_tree.heading('payment_date', text='Paid Date')
+        self.member_specific_history_tree.heading('start_date', text='Start Date')
+        self.member_specific_history_tree.heading('end_date', text='End Date')
+        self.member_specific_history_tree.heading('amount_paid', text='Amount ($)')
+        self.member_specific_history_tree.heading('method_or_sessions', text='Method/Sessions')
+
+        # Setting column widths (adjust as needed)
+        self.member_specific_history_tree.column('activity_type', width=100)
+        self.member_specific_history_tree.column('description', width=150)
+        self.member_specific_history_tree.column('payment_date', width=80, anchor='center')
+        self.member_specific_history_tree.column('start_date', width=80, anchor='center')
+        self.member_specific_history_tree.column('end_date', width=80, anchor='center')
+        self.member_specific_history_tree.column('amount_paid', width=80, anchor='e')
+        self.member_specific_history_tree.column('method_or_sessions', width=120)
+
+        self.member_specific_history_tree.grid(row=0, column=0, sticky="nsew")
+
+        # Vertical Scrollbar
+        member_history_scrollbar_y = ttk.Scrollbar(member_history_tree_container, orient="vertical", command=self.member_specific_history_tree.yview)
+        self.member_specific_history_tree.configure(yscrollcommand=member_history_scrollbar_y.set)
+        member_history_scrollbar_y.grid(row=0, column=1, sticky="ns")
+
+        # Horizontal Scrollbar
+        member_history_scrollbar_x = ttk.Scrollbar(member_history_tree_container, orient="horizontal", command=self.member_specific_history_tree.xview)
+        self.member_specific_history_tree.configure(xscrollcommand=member_history_scrollbar_x.set)
+        member_history_scrollbar_x.grid(row=1, column=0, sticky="ew")
+        # self._bind_mouse_scroll(self.member_specific_history_tree) # Removed
 
         # Initialize data displays
         # self.display_all_members() # This will be called via clear_member_filters or apply_member_filters
@@ -626,6 +775,30 @@ class App(customtkinter.CTk):
         # self.populate_pt_member_dropdown() # REMOVE THIS CALL - PT dropdown is gone
 
         self.display_membership_history([], None) # Show placeholder message in history view
+        self.members_tree.bind("<<TreeviewSelect>>", self.on_member_tree_select)
+
+    def on_member_tree_select(self, event):
+        selected_item = self.members_tree.focus() # Get selected item
+        if not selected_item: # No item selected or selection cleared
+            self.selected_member_id = None
+            self.display_membership_history([], None) # Clear history
+            return
+
+        item_values = self.members_tree.item(selected_item, "values")
+        if item_values:
+            member_id_str = item_values[0] # Assuming 'id' is the first column
+            try:
+                self.selected_member_id = int(member_id_str)
+                # Fetch and display history for this member_id
+                history_data = self.controller.get_all_activity_for_member(self.selected_member_id)
+                self.display_membership_history(history_data, self.selected_member_id)
+            except ValueError:
+                print(f"Error: Could not parse member ID: {member_id_str}")
+                self.selected_member_id = None
+                self.display_membership_history([], None)
+        else:
+            self.selected_member_id = None
+            self.display_membership_history([], None)
 
     def apply_member_filters(self):
         """Applies filters to the member list display."""
@@ -677,48 +850,67 @@ class App(customtkinter.CTk):
         self.plan_status_label = CTkLabel(self.plan_form_frame, text="", font=CTkFont(size=12))
         self.plan_status_label.grid(row=4, column=0, columnspan=2, padx=10, pady=5)
 
+        self.edit_selected_plan_button = CTkButton(self.plan_form_frame, text="Edit Selected Plan", command=self.on_edit_selected_plan_click)
+        self.edit_selected_plan_button.grid(row=5, column=0, columnspan=2, padx=10, pady=(10,5))
+
+        self.toggle_selected_plan_status_button = CTkButton(self.plan_form_frame, text="Toggle Selected Plan Status", command=self.on_toggle_selected_plan_status_click)
+        self.toggle_selected_plan_status_button.grid(row=6, column=0, columnspan=2, padx=10, pady=5)
+
         # --- Frame for Displaying Plans ---
-        self.plans_display_frame = CTkScrollableFrame(tab)
-        self.plans_display_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+        # Frame to hold the Treeview and its scrollbar
+        plans_tree_container = CTkFrame(tab) # Using CTkFrame as container for better theme integration if needed for scrollbar
+        plans_tree_container.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+        plans_tree_container.grid_rowconfigure(0, weight=1)
+        plans_tree_container.grid_columnconfigure(0, weight=1)
+        plans_tree_container.grid_columnconfigure(1, weight=0) # For scrollbar
+
+        plan_columns = ('id', 'name', 'duration', 'status')
+        self.plans_tree = ttk.Treeview(plans_tree_container, columns=plan_columns, show='headings', selectmode='browse', style="Treeview")
+
+        self.plans_tree.heading('id', text='ID')
+        self.plans_tree.heading('name', text='Name')
+        self.plans_tree.heading('duration', text='Duration (Days)')
+        self.plans_tree.heading('status', text='Status')
+
+        self.plans_tree.column('id', width=50, anchor='center')
+        self.plans_tree.column('name', width=150)
+        self.plans_tree.column('duration', width=100, anchor='center')
+        self.plans_tree.column('status', width=80, anchor='center')
+
+        self.plans_tree.grid(row=0, column=0, sticky="nsew")
+
+        plans_tree_scrollbar = ttk.Scrollbar(plans_tree_container, orient="vertical", command=self.plans_tree.yview)
+        self.plans_tree.configure(yscrollcommand=plans_tree_scrollbar.set)
+        plans_tree_scrollbar.grid(row=0, column=1, sticky="ns")
+        # self._bind_mouse_scroll(self.plans_tree) # ttk.Treeview might not need custom binding if scrollbar works
+        self.plans_tree.bind("<Double-1>", self.on_plan_tree_double_click)
 
         # Initial load of plans
         initial_plans = self.controller.get_all_plans_with_inactive()
         self.load_plans_display(initial_plans)
 
-    def load_plans_display(self, plans_list: list):
-        """Loads and displays all plans in the plans_display_frame using the provided list."""
-        # from reporter import database_manager # No longer needed here
-        # Clear existing widgets
-        for widget in self.plans_display_frame.winfo_children():
-            widget.destroy()
+    def on_plan_tree_double_click(self, event):
+        # This essentially does the same as on_edit_selected_plan_click
+        selected_item = self.plans_tree.focus()
+        if not selected_item:
+            return # Should not happen on double click if item is focused
 
-        # plans = database_manager.get_all_plans_with_inactive() # Fetch all plans
+        item_values = self.plans_tree.item(selected_item, "values")
+        if item_values:
+            plan_id, name, duration, _ = item_values
+            self.edit_plan_action(plan_id, name, duration)
+
+    def load_plans_display(self, plans_list: list):
+        for item in self.plans_tree.get_children():
+            self.plans_tree.delete(item)
+
         if not plans_list:
-            CTkLabel(self.plans_display_frame, text="No plans found.").pack(padx=10, pady=10)
             return
 
-        for i, plan_data in enumerate(plans_list):
+        for plan_data in plans_list:
             plan_id, name, duration, is_active = plan_data
             status_text = "Active" if is_active else "Inactive"
-
-            plan_item_frame = CTkFrame(self.plans_display_frame, fg_color="transparent")
-            plan_item_frame.pack(fill="x", expand=True, pady=2)
-
-            info_text = f"Name: {name} | Duration: {duration} days | Status: {status_text}"
-            CTkLabel(plan_item_frame, text=info_text, anchor="w").pack(side="left", padx=5, expand=True, fill="x")
-
-            edit_button = CTkButton(plan_item_frame, text="Edit", width=60,
-                                     command=lambda p_id=plan_id, p_name=name, p_duration=duration: self.edit_plan_action(p_id, p_name, p_duration))
-            edit_button.pack(side="right", padx=5)
-
-            toggle_text = "Deactivate" if is_active else "Activate"
-            toggle_button = CTkButton(plan_item_frame, text=toggle_text, width=90,
-                                       command=lambda p_id=plan_id, current_stat=is_active: self.on_toggle_plan_status_click(p_id, current_stat))
-            toggle_button.pack(side="right", padx=5)
-
-            if i < len(plans_list) - 1:
-                sep = CTkFrame(self.plans_display_frame, height=1, fg_color="gray70")
-                sep.pack(fill="x", padx=5, pady=2)
+            self.plans_tree.insert('', 'end', values=(plan_id, name, duration, status_text))
 
     def on_save_plan_click(self):
         """Handles the click event for saving a plan."""
@@ -762,6 +954,39 @@ class App(customtkinter.CTk):
         self.plan_duration_entry.delete(0, "end")
         self.plan_status_label.configure(text="")
 
+    def on_edit_selected_plan_click(self):
+        selected_item = self.plans_tree.focus()
+        if not selected_item:
+            self.plan_status_label.configure(text="Please select a plan to edit.", text_color="orange")
+            return
+
+        item_values = self.plans_tree.item(selected_item, "values")
+        if item_values:
+            plan_id, name, duration_str, _ = item_values # status not needed for form fill
+            # Duration might have ' days' suffix if not careful with data, ensure it's just number
+            duration = duration_str # Assuming it's already just the number from DB.
+            self.edit_plan_action(plan_id, name, duration) # Existing method to populate form
+        else:
+            self.plan_status_label.configure(text="Could not retrieve plan details.", text_color="red")
+
+    def on_toggle_selected_plan_status_click(self):
+        selected_item = self.plans_tree.focus()
+        if not selected_item:
+            self.plan_status_label.configure(text="Please select a plan to toggle its status.", text_color="orange")
+            return
+
+        item_values = self.plans_tree.item(selected_item, "values")
+        if item_values:
+            plan_id_str, _, _, status_str = item_values
+            try:
+                plan_id = int(plan_id_str)
+                current_status_bool = (status_str == "Active")
+                # Call the existing controller toggle action via the App method
+                self.on_toggle_plan_status_click(plan_id, current_status_bool) # Existing method
+            except ValueError:
+                self.plan_status_label.configure(text="Error: Invalid plan ID.", text_color="red")
+        else:
+            self.plan_status_label.configure(text="Could not retrieve plan details for status toggle.", text_color="red")
 
     def setup_reporting_tab(self, tab):
         """Configures the UI for the Reporting tab."""
@@ -796,8 +1021,36 @@ class App(customtkinter.CTk):
         self.pending_renewals_status_label.grid(row=1, column=0, padx=10, pady=(0,5), sticky="ew")
 
         # Scrollable frame to display the list of pending renewals
-        self.pending_renewals_frame = CTkScrollableFrame(tab)
-        self.pending_renewals_frame.grid(row=2, column=0, padx=10, pady=(0,10), sticky="nsew")
+        # Container for the Pending Renewals Treeview and its scrollbar
+        pending_renewals_tree_container = CTkFrame(tab)
+        pending_renewals_tree_container.grid(row=2, column=0, padx=10, pady=(0,10), sticky="nsew")
+        # tab.grid_rowconfigure(2, weight=1) # This was already set in setup_reporting_tab
+
+        pending_renewals_tree_container.grid_rowconfigure(0, weight=1) # Treeview takes full height
+        pending_renewals_tree_container.grid_columnconfigure(0, weight=1) # Treeview takes full width
+        pending_renewals_tree_container.grid_columnconfigure(1, weight=0) # Scrollbar
+
+        renewals_columns = ('client_name', 'phone', 'plan_name', 'end_date')
+
+        self.pending_renewals_tree = ttk.Treeview(pending_renewals_tree_container, columns=renewals_columns, show='headings', selectmode='browse', style="Treeview")
+
+        self.pending_renewals_tree.heading('client_name', text='Client Name')
+        self.pending_renewals_tree.heading('phone', text='Phone')
+        self.pending_renewals_tree.heading('plan_name', text='Plan Name')
+        self.pending_renewals_tree.heading('end_date', text='End Date')
+
+        # Setting column widths
+        self.pending_renewals_tree.column('client_name', width=150)
+        self.pending_renewals_tree.column('phone', width=100)
+        self.pending_renewals_tree.column('plan_name', width=150)
+        self.pending_renewals_tree.column('end_date', width=100, anchor='center')
+
+        self.pending_renewals_tree.grid(row=0, column=0, sticky="nsew")
+
+        renewals_scrollbar_y = ttk.Scrollbar(pending_renewals_tree_container, orient="vertical", command=self.pending_renewals_tree.yview)
+        self.pending_renewals_tree.configure(yscrollcommand=renewals_scrollbar_y.set)
+        renewals_scrollbar_y.grid(row=0, column=1, sticky="ns")
+        # self._bind_mouse_scroll(self.pending_renewals_tree) # Treeview with scrollbar usually handles this
 
         # --- Frame for Monthly Finance Report (below Pending Renewals) ---
         # This section sets up the UI for generating and displaying the monthly finance report.
@@ -903,120 +1156,79 @@ class App(customtkinter.CTk):
         self.membership_plan_dropdown.configure(values=plan_names_display)
 
     def display_all_members(self, members_list: list):
-        """Clears and re-populates the scrollable frame with member data using the provided list. Makes member labels clickable."""
-        # from reporter.database_manager import get_all_members # No longer needed here
+        # Clear existing items from the tree
+        for item in self.members_tree.get_children():
+            self.members_tree.delete(item)
 
-        # Check if the previously selected label widget still exists; if not, clear the reference
-        if self.selected_member_label_widget and not self.selected_member_label_widget.winfo_exists():
-            self.selected_member_id = None
-            self.selected_member_label_widget = None
+        # Store current selection to attempt re-selection if item still exists
+        # current_selection_id = self.selected_member_id
 
-        # Clear existing widgets in the frame before repopulating
-        for widget in self.members_scrollable_frame.winfo_children():
-            widget.destroy()
-
-        # members = get_all_members(name_filter=name_filter, phone_filter=phone_filter) # Fetch members with filter
         if not members_list:
-            # Display a message if no members are found
-            no_members_label = customtkinter.CTkLabel(self.members_scrollable_frame, text="No members found.")
-            no_members_label.pack(padx=10, pady=10)
-            # If a member was selected, but now the list is empty (e.g., if deletion was possible)
+            # If a member was selected, but now the list is empty (e.g., due to filters)
             if self.selected_member_id:
                 self.selected_member_id = None
-                if self.selected_member_label_widget:
-                    # Reset the appearance of the previously selected label (if any)
-                    self.selected_member_label_widget.configure(fg_color="transparent")
-                    self.selected_member_label_widget = None
-                self.display_membership_history(None) # Clear history display
-            return
+                # self.display_membership_history([], None) # on_member_tree_select will handle this if selection is cleared
+            return # Tree is empty
 
-        # Iterate through members and create labels for each
-        for i, member_data in enumerate(members):
-            member_id, client_name, phone, join_date = member_data
-            detail_text = f"ID: {member_id} | Name: {client_name} | Phone: {phone} | Joined: {join_date}"
+        for member_data in members_list:
+            self.members_tree.insert('', 'end', values=member_data)
 
-            # Using a frame for each member label to help with layout and potential future additions (e.g., buttons per member)
-            member_label_frame = customtkinter.CTkFrame(self.members_scrollable_frame, fg_color="transparent")
-            member_label_frame.pack(fill="x", expand=True)
-
-            member_label = customtkinter.CTkLabel(member_label_frame, text=detail_text, anchor="w", cursor="hand2") # 'hand2' cursor on hover
-            member_label.pack(padx=5, pady=2, fill="x", expand=True)
-
-            # Bind a click event to each member label.
-            # A lambda function is used to pass the specific member_id and the label widget itself to the handler.
-            member_label.bind("<Button-1>", lambda event, m_id=member_id, lbl=member_label: self.handle_member_selection(event, m_id, lbl))
-
-            # If this member is the currently selected one, highlight their label
-            if self.selected_member_id == member_id:
-                member_label.configure(fg_color="gray20") # Highlight color
-                self.selected_member_label_widget = member_label # Store this label as the selected one
-
-            # Add a visual separator between member entries, except for the last one
-            if i < len(members) - 1:
-                sep = customtkinter.CTkFrame(self.members_scrollable_frame, height=1, fg_color="gray70")
-                sep.pack(fill="x", padx=5, pady=2)
+        # Attempt to re-select the previously selected member if they are still in the list
+        # This is tricky because the tree items might change.
+        # A simpler approach is to let on_member_tree_select handle new selections.
+        # If the filter changes and selected item is gone, selection is cleared.
+        # If selected item remains, treeview might keep it selected.
 
         # If the previously selected member is no longer in the (updated) list,
-        # reset selection and clear history. This is relevant if members could be deleted.
-        if self.selected_member_id and not any(m[0] == self.selected_member_id for m in members_list):
-            self.selected_member_id = None
-            self.selected_member_label_widget = None # It's already gone from display, so no need to change color
-            self.display_membership_history(None)
+        # and the treeview selection doesn't automatically clear,
+        # we might need to explicitly clear our stored selected_member_id.
+        # However, <<TreeviewSelect>> should fire if selection changes or is lost.
+        if self.selected_member_id and not any(str(m[0]) == str(self.selected_member_id) for m in members_list):
+            # print(f"Previously selected member {self.selected_member_id} no longer in list.")
+            # self.selected_member_id = None # This might be redundant if TreeviewSelect handles it
+            # self.members_tree.selection_set([]) # Try to clear tree selection if item is gone
+            pass # Let event handling manage this
 
+        # If selection highlighting needs to be managed:
+        # self.selected_member_id = None # Reset selection state
+        # self.selected_member_label_widget = None # This is no longer a label widget, remove references
+        # Potentially clear history display if selection is reset, handled by on_member_tree_select
 
-    def handle_member_selection(self, event, member_id, label_widget):
-        """Handles click on a member label to display their membership history and highlight selection."""
-        if self.selected_member_label_widget and self.selected_member_label_widget != label_widget:
-            if self.selected_member_label_widget.winfo_exists():
-                self.selected_member_label_widget.configure(fg_color="transparent")
-            else:
-                self.selected_member_label_widget = None
-
-        self.selected_member_id = member_id
-        self.selected_member_label_widget = label_widget
-        label_widget.configure(fg_color="gray20")
-
-        history_data = self.controller.get_all_activity_for_member(member_id)
-        self.display_membership_history(history_data, member_id)
+    # handle_member_selection method is now removed.
 
     def display_membership_history(self, history_records: list, member_id: Optional[int] = None):
-        """Displays all activity for the given member_id using the provided history_records."""
-        # from reporter.database_manager import get_all_activity_for_member # No longer needed here
-
-        for widget in self.membership_history_frame.winfo_children():
-            widget.destroy()
+        for item in self.member_specific_history_tree.get_children():
+            self.member_specific_history_tree.delete(item)
 
         if not history_records:
+            message_text = "Select a member to see their activity history."
             if member_id is not None: # A specific member was selected, but they have no history
                 message_text = "No activity history found for this member."
-            else: # No member selected, or initial state
-                message_text = "Select a member to see their activity history."
-            no_history_label = customtkinter.CTkLabel(self.membership_history_frame, text=message_text)
-            no_history_label.pack(padx=10, pady=10)
+
+            # Optional: Display message in Treeview or a separate label.
+            # For now, just clear and return if using a Treeview.
+            # Example: self.member_specific_history_tree.insert('', 'end', values=(message_text,) + ("",)*(len(self.member_specific_history_tree['columns'])-1))
             return
 
-        # history_records = get_all_activity_for_member(member_id) # Logic moved
-        for i, record in enumerate(history_records):
-            # New tuple structure:
-            # (activity_type, name_or_description, payment_date, start_date, end_date, amount_paid, payment_method_or_sessions, activity_id)
-            activity_type, name_or_description, payment_date, start_date, end_date, amount_paid, payment_method_or_sessions, _ = record
+        for record in history_records:
+            # Record structure:
+            # (activity_type, name_or_description, payment_date, start_date, end_date,
+            #  amount_paid, payment_method_or_sessions, activity_id)
+            # activity_id is last and not displayed directly.
 
-            history_text = ""
-            if activity_type == 'Group Class':
-                history_text = (f"Type: {activity_type} - Plan: {name_or_description} | Paid: {amount_paid:.2f} ({payment_method_or_sessions})\n"
-                                f"From: {start_date} To: {end_date if end_date else 'N/A'} (Paid on: {payment_date})")
-            elif activity_type == 'Personal Training':
-                history_text = (f"Type: {activity_type} - Sessions: {payment_method_or_sessions} | Paid: {amount_paid:.2f}\n"
-                                f"Date: {start_date} (Paid on: {payment_date})")
-            else:
-                history_text = "Unknown activity type."
+            activity_type, name_or_description, payment_date, start_date,            end_date, amount_paid, payment_method_or_sessions, _ = record
 
-            history_label = customtkinter.CTkLabel(self.membership_history_frame, text=history_text, anchor="w", justify="left")
-            history_label.pack(padx=5, pady=3, fill="x", expand=True)
+            amount_paid_formatted = f"{amount_paid:.2f}" if amount_paid is not None else "0.00"
+            end_date_display = end_date if end_date else "N/A"
+            description_display = name_or_description if name_or_description else "N/A"
+            method_sessions_display = payment_method_or_sessions if payment_method_or_sessions else "N/A"
 
-            if i < len(history_records) - 1:
-                sep = customtkinter.CTkFrame(self.membership_history_frame, height=1, fg_color="gray70")
-                sep.pack(fill="x", padx=5, pady=2)
+
+            values_tuple = (activity_type, description_display, payment_date,
+                            start_date, end_date_display, amount_paid_formatted,
+                            method_sessions_display)
+
+            self.member_specific_history_tree.insert('', 'end', values=values_tuple)
 
     def on_generate_pending_renewals_click(self):
         """Handles click for generating pending renewals report."""
@@ -1031,23 +1243,21 @@ class App(customtkinter.CTk):
 
         self.pending_renewals_status_label.configure(text=message, text_color=color)
 
-        # Clear previous results from the scrollable frame
-        for widget in self.pending_renewals_frame.winfo_children():
-            widget.destroy()
+        # Clear previous results from the treeview
+        for item in self.pending_renewals_tree.get_children():
+            self.pending_renewals_tree.delete(item)
 
         if success and renewals_data:
-            for i, record in enumerate(renewals_data):
-                client_name, phone, plan_name, end_date = record
-                detail_text = f"Name: {client_name} | Phone: {phone}\nPlan: {plan_name} | Ends: {end_date}"
-                record_label = customtkinter.CTkLabel(self.pending_renewals_frame, text=detail_text, anchor="w", justify="left")
-                record_label.pack(padx=5, pady=3, fill="x", expand=True)
-                if i < len(renewals_data) - 1:
-                    sep = customtkinter.CTkFrame(self.pending_renewals_frame, height=1, fg_color="gray70")
-                    sep.pack(fill="x", padx=5, pady=2)
-        elif success and not renewals_data: # No renewals found
-            CTkLabel(self.pending_renewals_frame, text="No renewals to display.").pack(pady=10)
-        elif not success: # Error case
-            CTkLabel(self.pending_renewals_frame, text="Error generating report. Check status message above.").pack(pady=10)
+            for record in renewals_data:
+                # record structure: client_name, phone, plan_name, end_date
+                self.pending_renewals_tree.insert('', 'end', values=record)
+        # elif success and not renewals_data:
+            # No action needed for tree, it's just empty. Status label handles message.
+            # Optionally, insert a "No renewals" message into the tree if desired.
+            # self.pending_renewals_tree.insert('', 'end', values=("No renewals to display.", "", "", ""))
+        # elif not success:
+            # Error already handled by status label. Tree remains empty.
+            # self.pending_renewals_tree.insert('', 'end', values=("Error generating report.", "", "", ""))
 
     def on_generate_finance_report_click(self):
         """Handles click for generating monthly finance report."""
