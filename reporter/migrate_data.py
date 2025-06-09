@@ -12,8 +12,7 @@ from reporter.database_manager import (
     get_member_by_phone,
     add_member_with_join_date,
     get_or_create_plan_id,
-    add_group_membership_to_db,
-    add_pt_booking
+    add_transaction  # Updated import
 )
 
 GC_CSV_PATH = 'Kranos MMA Members.xlsx - GC.csv'
@@ -105,13 +104,15 @@ def process_gc_data():
 
                 amount = parse_amount(row['Amount'])
 
-                add_group_membership_to_db(
+                add_transaction(
+                    transaction_type="Group Class",
                     member_id=member_id,
                     plan_id=plan_id,
                     payment_date=payment_date,
                     start_date=plan_start_date,
                     amount_paid=amount,
-                    payment_method=row.get('Payment Mode', '').strip()
+                    payment_method=row.get('Payment Mode', '').strip(),
+                    sessions=None
                 )
             except (ValueError, KeyError) as e:
                 print(f"Skipping row due to data error ('{e}'): {row}")
@@ -156,12 +157,18 @@ def process_pt_data():
                         continue
 
                 amount_paid = parse_amount(row.get('Amount Paid', '0'))
+                sessions_count = int(row.get('Session Count', 0)) if row.get('Session Count') else 0
 
-                add_pt_booking(
+
+                add_transaction(
+                    transaction_type="Personal Training",
                     member_id=member_id,
                     start_date=start_date,
-                    sessions=int(row.get('Session Count', 0)),
-                    amount_paid=amount_paid
+                    amount_paid=amount_paid,
+                    sessions=sessions_count,
+                    plan_id=None,
+                    payment_method=None, # PT bookings didn't have this before
+                    payment_date=start_date # Explicitly set payment_date as start_date for PT
                 )
             except (ValueError, KeyError) as e:
                 print(f"Skipping PT row due to data error ('{e}'): {row}")

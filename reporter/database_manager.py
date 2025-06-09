@@ -83,9 +83,12 @@ def _update_member_join_date_if_earlier(member_id: int, activity_start_date_str:
         print(f"Date parsing error in _update_member_join_date_if_earlier: {ve}")
 
 
-def get_all_members() -> list:
+def get_all_members(name_filter: str = None, phone_filter: str = None) -> list:
     """
-    Retrieves all members from the database, ordered by client_name.
+    Retrieves all members from the database, with optional filtering, ordered by client_name.
+    Args:
+        name_filter (str, optional): Filter for client_name (case-insensitive LIKE). Defaults to None.
+        phone_filter (str, optional): Filter for phone number (case-insensitive LIKE). Defaults to None.
     Returns:
         list: A list of tuples, where each tuple represents a member
               (member_id, client_name, phone, join_date).
@@ -95,7 +98,25 @@ def get_all_members() -> list:
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT member_id, client_name, phone, join_date FROM members ORDER BY client_name ASC")
+
+        base_query = "SELECT member_id, client_name, phone, join_date FROM members"
+        conditions = []
+        params = []
+
+        if name_filter:
+            conditions.append("client_name LIKE ?")
+            params.append(f"%{name_filter}%")
+
+        if phone_filter:
+            conditions.append("phone LIKE ?")
+            params.append(f"%{phone_filter}%")
+
+        if conditions:
+            base_query += " WHERE " + " AND ".join(conditions)
+
+        base_query += " ORDER BY client_name ASC"
+
+        cursor.execute(base_query, params)
         members = cursor.fetchall()
         return members
     except sqlite3.Error as e:
@@ -236,18 +257,22 @@ def get_all_plans_with_inactive() -> list:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
-def add_group_membership_to_db(member_id: int, plan_id: int, payment_date: str,
-                               start_date: str, amount_paid: float, payment_method: str) -> bool:
+def add_transaction(transaction_type: str, member_id: int, start_date: str, amount_paid: float,
+                    plan_id: int = None, sessions: int = None, payment_method: str = None,
+                    payment_date: str = None) -> bool:
     """
-    Adds a new group membership record to the database.
-    Calculates end_date based on plan_id's duration.
+    Adds a new transaction to the database.
+    For 'Group Class' transactions, calculates end_date based on plan_id's duration.
+    Updates member's join_date if the transaction's start_date is earlier.
     Args:
+        transaction_type (str): Type of transaction (e.g., 'Group Class', 'Personal Training').
         member_id (int): ID of the member.
-        plan_id (int): ID of the plan.
-        payment_date (str): Payment date in 'YYYY-MM-DD' format.
-        start_date (str): Membership start date in 'YYYY-MM-DD' format.
-        amount_paid (float): Amount paid for the membership.
-        payment_method (str): Method of payment.
+        start_date (str): Transaction start date in 'YYYY-MM-DD' format.
+        amount_paid (float): Amount paid for the transaction.
+        plan_id (int, optional): ID of the plan (required for 'Group Class'). Defaults to None.
+        sessions (int, optional): Number of sessions (for 'Personal Training'). Defaults to None.
+        payment_method (str, optional): Method of payment. Defaults to None.
+        payment_date (str, optional): Payment date in 'YYYY-MM-DD' format. Defaults to start_date if None.
     Returns:
         bool: True if successful, False otherwise.
     """
@@ -256,38 +281,44 @@ def add_group_membership_to_db(member_id: int, plan_id: int, payment_date: str,
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Get plan duration
-        cursor.execute("SELECT duration_days FROM plans WHERE plan_id = ?", (plan_id,))
-        plan_duration_row = cursor.fetchone()
-        if not plan_duration_row:
-            print(f"Error: Plan with ID {plan_id} not found.")
-            return False
-        duration_days = plan_duration_row[0]
+        if payment_date is None:
+            payment_date = start_date
 
-        # Calculate end_date
-        start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
-        end_date_obj = start_date_obj + timedelta(days=duration_days)
-        end_date_str = end_date_obj.strftime('%Y-%m-%d')
+        end_date = None
+        if transaction_type == 'Group Class':
+            if not plan_id:
+                print("Error: plan_id is required for Group Class transactions.")
+                return False # Connection closed in finally
+
+            cursor.execute("SELECT duration_days FROM plans WHERE plan_id = ?", (plan_id,))
+            plan_duration_row = cursor.fetchone()
+            if not plan_duration_row:
+                print(f"Error: Plan with ID {plan_id} not found.")
+                return False # Connection closed in finally
+
+            duration_days = plan_duration_row[0]
+            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+            end_date_obj = start_date_obj + timedelta(days=duration_days)
+            end_date = end_date_obj.strftime('%Y-%m-%d')
 
         cursor.execute(
             """
-            INSERT INTO group_memberships
-            (member_id, plan_id, payment_date, start_date, end_date, amount_paid, payment_method)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions
+            (member_id, transaction_type, plan_id, payment_date, start_date, end_date, amount_paid, payment_method, sessions)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (member_id, plan_id, payment_date, start_date, end_date_str, amount_paid, payment_method)
+            (member_id, transaction_type, plan_id, payment_date, start_date, end_date, amount_paid, payment_method, sessions)
         )
 
-        # Update member's join date if this membership's start date is earlier
         _update_member_join_date_if_earlier(member_id, start_date, cursor)
 
         conn.commit()
         return True
-    except sqlite3.Error as e:
-        print(f"Database error while adding group membership: {e}")
+    except ValueError as ve:
+        print(f"Data validation or date parsing error: {ve}")
         return False
-    except ValueError as ve: # For date conversion errors
-        print(f"Date format error: {ve}")
+    except sqlite3.Error as e:
+        print(f"Database error while adding transaction: {e}")
         return False
     finally:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
@@ -295,48 +326,40 @@ def add_group_membership_to_db(member_id: int, plan_id: int, payment_date: str,
 
 def get_all_activity_for_member(member_id: int) -> list:
     """
-    Retrieves all group memberships and PT bookings for a given member.
+    Retrieves all transactions for a given member.
     Args:
         member_id (int): The ID of the member.
     Returns:
-        list: A list of tuples, each representing an activity.
-              Structure: (activity_type, name_or_description, payment_date, start_date, end_date, amount_paid, payment_method_or_sessions, activity_id)
-              Ordered by start_date descending. Returns empty list on error or if no activities.
+        list: A list of tuples, each representing a transaction.
+              Structure: (transaction_type, name_or_description, payment_date, start_date, end_date, amount_paid, payment_method_or_sessions, transaction_id)
+              Ordered by start_date descending. Returns empty list on error or if no transactions.
     """
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("""
+        query = """
             SELECT
-                'Group Class' AS activity_type,
-                p.plan_name AS name_or_description,
-                gm.payment_date,
-                gm.start_date,
-                gm.end_date,
-                gm.amount_paid,
-                gm.payment_method AS payment_method_or_sessions,
-                gm.membership_id AS activity_id
-            FROM group_memberships gm
-            JOIN plans p ON gm.plan_id = p.plan_id
-            WHERE gm.member_id = ?
-
-            UNION ALL
-
-            SELECT
-                'Personal Training' AS activity_type,
-                'PT Session' AS name_or_description, /* Placeholder description */
-                pt.start_date AS payment_date, /* Assuming payment is on start date */
-                pt.start_date,
-                NULL AS end_date, /* PT sessions don't have an end date in the same way */
-                pt.amount_paid,
-                CAST(pt.sessions AS TEXT) || ' sessions' AS payment_method_or_sessions,
-                pt.pt_booking_id AS activity_id
-            FROM pt_bookings pt
-            WHERE pt.member_id = ?
-
-            ORDER BY start_date DESC
-        """, (member_id, member_id))
+                t.transaction_type,
+                CASE
+                    WHEN t.transaction_type = 'Group Class' THEN p.plan_name
+                    ELSE 'PT Session'
+                END AS name_or_description,
+                t.payment_date,
+                t.start_date,
+                t.end_date,
+                t.amount_paid,
+                CASE
+                    WHEN t.transaction_type = 'Group Class' THEN t.payment_method
+                    ELSE CAST(t.sessions AS TEXT) || ' sessions'
+                END AS payment_method_or_sessions,
+                t.transaction_id AS activity_id
+            FROM transactions t
+            LEFT JOIN plans p ON t.plan_id = p.plan_id
+            WHERE t.member_id = ?
+            ORDER BY t.start_date DESC;
+        """
+        cursor.execute(query, (member_id,))
         activities = cursor.fetchall()
         return activities
     except sqlite3.Error as e:
@@ -348,7 +371,7 @@ def get_all_activity_for_member(member_id: int) -> list:
 
 def get_pending_renewals(target_date_str: str) -> list:
     """
-    Retrieves group memberships ending in the month and year of the target_date_str.
+    Retrieves 'Group Class' transactions ending in the month and year of the target_date_str.
     Args:
         target_date_str (str): The target date in 'YYYY-MM-DD' format.
     Returns:
@@ -358,29 +381,25 @@ def get_pending_renewals(target_date_str: str) -> list:
     """
     conn = None
     try:
-        # Validate target_date_str format (optional, as strftime will handle some errors)
-        datetime.strptime(target_date_str, '%Y-%m-%d') # Will raise ValueError if format is wrong
+        target_datetime = datetime.strptime(target_date_str, '%Y-%m-%d')
+        target_year_month = target_datetime.strftime('%Y-%m')
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Extract year and month from target_date_str for comparison
-        # SQLite's strftime('%Y-%m', date_column) will give 'YYYY-MM'
-        target_year_month = datetime.strptime(target_date_str, '%Y-%m-%d').strftime('%Y-%m')
-
-        cursor.execute("""
+        query = """
             SELECT
                 m.client_name,
                 m.phone,
                 p.plan_name,
-                gm.end_date
-            FROM group_memberships gm
-            JOIN members m ON gm.member_id = m.member_id
-            JOIN plans p ON gm.plan_id = p.plan_id
-            WHERE strftime('%Y-%m', gm.end_date) = ?
-            ORDER BY gm.end_date ASC, m.client_name ASC
-        """, (target_year_month,))
-
+                t.end_date
+            FROM transactions t
+            JOIN members m ON t.member_id = m.member_id
+            JOIN plans p ON t.plan_id = p.plan_id
+            WHERE t.transaction_type = 'Group Class' AND strftime('%Y-%m', t.end_date) = ?
+            ORDER BY t.end_date ASC, m.client_name ASC;
+        """
+        cursor.execute(query, (target_year_month,))
         renewals = cursor.fetchall()
         return renewals
     except ValueError:
@@ -395,57 +414,39 @@ def get_pending_renewals(target_date_str: str) -> list:
 
 def get_finance_report(year: int, month: int) -> float | None:
     """
-    Calculates the total amount_paid from group_memberships for a given year and month.
+    Calculates the total amount_paid from all transactions for a given year and month, based on payment_date.
     Args:
         year (int): The target year.
         month (int): The target month (1-12).
     Returns:
-        float | None: The total sum of amount_paid, or None if no transactions or an error occurs.
+        float | None: The total sum of amount_paid, or 0.0 if no transactions, or None if an error occurs.
     """
     conn = None
-    total_revenue_group = 0.0
-    total_revenue_pt = 0.0
-
     try:
         if not (1 <= month <= 12):
             print("Error: Month must be between 1 and 12.")
             return None
 
-        # Format month to ensure two digits (e.g., '01', '02', ..., '12')
-        month_str = f"{month:02d}"
-        date_prefix = f"{year}-{month_str}-"  # e.g., "2023-07-"
-
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Calculate total revenue from group memberships
-        cursor.execute("""
-            SELECT SUM(amount_paid)
-            FROM group_memberships
-            WHERE payment_date LIKE ?
-        """, (date_prefix + '%',))  # LIKE 'YYYY-MM-%'
-        result_group = cursor.fetchone()
-        if result_group and result_group[0] is not None:
-            total_revenue_group = float(result_group[0])
+        year_month_str = f"{year:04d}-{month:02d}"
 
-        # Calculate total revenue from PT bookings
-        # Assuming pt_bookings.start_date is used for revenue recognition month
-        cursor.execute("""
+        query = """
             SELECT SUM(amount_paid)
-            FROM pt_bookings
-            WHERE start_date LIKE ?
-        """, (date_prefix + '%',))  # LIKE 'YYYY-MM-%'
-        result_pt = cursor.fetchone()
-        if result_pt and result_pt[0] is not None:
-            total_revenue_pt = float(result_pt[0])
+            FROM transactions
+            WHERE strftime('%Y-%m', payment_date) = ?;
+        """
+        cursor.execute(query, (year_month_str,))
+        result = cursor.fetchone()
 
-        return total_revenue_group + total_revenue_pt
+        if result and result[0] is not None:
+            return float(result[0])
+        else:
+            return 0.0  # No transactions found or sum is NULL
 
     except sqlite3.Error as e:
-        print(f"Database error while generating finance report for {year}-{month}: {e}")
-        return None
-    except Exception as e: # Catch any other unexpected errors
-        print(f"An unexpected error occurred in get_finance_report: {e}")
+        print(f"Database error while generating finance report for {year}-{month:02d}: {e}")
         return None
     finally:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
@@ -538,180 +539,187 @@ def get_or_create_plan_id(plan_name: str, duration_days: int) -> int | None:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
-def get_group_memberships_by_member_id(member_id: int) -> list:
-    """Retrieves all group memberships for a given member ID."""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT membership_id, member_id, plan_id, payment_date, start_date, end_date, amount_paid, payment_method
-            FROM group_memberships
-            WHERE member_id = ?
-            ORDER BY start_date DESC
-            """,
-            (member_id,)
-        )
-        return cursor.fetchall()
-    except sqlite3.Error as e:
-        print(f"Database error while fetching group memberships for member {member_id}: {e}")
-        return []
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
+# def get_group_memberships_by_member_id(member_id: int) -> list:
+#     """Retrieves all group memberships for a given member ID."""
+#     conn = None
+#     try:
+#         conn = get_db_connection()
+#         cursor = conn.cursor()
+#         cursor.execute(
+#             """
+#             SELECT membership_id, member_id, plan_id, payment_date, start_date, end_date, amount_paid, payment_method
+#             FROM group_memberships
+#             WHERE member_id = ?
+#             ORDER BY start_date DESC
+#             """,
+#             (member_id,)
+#         )
+#         return cursor.fetchall()
+#     except sqlite3.Error as e:
+#         print(f"Database error while fetching group memberships for member {member_id}: {e}")
+#         return []
+#     finally:
+#         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
+#             conn.close()
 
-def add_pt_booking(member_id: int, start_date: str, sessions: int, amount_paid: float) -> bool:
-    """Adds a personal training booking to the database."""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO pt_bookings (member_id, start_date, sessions, amount_paid)
-            VALUES (?, ?, ?, ?)
-            """,
-            (member_id, start_date, sessions, amount_paid)
-        )
+# def add_pt_booking(member_id: int, start_date: str, sessions: int, amount_paid: float) -> bool:
+#     """Adds a personal training booking to the database."""
+#     conn = None
+#     try:
+#         conn = get_db_connection()
+#         cursor = conn.cursor()
+#         cursor.execute(
+#             """
+#             INSERT INTO pt_bookings (member_id, start_date, sessions, amount_paid)
+#             VALUES (?, ?, ?, ?)
+#             """,
+#             (member_id, start_date, sessions, amount_paid)
+#         )
 
-        # Update member's join date if this booking's start date is earlier
-        _update_member_join_date_if_earlier(member_id, start_date, cursor)
+#         # Update member's join date if this booking's start date is earlier
+#         _update_member_join_date_if_earlier(member_id, start_date, cursor)
 
-        conn.commit()
-        return True
-    except sqlite3.Error as e:
-        print(f"Database error while adding PT booking for member {member_id}: {e}")
-        return False
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
+#         conn.commit()
+#         return True
+#     except sqlite3.Error as e:
+#         print(f"Database error while adding PT booking for member {member_id}: {e}")
+#         return False
+#     finally:
+#         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
+#             conn.close()
 
-def get_pt_bookings_by_member_id(member_id: int) -> list:
-    """Retrieves all PT bookings for a given member ID."""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT pt_booking_id, member_id, start_date, sessions, amount_paid
-            FROM pt_bookings
-            WHERE member_id = ?
-            ORDER BY start_date DESC
-            """,
-            (member_id,)
-        )
-        return cursor.fetchall()
-    except sqlite3.Error as e:
-        print(f"Database error while fetching PT bookings for member {member_id}: {e}")
-        return []
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
+# def get_pt_bookings_by_member_id(member_id: int) -> list:
+#     """Retrieves all PT bookings for a given member ID."""
+#     conn = None
+#     try:
+#         conn = get_db_connection()
+#         cursor = conn.cursor()
+#         cursor.execute(
+#             """
+#             SELECT pt_booking_id, member_id, start_date, sessions, amount_paid
+#             FROM pt_bookings
+#             WHERE member_id = ?
+#             ORDER BY start_date DESC
+#             """,
+#             (member_id,)
+#         )
+#         return cursor.fetchall()
+#     except sqlite3.Error as e:
+#         print(f"Database error while fetching PT bookings for member {member_id}: {e}")
+#         return []
+#     finally:
+#         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
+#             conn.close()
 
-if __name__ == '__main__':
-    # Example Usage (and for basic testing)
-    print("Attempting to initialize DB (if not already done by database.py main)")
-    # We need tables to be there, so ensure database.py's main block has run or run its functions
-    from reporter.database import create_database, seed_initial_plans
+# if __name__ == '__main__':
+#     # Example Usage (and for basic testing)
+#     print("Attempting to initialize DB (if not already done by database.py main)")
+#     # We need tables to be there, so ensure database.py's main block has run or run its functions
+#     from reporter.database import create_database, seed_initial_plans
 
-    # Ensure data directory exists (if running this directly before database.py's main)
-    import os
-    data_dir = os.path.dirname(DB_FILE)
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir)
-        print(f"Created directory: {data_dir}")
+#     # Ensure data directory exists (if running this directly before database.py's main)
+#     import os
+#     data_dir = os.path.dirname(DB_FILE)
+#     if not os.path.exists(data_dir):
+#         os.makedirs(data_dir)
+#         print(f"Created directory: {data_dir}")
 
-    create_database(DB_FILE) # Create tables if they don't exist
+#     create_database(DB_FILE) # Create tables if they don't exist
 
-    # Seeding plans is not directly related to member management but good for full setup
-    temp_conn_for_seed = get_db_connection()
-    try:
-        seed_initial_plans(temp_conn_for_seed)
-    finally:
-        if temp_conn_for_seed:
-            temp_conn_for_seed.close()
+#     # Seeding plans is not directly related to member management but good for full setup
+#     temp_conn_for_seed = get_db_connection()
+#     try:
+#         seed_initial_plans(temp_conn_for_seed)
+#     finally:
+#         if temp_conn_for_seed:
+#             temp_conn_for_seed.close()
 
-    print("\n--- Testing add_member_to_db ---")
-    success1 = add_member_to_db("John Doe", "1234567890")
-    print(f"Added 'John Doe': {success1}")
-    success2 = add_member_to_db("Jane Smith", "0987654321")
-    print(f"Added 'Jane Smith': {success2}")
-    success_dup = add_member_to_db("John Again", "1234567890") # Duplicate phone
-    print(f"Added 'John Again' (duplicate phone): {success_dup}")
+#     print("\n--- Testing add_member_to_db ---")
+#     success1 = add_member_to_db("John Doe", "1234567890")
+#     print(f"Added 'John Doe': {success1}")
+#     success2 = add_member_to_db("Jane Smith", "0987654321")
+#     print(f"Added 'Jane Smith': {success2}")
+#     success_dup = add_member_to_db("John Again", "1234567890") # Duplicate phone
+#     print(f"Added 'John Again' (duplicate phone): {success_dup}")
 
-    print("\n--- Testing get_all_members ---")
-    all_members = get_all_members()
-    if all_members:
-        for member in all_members:
-            print(member)
-    else:
-        print("No members found or error occurred.")
+#     print("\n--- Testing get_all_members ---")
+#     all_members = get_all_members()
+#     if all_members:
+#         for member in all_members:
+#             print(member)
+#     else:
+#         print("No members found or error occurred.")
 
-    print("\n--- Testing get_all_plans ---")
-    all_plans = get_all_plans()
-    if all_plans:
-        for plan in all_plans:
-            print(plan)
-    else:
-        print("No plans found or error occurred.")
+#     print("\n--- Testing get_all_plans ---")
+#     all_plans = get_all_plans()
+#     if all_plans:
+#         for plan in all_plans:
+#             print(plan)
+#     else:
+#         print("No plans found or error occurred.")
 
-    print("\n--- Testing add_group_membership_to_db ---")
-    if all_members and all_plans:
-        test_member_id = all_members[0][0] # Get ID of first member
-        test_plan_id = all_plans[0][0]     # Get ID of first plan
-        today_str = datetime.now().strftime('%Y-%m-%d')
+#     print("\n--- Testing add_transaction ---") # Updated from add_group_membership
+#     if all_members and all_plans:
+#         test_member_id = all_members[0][0] # Get ID of first member
+#         test_plan_id = all_plans[0][0]     # Get ID of first plan
+#         today_str = datetime.now().strftime('%Y-%m-%d')
 
-        gm_success = add_group_membership_to_db(
-            member_id=test_member_id,
-            plan_id=test_plan_id,
-            payment_date=today_str,
-            start_date=today_str,
-            amount_paid=50.00,
-            payment_method="Cash"
-        )
-        print(f"Added group membership for {all_members[0][1]}: {gm_success}")
+#         # Example: Add a Group Class transaction
+#         gc_success = add_transaction(
+#             transaction_type='Group Class',
+#             member_id=test_member_id,
+#             plan_id=test_plan_id,
+#             payment_date=today_str,
+#             start_date=today_str,
+#             amount_paid=50.00,
+#             payment_method="Cash"
+#         )
+#         print(f"Added Group Class transaction for {all_members[0][1]}: {gc_success}")
 
-        print("\n--- Testing get_all_activity_for_member ---")
-        if gm_success:
-            member_history = get_all_activity_for_member(test_member_id)
-            if member_history:
-                print(f"Activity history for member ID {test_member_id}:")
-                for record in member_history:
-                    print(record)
-            else:
-                print(f"No activity history found for member ID {test_member_id}, or an error occurred.")
-        else:
-            print("Skipping get_all_activity_for_member test as prerequisite gm add failed.")
+#         # Example: Add a Personal Training transaction
+#         pt_success = add_transaction(
+#             transaction_type='Personal Training',
+#             member_id=test_member_id,
+#             start_date=today_str, # Payment date will default to start_date
+#             amount_paid=75.00,
+#             sessions=5
+#         )
+#         print(f"Added Personal Training transaction for {all_members[0][1]}: {pt_success}")
 
-        # Example of trying to add with missing fields (handled by DB constraints or GUI validation later)
-        # try:
-        #     add_member_to_db(None, "5555555555")
-        # except Exception as e:
-        #     print(f"Error with None name: {e}")
-    else:
-        print("Skipping add_group_membership and get_history tests as no members or plans are available.")
 
-    print("\n--- Testing get_pending_renewals ---")
-    # This test in main is a bit limited as it depends on when it's run.
-    # For more robust testing, specific end_dates need to be in the DB.
-    today_for_renewal_test = datetime.now().strftime('%Y-%m-%d')
-    pending_renewals_today = get_pending_renewals(today_for_renewal_test)
-    if pending_renewals_today:
-        print(f"Pending renewals for {datetime.strptime(today_for_renewal_test, '%Y-%m-%d').strftime('%B %Y')}:")
-        for renewal in pending_renewals_today:
-            print(renewal)
-    else:
-        print(f"No pending renewals found for {datetime.strptime(today_for_renewal_test, '%Y-%m-%d').strftime('%B %Y')}, or an error occurred.")
+#         print("\n--- Testing get_all_activity_for_member ---")
+#         if gc_success or pt_success: # Check if at least one transaction was added
+#             member_history = get_all_activity_for_member(test_member_id)
+#             if member_history:
+#                 print(f"Activity history for member ID {test_member_id}:")
+#                 for record in member_history:
+#                     print(record)
+#             else:
+#                 print(f"No activity history found for member ID {test_member_id}, or an error occurred.")
+#         else:
+#             print("Skipping get_all_activity_for_member test as prerequisite transaction add failed.")
+#     else:
+#         print("Skipping add_transaction and get_history tests as no members or plans are available.")
 
-    print("\n--- Testing get_finance_report ---")
-    import calendar
-    # This test in main is also limited. More robust testing in test_database_manager.py
-    last_month_test_date = datetime.now().replace(day=1) - timedelta(days=1)
-    lm_year, lm_month = last_month_test_date.year, last_month_test_date.month
-    total_revenue_lm = get_finance_report(lm_year, lm_month)
-    if total_revenue_lm is not None:
-        print(f"Total revenue for {calendar.month_name[lm_month]} {lm_year}: ${total_revenue_lm:.2f}")
-    else:
-        print(f"Could not retrieve finance report for {calendar.month_name[lm_month]} {lm_year}.")
+#     print("\n--- Testing get_pending_renewals ---")
+#     # This test in main is a bit limited as it depends on when it's run.
+#     # For more robust testing, specific end_dates need to be in the DB.
+#     today_for_renewal_test = datetime.now().strftime('%Y-%m-%d')
+#     pending_renewals_today = get_pending_renewals(today_for_renewal_test)
+#     if pending_renewals_today:
+#         print(f"Pending renewals for {datetime.strptime(today_for_renewal_test, '%Y-%m-%d').strftime('%B %Y')}:")
+#         for renewal in pending_renewals_today:
+#             print(renewal)
+#     else:
+#         print(f"No pending renewals found for {datetime.strptime(today_for_renewal_test, '%Y-%m-%d').strftime('%B %Y')}, or an error occurred.")
+
+#     print("\n--- Testing get_finance_report ---")
+#     import calendar
+#     # This test in main is also limited. More robust testing in test_database_manager.py
+#     current_year = datetime.now().year
+#     current_month = datetime.now().month
+#     total_revenue_current_month = get_finance_report(current_year, current_month)
+#     if total_revenue_current_month is not None:
+#         print(f"Total revenue for {calendar.month_name[current_month]} {current_year}: ${total_revenue_current_month:.2f}")
+#     else:
+#         print(f"Could not retrieve finance report for {calendar.month_name[current_month]} {current_year}.")

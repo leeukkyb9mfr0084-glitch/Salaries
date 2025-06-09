@@ -263,25 +263,44 @@ class App(customtkinter.CTk):
         # This frame is for displaying member lists and membership history.
         display_frame = customtkinter.CTkFrame(main_management_frame)
         display_frame.grid(row=0, column=1, rowspan=3, padx=5, pady=5, sticky="nsew") # Spans rows and fills space
-        display_frame.grid_rowconfigure(1, weight=1) # Allows the members_scrollable_frame to expand vertically
-        display_frame.grid_rowconfigure(3, weight=1) # Allows the membership_history_frame to expand vertically
+        display_frame.grid_rowconfigure(1, weight=0) # New row for filter_controls_frame
+        display_frame.grid_rowconfigure(2, weight=1) # Allows the members_scrollable_frame to expand vertically (was row 1)
+        display_frame.grid_rowconfigure(4, weight=1) # Allows the membership_history_frame to expand vertically (was row 3)
         display_frame.grid_columnconfigure(0, weight=1) # Allows content within to expand horizontally
 
         # Title for the "All Members" list
         display_title = CTkLabel(display_frame, text="All Members", font=CTkFont(weight="bold"))
         display_title.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
 
+        # Filter Controls Frame
+        filter_controls_frame = CTkFrame(display_frame)
+        filter_controls_frame.grid(row=1, column=0, padx=10, pady=(5, 10), sticky="ew")
+        filter_controls_frame.grid_columnconfigure((0, 1), weight=1) # Name and Phone entry expand
+        filter_controls_frame.grid_columnconfigure((2, 3), weight=0) # Buttons take their own space
+
+        self.name_filter_entry = CTkEntry(filter_controls_frame, placeholder_text="Filter by Name")
+        self.name_filter_entry.grid(row=0, column=0, padx=(0,5), pady=5, sticky="ew")
+
+        self.phone_filter_entry = CTkEntry(filter_controls_frame, placeholder_text="Filter by Phone")
+        self.phone_filter_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+
+        self.filter_button = CTkButton(filter_controls_frame, text="Filter", command=self.apply_member_filters)
+        self.filter_button.grid(row=0, column=2, padx=5, pady=5)
+
+        self.clear_button = CTkButton(filter_controls_frame, text="Clear", command=self.clear_member_filters)
+        self.clear_button.grid(row=0, column=3, padx=(5,0), pady=5)
+
         # Scrollable frame to display the list of all members
         self.members_scrollable_frame = CTkScrollableFrame(display_frame)
-        self.members_scrollable_frame.grid(row=1, column=0, padx=10, pady=(0,10), sticky="nsew")
+        self.members_scrollable_frame.grid(row=2, column=0, padx=10, pady=(0,10), sticky="nsew") # Moved to row=2
 
         # --- Membership History Frame (Below All Members) ---
         history_title = CTkLabel(display_frame, text="Membership History", font=CTkFont(weight="bold"))
-        history_title.grid(row=2, column=0, padx=10, pady=(10,0), sticky="ew") # Placed below members list
+        history_title.grid(row=3, column=0, padx=10, pady=(10,0), sticky="ew") # Moved to row=3
 
         # Scrollable frame to display history for a selected member
         self.membership_history_frame = CTkScrollableFrame(display_frame)
-        self.membership_history_frame.grid(row=3, column=0, padx=10, pady=10, sticky="nsew")
+        self.membership_history_frame.grid(row=4, column=0, padx=10, pady=10, sticky="nsew") # Moved to row=4
 
         # Initialize data displays
         self.display_all_members()      # Populate the list of all members
@@ -290,6 +309,19 @@ class App(customtkinter.CTk):
         self.populate_pt_member_dropdown() # Populate dropdown for PT booking form
 
         self.display_membership_history(None) # Show placeholder message in history view
+
+    def apply_member_filters(self):
+        """Applies filters to the member list display."""
+        name_query = self.name_filter_entry.get().strip()
+        phone_query = self.phone_filter_entry.get().strip()
+        self.display_all_members(name_filter=name_query if name_query else None,
+                                 phone_filter=phone_query if phone_query else None)
+
+    def clear_member_filters(self):
+        """Clears active member filters and refreshes the list."""
+        self.name_filter_entry.delete(0, "end")
+        self.phone_filter_entry.delete(0, "end")
+        self.display_all_members()
 
     def setup_plan_management_tab(self, tab):
         """Configures the UI for the Plan Management tab."""
@@ -684,7 +716,7 @@ class App(customtkinter.CTk):
 
     def save_group_membership_action(self):
         """Handles the save group membership button click event with validation."""
-        from reporter.database_manager import add_group_membership_to_db # Local import
+        from reporter.database_manager import add_transaction # Updated import to add_transaction
         from datetime import datetime
 
         # Get selected values from dropdowns
@@ -735,8 +767,16 @@ class App(customtkinter.CTk):
 
         # Attempt to add to database
         try:
-            success = add_group_membership_to_db(
-                member_id, plan_id, payment_date_str, start_date_str, amount_paid, payment_method
+            # Updated to use add_transaction for 'Group Class'
+            success = add_transaction(
+                transaction_type="Group Class",
+                member_id=member_id,
+                plan_id=plan_id,
+                payment_date=payment_date_str,
+                start_date=start_date_str,
+                amount_paid=amount_paid,
+                payment_method=payment_method
+                # sessions=None is implied by add_transaction's default if not provided
             )
             if success:
                 self.group_membership_status_label.configure(text="Group membership added successfully!", text_color="green")
@@ -756,7 +796,7 @@ class App(customtkinter.CTk):
         except Exception as e: # Catch any other unexpected errors
             self.group_membership_status_label.configure(text=f"An error occurred: {str(e)}", text_color="red")
 
-    def display_all_members(self):
+    def display_all_members(self, name_filter=None, phone_filter=None):
         """Clears and re-populates the scrollable frame with member data. Makes member labels clickable."""
         from reporter.database_manager import get_all_members # Local import
 
@@ -764,7 +804,7 @@ class App(customtkinter.CTk):
         for widget in self.members_scrollable_frame.winfo_children():
             widget.destroy()
 
-        members = get_all_members() # Fetch all members from the database
+        members = get_all_members(name_filter=name_filter, phone_filter=phone_filter) # Fetch members with filter
         if not members:
             # Display a message if no members are found
             no_members_label = customtkinter.CTkLabel(self.members_scrollable_frame, text="No members found.")
