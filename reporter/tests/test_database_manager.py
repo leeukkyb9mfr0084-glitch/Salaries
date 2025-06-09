@@ -404,8 +404,8 @@ def test_get_or_create_plan_id_create_new(db_conn):
     assert count == 4 # 3 seeded + 1 new
 
 
-def test_add_group_membership(db_conn):
-    """Tests adding a group membership and verifies data including end_date calculation."""
+def test_add_transaction_group_class(db_conn):
+    """Tests adding a group class transaction and verifies data including end_date calculation."""
     # 1. Add a test member
     member_name = "Membership User"
     member_phone = "9998887777"
@@ -577,8 +577,8 @@ def test_add_transaction_group_class_invalid_plan_id(db_conn):
     assert count == 0, "No transaction should have been added to the database."
 
 
-def test_add_pt_booking(db_conn):
-    """Tests adding a PT booking and verifies the inserted data."""
+def test_add_transaction_personal_training(db_conn):
+    """Tests adding a Personal Training transaction and verifies the inserted data."""
     # 1. Add a test member
     member_name = "PT User"
     member_phone = "PT123456"

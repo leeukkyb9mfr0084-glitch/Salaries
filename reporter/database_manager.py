@@ -1,3 +1,4 @@
+import sys
 import sqlite3
 from datetime import datetime, timedelta
 
@@ -27,6 +28,9 @@ def add_member_to_db(name: str, phone: str, join_date: str = None) -> bool:
     Returns:
         bool: True if the member was added successfully, False otherwise.
     """
+    if not name or not phone:
+        print("Error: Member name and phone number cannot be empty.", file=sys.stderr)
+        return False
     conn = None
     try:
         conn = get_db_connection()
@@ -136,6 +140,9 @@ def add_plan(name: str, duration_days: int, is_active: bool = True) -> int | Non
     Returns:
         int | None: The ID of the newly added plan, or None if an error occurs.
     """
+    if duration_days <= 0:
+        print("Error: Plan duration must be a positive number of days.", file=sys.stderr)
+        return None
     conn = None
     try:
         conn = get_db_connection()
@@ -276,6 +283,13 @@ def add_transaction(transaction_type: str, member_id: int, start_date: str, amou
     Returns:
         bool: True if successful, False otherwise.
     """
+    if amount_paid <= 0:
+        print("Error: Amount paid must be a positive number.", file=sys.stderr)
+        return False
+    if transaction_type == 'Personal Training' and sessions is not None and sessions <= 0:
+        print("Error: Number of sessions must be a positive number for Personal Training.", file=sys.stderr)
+        return False
+
     conn = None
     try:
         conn = get_db_connection()
