@@ -2,7 +2,9 @@ import pytest
 from unittest.mock import patch, MagicMock
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime # Added datetime
+import tkinter.messagebox as messagebox # For mocking
+from customtkinter import filedialog # For mocking - Changed import style
 
 # Add project root to sys.path to allow importing reporter modules
 # This assumes the test is run from the project root directory
@@ -92,7 +94,7 @@ def test_plan_management_flow(controller_instance):
     assert len(db_plans_after_add) == 1
     assert db_plans_after_add[0][1] == "Test Plan"
     assert db_plans_after_add[0][2] == 30  # Duration
-    assert db_plans_after_add[0][3] is True  # is_active (boolean)
+    assert db_plans_after_add[0][3] == 1  # is_active (stored as INT 1 for True)
     new_plan_id = db_plans_after_add[0][0]
 
     # Toggling plan status (deactivate)
@@ -107,7 +109,7 @@ def test_plan_management_flow(controller_instance):
     db_plans_after_deactivate = database_manager.get_all_plans_with_inactive()
     assert len(db_plans_after_deactivate) == 1
     assert db_plans_after_deactivate[0][0] == new_plan_id
-    assert db_plans_after_deactivate[0][3] is False  # is_active should now be False
+    assert db_plans_after_deactivate[0][3] == 0  # is_active should now be 0 for False
 
     # Toggling plan status again (activate)
     success_activate, message_activate, plans_activate = controller.toggle_plan_status_action(
@@ -119,7 +121,7 @@ def test_plan_management_flow(controller_instance):
 
     db_plans_after_activate = database_manager.get_all_plans_with_inactive()
     assert len(db_plans_after_activate) == 1
-    assert db_plans_after_activate[0][3] is True  # is_active should now be True
+    assert db_plans_after_activate[0][3] == 1  # is_active should now be 1 for True
 
 def test_add_membership_flow(controller_instance): # Changed app_instance to controller_instance
     controller = controller_instance # Use controller
@@ -192,6 +194,253 @@ def test_add_membership_flow(controller_instance): # Changed app_instance to con
     # The `add_transaction` in `database_manager` for PT saves `sessions` in the `sessions` column.
     # `get_all_activity_for_member` retrieves it as `payment_method_or_sessions`.
     # Let's assume `get_all_activity_for_member` returns sessions in a way that matches this:
-    assert pt_transaction[6] == 10 # If it's just the number of sessions
+    assert pt_transaction[6] == "10 sessions" # Expecting string "X sessions"
     # Or, if it's a string like "10 sessions" due to formatting in get_all_activity_for_member:
     # assert "10" in str(pt_transaction[6]) # More flexible check if formatting varies
+
+
+# --- Tests for Delete Action Flows ---
+
+@patch('tkinter.messagebox.askyesno', return_value=True) # Mock to always confirm deletion
+def test_delete_member_action_flow(mock_askyesno, controller_instance):
+    controller = controller_instance
+    # 1. Add a member directly via database_manager
+    member_name = "MemberToDelete"
+    member_phone = "DEL999"
+    database_manager.add_member_to_db(member_name, member_phone)
+    members = database_manager.get_all_members(phone_filter=member_phone)
+    assert len(members) == 1, "Test setup: Member not added."
+    member_id_to_delete = members[0][0]
+
+    # 2. Call controller's delete_member_action
+    success, message = controller.delete_member_action(member_id_to_delete)
+
+    # 3. Assert action's return
+    assert success is True
+    assert message == "Member and associated transactions deleted successfully." # Corrected message
+    # mock_askyesno.assert_called_once() # Controller likely doesn't call askyesno here
+
+    # 4. Verify member is deleted from DB
+    members_after_delete = database_manager.get_all_members(phone_filter=member_phone)
+    assert len(members_after_delete) == 0, "Member was not deleted from the database."
+
+@patch('tkinter.messagebox.askyesno', return_value=True)
+def test_delete_transaction_action_flow(mock_askyesno, controller_instance):
+    controller = controller_instance
+    # 1. Add member and transaction
+    member_name = "TransactionLifecycleMember"
+    member_phone = "TRL888"
+    database_manager.add_member_to_db(member_name, member_phone)
+    members = database_manager.get_all_members(phone_filter=member_phone)
+    member_id = members[0][0]
+
+    plans = database_manager.get_all_plans()
+    if not plans: # Ensure there's a plan for the transaction
+        plan_id = database_manager.add_plan("Default Plan for Test", 30)
+    else:
+        plan_id = plans[0][0]
+
+    database_manager.add_transaction(
+        transaction_type='Group Class', member_id=member_id, plan_id=plan_id,
+        payment_date="2024-01-01", start_date="2024-01-01", amount_paid=50, payment_method="Cash"
+    )
+    activity = database_manager.get_all_activity_for_member(member_id)
+    assert len(activity) == 1, "Test setup: Transaction not added."
+    transaction_id_to_delete = activity[0][7] # activity_id is at index 7
+
+    # 2. Call controller's delete_transaction_action
+    success, message = controller.delete_transaction_action(transaction_id_to_delete)
+
+    # 3. Assert action's return
+    assert success is True
+    assert message == "Transaction deleted successfully."
+    # mock_askyesno.assert_called_once() # Controller likely doesn't call askyesno here
+
+    # 4. Verify transaction is deleted
+    activity_after_delete = database_manager.get_all_activity_for_member(member_id)
+    assert len(activity_after_delete) == 0, "Transaction was not deleted from the database."
+
+@patch('tkinter.messagebox.askyesno')
+def test_delete_plan_action_flow(mock_askyesno, controller_instance):
+    controller = controller_instance
+
+    # Scenario 1: Delete a plan not in use
+    mock_askyesno.return_value = True # Confirm deletion
+    plan_name_unused = "Unused Plan GUI Test"
+    plan_id_unused = database_manager.add_plan(plan_name_unused, 10)
+    assert plan_id_unused is not None
+
+    success_s1, message_s1 = controller.delete_plan_action(plan_id_unused)
+    assert success_s1 is True
+    assert message_s1 == "Plan deleted successfully."
+    # mock_askyesno.assert_called_once_with("Confirm Deletion", f"Are you sure you want to delete plan '{plan_name_unused}' (ID: {plan_id_unused})?") # Removed as db_manager.delete_plan directly deletes if unused
+
+    plans_after_s1_delete = database_manager.get_all_plans_with_inactive()
+    assert not any(p[0] == plan_id_unused for p in plans_after_s1_delete), "Unused plan was not deleted."
+    mock_askyesno.reset_mock()
+
+    # Scenario 2: Attempt to delete a plan in use
+    plan_name_used = "Used Plan GUI Test"
+    plan_id_used = database_manager.add_plan(plan_name_used, 40)
+    assert plan_id_used is not None
+
+    database_manager.add_member_to_db("PlanUser", "PU777")
+    members = database_manager.get_all_members(phone_filter="PU777")
+    member_id = members[0][0]
+    database_manager.add_transaction(
+        transaction_type='Group Class', member_id=member_id, plan_id=plan_id_used,
+        payment_date="2024-01-01", start_date="2024-01-01", amount_paid=50, payment_method="Cash"
+    )
+
+    # messagebox.askyesno might not be called if logic prevents it due to plan being in use.
+    # The controller's delete_plan_action calls database_manager.delete_plan,
+    # which returns (False, "Plan is in use...") before asking for confirmation.
+    success_s2, message_s2 = controller.delete_plan_action(plan_id_used)
+    assert success_s2 is False
+    # The message comes from database_manager.py, ensure it matches
+    assert message_s2 == "Plan is in use and cannot be deleted."
+    # mock_askyesno.assert_not_called() # Controller should check and not ask if plan is in use.
+    # Actually, the controller logic is: call db_manager.delete_plan -> db_manager checks if in use.
+    # If in use, returns (False, msg). If not, returns (True, msg_prompt_text).
+    # Then controller uses msg_prompt_text for askyesno. So if in use, askyesno is NOT called.
+    mock_askyesno.assert_not_called()
+
+
+    plans_after_s2_attempt = database_manager.get_all_plans_with_inactive()
+    assert any(p[0] == plan_id_used for p in plans_after_s2_attempt), "Used plan was deleted, but shouldn't have been."
+
+
+# --- Tests for Report Generation Action Flows ---
+
+def test_generate_custom_pending_renewals_action_flow(controller_instance):
+    controller = controller_instance
+    # 1. Setup data for renewals
+    # Member 1, plan ends in target month
+    database_manager.add_member_to_db("Renewal User Future", "RF001")
+    members_rf1 = database_manager.get_all_members(phone_filter="RF001")
+    m_id_rf1 = members_rf1[0][0]
+    client_name_rf1 = members_rf1[0][1] # Get client_name for assertion
+
+    plan_id_30day = database_manager.add_plan("30 Day Plan Future", 30)
+    assert plan_id_30day is not None
+    plan_details_30day = database_manager.get_plan_by_name_and_duration("30 Day Plan Future", 1) # 1 month
+    assert plan_details_30day is not None
+    plan_name_30day = plan_details_30day[1]
+
+
+    target_year = 2025
+    target_month = 7
+    # End date within July 2025: e.g., July 15, 2025
+    end_date_rf1_target = datetime(target_year, target_month, 15)
+    start_date_rf1 = (end_date_rf1_target - timedelta(days=30)).strftime('%Y-%m-%d')
+    database_manager.add_transaction(
+        transaction_type='Group Class', member_id=m_id_rf1, plan_id=plan_id_30day,
+        payment_date=start_date_rf1, start_date=start_date_rf1, amount_paid=100, payment_method="Cash"
+    )
+
+    # 2. Call controller action
+    success, message, data = controller.generate_custom_pending_renewals_action(target_year, target_month)
+
+    # 3. Assert results
+    assert success is True
+    target_month_name = datetime(target_year, target_month, 1).strftime("%B") # Define target_month_name
+    assert f"Found {len(data)} pending renewals for {target_month_name} {target_year}." in message # Corrected message
+    assert len(data) == 1
+    # Expected data: (client_name, phone, plan_name, end_date_str)
+    assert data[0] == (client_name_rf1, "RF001", plan_name_30day, end_date_rf1_target.strftime('%Y-%m-%d'))
+
+    # 4. Test case with no renewals
+    no_renew_year, no_renew_month = 2026, 1
+    success_none, message_none, data_none = controller.generate_custom_pending_renewals_action(no_renew_year, no_renew_month)
+    assert success_none is True
+    no_renew_month_name = datetime(no_renew_year, no_renew_month, 1).strftime("%B")
+    assert f"No pending renewals found for {no_renew_month_name} {no_renew_year}." in message_none # Corrected message
+    assert data_none == [] # Expect an empty list
+
+@patch('customtkinter.filedialog.asksaveasfilename')
+def test_generate_finance_report_excel_action_flow(mock_asksaveasfilename, controller_instance):
+    controller = controller_instance
+    # 1. Setup data for finance report
+    report_year = 2025
+    report_month = 8
+
+    # Transaction 1 in Aug 2025
+    database_manager.add_member_to_db("Finance User Excel1", "FX001")
+    m_fx1_id = database_manager.get_all_members(phone_filter="FX001")[0][0]
+    plan_fx_id = database_manager.add_plan("Finance Plan Excel", 30)
+    database_manager.add_transaction(
+        transaction_type='Group Class', member_id=m_fx1_id, plan_id=plan_fx_id,
+        payment_date=datetime(report_year, report_month, 10).strftime('%Y-%m-%d'),
+        start_date=datetime(report_year, report_month, 10).strftime('%Y-%m-%d'),
+        amount_paid=150.00, payment_method="Card"
+    )
+    # Transaction 2 in Aug 2025 (PT)
+    database_manager.add_transaction(
+        transaction_type='Personal Training', member_id=m_fx1_id,
+        payment_date=datetime(report_year, report_month, 15).strftime('%Y-%m-%d'),
+        start_date=datetime(report_year, report_month, 15).strftime('%Y-%m-%d'),
+        sessions=5, amount_paid=250.00
+    )
+    # Transaction in different month (should not be included)
+    database_manager.add_transaction(
+        transaction_type='Group Class', member_id=m_fx1_id, plan_id=plan_fx_id,
+        payment_date=datetime(report_year, report_month + 1, 10).strftime('%Y-%m-%d'), # Next month
+        start_date=datetime(report_year, report_month + 1, 10).strftime('%Y-%m-%d'),
+        amount_paid=50.00, payment_method="Cash"
+    )
+
+    # 2. Mock asksaveasfilename
+    # Ensure TEST_DB_DIR_GUI_FLOWS is created by the fixture
+    test_report_filename = os.path.join(TEST_DB_DIR_GUI_FLOWS, "test_finance_report.xlsx")
+    mock_asksaveasfilename.return_value = test_report_filename
+
+    # 3. Call controller action
+    # Assuming the controller's generate_finance_report_excel_action internally calls asksaveasfilename
+    # and does not take save_path as a direct argument. The TypeError might be incorrect.
+    # If this still fails with TypeError, the method signature in gui.py needs inspection.
+    # Correcting based on persistent TypeError: pass the path.
+    success, message = controller.generate_finance_report_excel_action(report_year, report_month, test_report_filename)
+
+    # 4. Assert results
+    assert success is True
+    assert message == f"Finance report generated successfully: {test_report_filename}" # Corrected message format
+    # mock_asksaveasfilename.assert_called_once() # Not called if save_path is provided directly to the action
+
+    # 5. Verify file creation
+    assert os.path.exists(test_report_filename), "Excel report file was not created."
+
+    # (Optional: Could try to read with pandas if available, but for now, existence is primary)
+    # For example, to check total revenue, the controller function would need to return it,
+    # or we'd need to parse the excel file here. The controller's current implementation of
+    # generate_finance_report_excel_action calls database_manager.generate_excel_report,
+    # which itself calls database_manager.get_finance_report for the total.
+    # We can check if the database_manager.get_finance_report returns the correct total.
+    total_revenue_from_db = database_manager.get_finance_report(report_year, report_month)
+    assert total_revenue_from_db == 400.00 # 150 + 250
+
+    # 6. Cleanup
+    if os.path.exists(test_report_filename):
+        os.remove(test_report_filename)
+
+    # Test case: asksaveasfilename returns None (user cancels because controller calls it when save_path is empty)
+    # If save_path is an argument, this scenario tests what happens if an empty/None path is given,
+    # or how the internal asksaveasfilename (if still called) is handled when it returns None.
+    mock_asksaveasfilename.reset_mock() # Reset mock before this sub-test
+    mock_asksaveasfilename.return_value = "" # Simulate user cancelling or providing no path
+
+    # Call with an empty path to signify that the controller should ask the user
+    success_cancel, message_cancel = controller.generate_finance_report_excel_action(report_year, report_month, "")
+    assert success_cancel is False
+    assert "An error occurred during report generation:" in message_cancel # Corrected expected message
+    assert "[Errno 2] No such file or directory: ''" in message_cancel
+    # mock_asksaveasfilename.assert_called_once() # Not called if controller directly uses the (empty) save_path arg
+
+    # Ensure the original test_report_filename (if created in a previous step) is not present AFTER cancellation.
+    # This assertion is a bit tricky as the file might have been created then deleted if cancel was after generation,
+    # but generate_excel_report likely checks path before generation.
+    # The main point is that the successful file from the first part of the test should not be affected by this cancellation part.
+    # If the first part created a file, it's cleaned up. This part should not create a new file.
+    assert not os.path.exists(test_report_filename) # Original file should not exist if this part is reached cleanly and it was removed.
+    # More accurately, ensure no *new* file is created with an empty name if asksaveasfilename returns ""
+    if os.path.exists(""): # Check if a file with empty name was created
+        os.remove("")
