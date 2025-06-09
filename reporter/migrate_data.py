@@ -49,6 +49,24 @@ def parse_amount(amount_str):
 def process_gc_data():
     """Reads the Group Class CSV and populates members and group_memberships tables."""
     print("\nProcessing Group Class data...")
+
+    conn = None  # Initialize conn to None
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        print("Clearing existing data from tables: transactions, members, plans")
+        cursor.execute("DELETE FROM transactions;")
+        cursor.execute("DELETE FROM members;")
+        cursor.execute("DELETE FROM plans;")
+        cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('members', 'transactions', 'plans');")
+        conn.commit()
+        print("Data cleared successfully.")
+    except sqlite3.Error as e:
+        print(f"Database error during data clearing: {e}")
+    finally:
+        if conn:
+            conn.close()
+
     if not os.path.exists(GC_CSV_PATH):
         print(f"ERROR: GC data file not found at '{GC_CSV_PATH}'")
         return
