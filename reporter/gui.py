@@ -221,7 +221,7 @@ class App(customtkinter.CTk):
 
         # --- Column 0: Input Forms ---
         # This frame will contain all individual input forms (Add Member, Add Group Membership)
-        forms_frame = customtkinter.CTkFrame(main_management_frame, fg_color="transparent")
+        forms_frame = customtkinter.CTkScrollableFrame(main_management_frame, fg_color="transparent")
         forms_frame.grid(row=0, column=0, rowspan=3, padx=5, pady=5, sticky="nsew") # Spans multiple rows in parent grid
         forms_frame.grid_columnconfigure(0, weight=1) # Ensure forms within this frame can expand horizontally
 
@@ -670,7 +670,7 @@ class App(customtkinter.CTk):
         from reporter.database_manager import get_all_plans # Local import
         plans = get_all_plans() # Fetches (plan_id, plan_name, duration_days)
         # Create a mapping from plan name to plan ID
-        self.plan_name_to_id = {p[1]: p[0] for p in plans}
+        self.plan_name_to_id = {f"{p[1]} | {p[2]} days": p[0] for p in plans}
         plan_names_display = list(self.plan_name_to_id.keys())
 
         if not plan_names_display:
