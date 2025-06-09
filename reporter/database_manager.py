@@ -383,11 +383,12 @@ def get_all_activity_for_member(member_id: int) -> list:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
-def get_pending_renewals(target_date_str: str) -> list:
+def get_pending_renewals(year: int, month: int) -> list:
     """
-    Retrieves 'Group Class' transactions ending in the month and year of the target_date_str.
+    Retrieves 'Group Class' transactions ending in the specified year and month.
     Args:
-        target_date_str (str): The target date in 'YYYY-MM-DD' format.
+        year (int): The target year (e.g., 2023).
+        month (int): The target month (1-12).
     Returns:
         list: A list of tuples, where each tuple contains:
               (client_name, phone, plan_name, end_date)
@@ -395,8 +396,11 @@ def get_pending_renewals(target_date_str: str) -> list:
     """
     conn = None
     try:
-        target_datetime = datetime.strptime(target_date_str, '%Y-%m-%d')
-        target_year_month = target_datetime.strftime('%Y-%m')
+        if not (1 <= month <= 12):
+            print(f"Error: Invalid month '{month}'. Must be between 1 and 12.", file=sys.stderr)
+            return []
+
+        month_str = f"{month:02d}" # Format month to two digits
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -410,17 +414,19 @@ def get_pending_renewals(target_date_str: str) -> list:
             FROM transactions t
             JOIN members m ON t.member_id = m.member_id
             JOIN plans p ON t.plan_id = p.plan_id
-            WHERE t.transaction_type = 'Group Class' AND strftime('%Y-%m', t.end_date) = ?
+            WHERE t.transaction_type = 'Group Class'
+              AND strftime('%Y', t.end_date) = ?
+              AND strftime('%m', t.end_date) = ?
             ORDER BY t.end_date ASC, m.client_name ASC;
         """
-        cursor.execute(query, (target_year_month,))
+        cursor.execute(query, (str(year), month_str)) # Pass year as string
         renewals = cursor.fetchall()
         return renewals
-    except ValueError:
-        print(f"Error: Invalid target_date_str format '{target_date_str}'. Please use YYYY-MM-DD.")
+    except sqlite3.Error as e: # Catch specific sqlite errors
+        print(f"Database error while fetching pending renewals for {year}-{month_str}: {e}", file=sys.stderr)
         return []
-    except sqlite3.Error as e:
-        print(f"Database error while fetching pending renewals: {e}")
+    except Exception as e: # Catch any other unexpected errors
+        print(f"An unexpected error occurred in get_pending_renewals for {year}-{month_str}: {e}", file=sys.stderr)
         return []
     finally:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
@@ -610,6 +616,68 @@ def get_transactions_with_member_details(name_filter: str = None, phone_filter: 
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
+def get_transactions_for_month(year: int, month: int) -> list:
+    """
+    Retrieves all transactions for a specific month and year, based on payment_date.
+    Args:
+        year (int): The target year.
+        month (int): The target month (1-12).
+    Returns:
+        list: A list of tuples, each representing a transaction with details.
+              Example tuple structure:
+              (transaction_id, client_name, payment_date, start_date, end_date,
+               amount_paid, transaction_type, plan_name_or_session_details, payment_method)
+              Returns an empty list on error or if no transactions are found.
+    """
+    if not (1 <= month <= 12):
+        print(f"Error: Invalid month '{month}'. Must be between 1 and 12.", file=sys.stderr)
+        return []
+
+    year_str = str(year)
+    month_str = f"{month:02d}"
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        query = """
+            SELECT
+                t.transaction_id,
+                m.client_name,
+                t.payment_date,
+                t.start_date,
+                t.end_date,
+                t.amount_paid,
+                t.transaction_type,
+                CASE
+                    WHEN t.transaction_type = 'Group Class' THEN p.plan_name
+                    WHEN t.transaction_type = 'Personal Training' THEN CAST(t.sessions AS TEXT) || ' sessions'
+                    ELSE NULL
+                END AS plan_or_session_details,
+                t.payment_method
+            FROM transactions t
+            JOIN members m ON t.member_id = m.member_id
+            LEFT JOIN plans p ON t.plan_id = p.plan_id
+            WHERE strftime('%Y', t.payment_date) = ?
+              AND strftime('%m', t.payment_date) = ?
+            ORDER BY t.payment_date ASC, t.transaction_id ASC;
+        """
+
+        cursor.execute(query, (year_str, month_str))
+        transactions = cursor.fetchall()
+        return transactions
+
+    except sqlite3.Error as e:
+        print(f"Database error in get_transactions_for_month for {year_str}-{month_str}: {e}", file=sys.stderr)
+        return []
+    except Exception as e: # General catch for unexpected issues
+        print(f"Unexpected error in get_transactions_for_month for {year_str}-{month_str}: {e}", file=sys.stderr)
+        return []
+    finally:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
+            conn.close()
+
 # def get_group_memberships_by_member_id(member_id: int) -> list:
 #     """Retrieves all group memberships for a given member ID."""
 #     conn = None
@@ -776,7 +844,7 @@ def get_transactions_with_member_details(name_filter: str = None, phone_filter: 
 #     # This test in main is a bit limited as it depends on when it's run.
 #     # For more robust testing, specific end_dates need to be in the DB.
 #     today_for_renewal_test = datetime.now().strftime('%Y-%m-%d')
-#     pending_renewals_today = get_pending_renewals(today_for_renewal_test)
+#     pending_renewals_today = get_pending_renewals(today_for_renewal_test) # This would fail with new signature
 #     if pending_renewals_today:
 #         print(f"Pending renewals for {datetime.strptime(today_for_renewal_test, '%Y-%m-%d').strftime('%B %Y')}:")
 #         for renewal in pending_renewals_today:

@@ -6,6 +6,10 @@ from datetime import datetime, date # Explicitly import datetime and date
 from customtkinter import CTkFrame, CTkLabel, CTkEntry, CTkButton, CTkOptionMenu, CTkFont, CTkScrollableFrame
 from tkcalendar import DateEntry
 from reporter import database_manager
+import pandas as pd
+from openpyxl.styles import Font, Border, Side, Alignment, PatternFill
+from openpyxl.utils import get_column_letter
+import calendar
 
 
 class GuiController:
@@ -159,45 +163,151 @@ class GuiController:
             # Log the exception e for debugging purposes if possible
             return False, f"An error occurred: {str(e)}"
 
+    def generate_custom_pending_renewals_action(self, year: int, month: int) -> tuple[bool, str, list | None]:
+        """Fetches pending renewals for a specific year and month."""
+        import calendar # For month name in message
+
+        try:
+            # The database_manager.get_pending_renewals is expected to handle its own exceptions
+            # and return an empty list if there's a DB error or no results.
+            renewals = database_manager.get_pending_renewals(year, month)
+
+            month_name = calendar.month_name[month]
+
+            # get_pending_renewals returns a list. An empty list means no renewals or a DB error handled by it.
+            if renewals:
+                return True, f"Found {len(renewals)} pending renewals for {month_name} {year}.", renewals
+            else:
+                # This covers both "no renewals found" and cases where get_pending_renewals had an issue and returned [].
+                # The message from get_pending_renewals (if any, via print to stderr) would indicate DB error.
+                # For the GUI, just report that no data was retrieved for the period.
+                return True, f"No pending renewals found for {month_name} {year}.", []
+
+        except Exception as e:
+            # Catch any unexpected errors during the process
+            month_name_str = str(month)
+            try:
+                month_name_str = calendar.month_name[month]
+            except IndexError: # Should not happen if month is 1-12 as validated by App method
+                pass
+            return False, f"Error generating renewals report for {month_name_str} {year}: {str(e)}", None
+
     def generate_pending_renewals_action(self) -> tuple[bool, str, list | None]:
         """Fetches pending renewals for the current month."""
         from datetime import date
         import calendar
 
         today = date.today()
-        current_date_str = today.strftime('%Y-%m-%d')
-        month_name = calendar.month_name[today.month]
-        year = today.year
+        # current_date_str = today.strftime('%Y-%m-%d') # Old way
+        current_year = today.year
+        current_month = today.month
+        month_name = calendar.month_name[current_month]
 
         try:
-            renewals = database_manager.get_pending_renewals(current_date_str)
-            if renewals:
-                return True, f"Found {len(renewals)} pending renewals for {month_name} {year}:", renewals
+            # Call the updated database_manager.get_pending_renewals with year and month
+            renewals = database_manager.get_pending_renewals(current_year, current_month)
+            if renewals: # renewals is a list, empty list means no data or DB error handled by get_pending_renewals
+                return True, f"Found {len(renewals)} pending renewals for {month_name} {current_year}.", renewals
             else:
-                return True, f"No pending renewals found for {month_name} {year}.", []
+                return True, f"No pending renewals found for {month_name} {current_year}.", []
         except Exception as e:
-            return False, f"Error generating report: {str(e)}", None
+            return False, f"Error generating report for current month: {str(e)}", None
 
-    def generate_finance_report_action(self) -> tuple[bool, str, float | None]:
-        """Fetches and returns the finance report for the previous month."""
-        from datetime import date, timedelta
-        import calendar
-
-        today = date.today()
-        first_day_current_month = today.replace(day=1)
-        last_day_previous_month = first_day_current_month - timedelta(days=1)
-        prev_month = last_day_previous_month.month
-        prev_year = last_day_previous_month.year
-        prev_month_name = calendar.month_name[prev_month]
+    def generate_finance_report_excel_action(self, year: int, month: int, save_path: str) -> tuple[bool, str]:
+        """
+        Generates an Excel finance report for the given month and year.
+        The report includes a summary sheet and a detailed transactions sheet.
+        Applies styling to the report.
+        """
+        # pandas, openpyxl.styles, openpyxl.utils, calendar are imported at the top of the file.
 
         try:
-            total_revenue = database_manager.get_finance_report(prev_year, prev_month)
-            if total_revenue is not None:
-                return True, f"Total revenue for {prev_month_name} {prev_year}: ${total_revenue:.2f}", total_revenue
-            else:
-                return False, f"Could not generate finance report for {prev_month_name} {prev_year}. Check logs.", None
+            transactions_data = database_manager.get_transactions_for_month(year, month)
+
+            month_name_str = calendar.month_name[month]
+
+            if not transactions_data:
+                return True, f"No transaction data found for {month_name_str} {year}. Report not generated."
+
+            df_columns = [
+                "Transaction ID", "Client Name", "Payment Date", "Start Date", "End Date",
+                "Amount Paid", "Type", "Plan/Sessions", "Payment Method"
+            ]
+            df = pd.DataFrame(transactions_data, columns=df_columns)
+
+            df["Amount Paid"] = pd.to_numeric(df["Amount Paid"], errors='coerce').fillna(0)
+            df["Payment Date"] = pd.to_datetime(df["Payment Date"], errors='coerce').dt.strftime('%Y-%m-%d')
+            df["Start Date"] = pd.to_datetime(df["Start Date"], errors='coerce').dt.strftime('%Y-%m-%d')
+            # df["End Date"] can be 'N/A' or other non-date strings from DB if not NULL
+            # Avoid direct conversion for "End Date" unless data cleaning is robust or it's always a valid date/NULL
+            # df["End Date"] = pd.to_datetime(df["End Date"], errors='coerce').dt.strftime('%Y-%m-%d')
+
+
+            total_revenue = df["Amount Paid"].sum()
+            total_transactions = len(df)
+
+            summary_data = {
+                "Metric": ["Total Revenue", "Total Transactions"],
+                "Value": [total_revenue, total_transactions]
+            }
+            summary_df = pd.DataFrame(summary_data)
+
+            with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
+                summary_df.to_excel(writer, sheet_name="Summary", index=False, startrow=2)
+                df.to_excel(writer, sheet_name="Detailed Transactions", index=False, startrow=1) # data starts at row 2 after header
+
+                workbook = writer.book
+                summary_sheet = writer.sheets["Summary"]
+                details_sheet = writer.sheets["Detailed Transactions"]
+
+                header_font = Font(bold=True, color="FFFFFF")
+                header_fill = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
+                title_font = Font(bold=True, size=16)
+                border_style = Side(style="thin", color="000000")
+                thin_border = Border(left=border_style, right=border_style, top=border_style, bottom=border_style)
+
+                summary_sheet.cell(row=1, column=1, value=f"Finance Summary - {month_name_str} {year}").font = title_font
+                for col_num, column_title in enumerate(summary_df.columns, 1):
+                    cell = summary_sheet.cell(row=3, column=col_num)
+                    cell.font = header_font
+                    cell.fill = header_fill
+                    cell.border = thin_border
+                for row_idx_offset, _ in enumerate(summary_df.index): # Iterate based on DataFrame index
+                    for col_idx, _ in enumerate(summary_df.columns):
+                        summary_sheet.cell(row=row_idx_offset + 4, column=col_idx + 1).border = thin_border
+
+                summary_sheet.column_dimensions['A'].width = 25
+                summary_sheet.column_dimensions['B'].width = 15
+                summary_sheet.cell(row=4, column=2).number_format = '"$"#,##0.00'
+
+                details_sheet.cell(row=1, column=1, value=f"Detailed Transactions - {month_name_str} {year}").font = title_font
+                for col_num, column_title in enumerate(df.columns, 1):
+                    cell = details_sheet.cell(row=2, column=col_num)
+                    cell.value = column_title
+                    cell.font = header_font
+                    cell.fill = header_fill
+                    cell.border = thin_border
+                    column_letter = get_column_letter(col_num)
+                    try: # Handle potential empty series in max_len calculation
+                        max_len = max(df[column_title].astype(str).map(len).max(), len(str(column_title))) + 2
+                    except (TypeError, ValueError): # If column is empty or all NaT/NaN
+                        max_len = len(str(column_title)) + 2
+                    details_sheet.column_dimensions[column_letter].width = max_len if max_len < 50 else 50
+
+                for row_idx_offset, _ in enumerate(df.index): # Iterate based on DataFrame index
+                    for col_idx, _ in enumerate(df.columns):
+                        details_sheet.cell(row=row_idx_offset + 3, column=col_idx + 1).border = thin_border
+
+                amount_paid_col_letter = get_column_letter(df_columns.index("Amount Paid") + 1)
+                for row_num in range(3, details_sheet.max_row + 1):
+                     details_sheet[f'{amount_paid_col_letter}{row_num}'].number_format = '"$"#,##0.00'
+
+            return True, f"Finance report generated successfully: {save_path}"
+
+        except ImportError:
+            return False, "Error: pandas or openpyxl library not found. Please ensure they are installed."
         except Exception as e:
-            return False, f"Error generating finance report: {str(e)}", None
+            return False, f"An error occurred during report generation: {str(e)}"
 
     def get_filtered_members(self, name_filter: Optional[str], phone_filter: Optional[str]) -> list:
         """Fetches members based on name and/or phone filters."""
@@ -306,6 +416,20 @@ class App(customtkinter.CTk):
     # --- Reporting Tab ---
         self.setup_reporting_tab(self.tab_view.tab("Reporting"))
 
+    def _get_membership_status(self, end_date_str: str) -> str:
+        if not end_date_str or end_date_str.lower() == "n/a":
+            return "N/A" # Or "Inactive" depending on desired behavior for missing dates
+
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            if end_date >= date.today():
+                return "Active"
+            else:
+                return "Inactive"
+        except ValueError:
+            # Handle cases where end_date_str is not a valid date string
+            return "Invalid Date" # Or "Inactive"
+
     def _bind_mouse_scroll(self, widget):
         """Binds mouse wheel and trackpad scroll to a scrollable widget."""
         def on_scroll(event):
@@ -397,7 +521,7 @@ class App(customtkinter.CTk):
         history_tree_container.grid_columnconfigure(1, weight=0) # Scrollbar
 
         history_columns = ('transaction_id', 'client_name', 'phone', 'join_date', 'transaction_type',
-                           'amount_paid', 'payment_date', 'start_date', 'end_date',
+                           'amount_paid', 'payment_date', 'start_date', 'end_date', 'status',
                            'plan_id_or_sessions', 'payment_method')
 
         self.history_tree = ttk.Treeview(history_tree_container, columns=history_columns, show='headings', selectmode='browse', style="Treeview")
@@ -411,6 +535,7 @@ class App(customtkinter.CTk):
         self.history_tree.heading('payment_date', text='Paid Date')
         self.history_tree.heading('start_date', text='Start Date')
         self.history_tree.heading('end_date', text='End Date')
+        self.history_tree.heading('status', text='Status')
         self.history_tree.heading('plan_id_or_sessions', text='Plan/Sessions')
         self.history_tree.heading('payment_method', text='Pay Method')
 
@@ -423,15 +548,16 @@ class App(customtkinter.CTk):
         self.history_tree.column('payment_date', width=80, anchor='center')
         self.history_tree.column('start_date', width=80, anchor='center')
         self.history_tree.column('end_date', width=80, anchor='center')
+        self.history_tree.column('status', width=75, anchor='center')
         self.history_tree.column('transaction_id', width=60, anchor='center')
-        self.history_tree.column('client_name', width=120)
-        self.history_tree.column('phone', width=90)
-        self.history_tree.column('join_date', width=80, anchor='center')
-        self.history_tree.column('transaction_type', width=100)
-        self.history_tree.column('amount_paid', width=70, anchor='e')
-        self.history_tree.column('payment_date', width=80, anchor='center')
-        self.history_tree.column('start_date', width=80, anchor='center')
-        self.history_tree.column('end_date', width=80, anchor='center')
+        # self.history_tree.column('client_name', width=120) # Duplicate removed
+        # self.history_tree.column('phone', width=90) # Duplicate removed
+        # self.history_tree.column('join_date', width=80, anchor='center') # Duplicate removed
+        # self.history_tree.column('transaction_type', width=100) # Duplicate removed
+        # self.history_tree.column('amount_paid', width=70, anchor='e') # Duplicate removed
+        # self.history_tree.column('payment_date', width=80, anchor='center') # Duplicate removed
+        # self.history_tree.column('start_date', width=80, anchor='center') # Duplicate removed
+        # self.history_tree.column('end_date', width=80, anchor='center') # Duplicate removed
         self.history_tree.column('plan_id_or_sessions', width=100, anchor='center')
         self.history_tree.column('payment_method', width=90)
 
@@ -516,10 +642,12 @@ class App(customtkinter.CTk):
             else:
                 amount_paid_formatted = "0.00"
             end_date_display = end_date if end_date else "N/A"
+            status = self._get_membership_status(end_date_display) # Call the helper
 
             # Ensure transaction_id is the first element in the tuple
             values_tuple = (transaction_id, client_name, phone, join_date, transaction_type,
                             amount_paid_formatted, payment_date, start_date, end_date_display,
+                            status, # Insert the status here
                             plan_id_or_sessions_display, payment_method_db)
 
             self.history_tree.insert('', 'end', values=values_tuple)
@@ -1082,9 +1210,25 @@ class App(customtkinter.CTk):
         renewals_title = CTkLabel(renewals_frame, text="Pending Renewals Report", font=CTkFont(weight="bold"))
         renewals_title.pack(pady=(5,10)) # pack is used here for simpler vertical layout
 
-        generate_button = CTkButton(renewals_frame, text="Generate Pending Renewals for Current Month",
-                                    command=self.on_generate_pending_renewals_click)
-        generate_button.pack(pady=5)
+        # Frame for custom date inputs
+        custom_renewals_input_frame = CTkFrame(renewals_frame)
+        custom_renewals_input_frame.pack(pady=5)
+
+        CTkLabel(custom_renewals_input_frame, text="Year:").grid(row=0, column=0, padx=5, pady=5)
+        self.renewal_year_entry = CTkEntry(custom_renewals_input_frame, placeholder_text="YYYY")
+        self.renewal_year_entry.grid(row=0, column=1, padx=5, pady=5)
+        # Pre-fill with current year
+        self.renewal_year_entry.insert(0, str(datetime.now().year))
+
+
+        CTkLabel(custom_renewals_input_frame, text="Month:").grid(row=0, column=2, padx=5, pady=5)
+        self.renewal_month_var = StringVar(value=str(datetime.now().month)) # Ensure tkinter.StringVar, pre-fill current month
+        months = [str(i) for i in range(1, 13)]
+        self.renewal_month_menu = CTkOptionMenu(custom_renewals_input_frame, variable=self.renewal_month_var, values=months)
+        self.renewal_month_menu.grid(row=0, column=3, padx=5, pady=5)
+
+        self.custom_generate_renewals_button = CTkButton(renewals_frame, text="Generate Renewals Report", command=self._handle_generate_custom_pending_renewals)
+        self.custom_generate_renewals_button.pack(pady=10)
 
         # Status label to provide feedback on the renewals report generation
         self.pending_renewals_status_label = CTkLabel(tab, text="")
@@ -1129,15 +1273,35 @@ class App(customtkinter.CTk):
         finance_report_frame.grid_columnconfigure(0, weight=1) # Allows content to center or expand
 
         finance_title = CTkLabel(finance_report_frame, text="Monthly Finance Report", font=CTkFont(weight="bold"))
-        finance_title.pack(pady=(5,10))
+        finance_title.pack(pady=(5,10)) # Or use grid
 
-        generate_finance_button = CTkButton(finance_report_frame, text="Generate Last Month's Finance Report",
-                                            command=self.on_generate_finance_report_click)
-        generate_finance_button.pack(pady=5)
+        # NEW Input Frame for Year and Month
+        finance_input_frame = CTkFrame(finance_report_frame)
+        finance_input_frame.pack(pady=5) # Or grid
 
-        # Label to display the finance report result or status messages
-        self.finance_report_label = CTkLabel(finance_report_frame, text="Finance report will appear here.", font=CTkFont(size=14))
-        self.finance_report_label.pack(pady=10)
+        current_year = datetime.now().year
+        current_month = str(datetime.now().month)
+
+        CTkLabel(finance_input_frame, text="Year:").grid(row=0, column=0, padx=5, pady=5)
+        self.finance_report_year_entry = CTkEntry(finance_input_frame, placeholder_text="YYYY")
+        self.finance_report_year_entry.insert(0, str(current_year))
+        self.finance_report_year_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        CTkLabel(finance_input_frame, text="Month:").grid(row=0, column=2, padx=5, pady=5)
+        self.finance_report_month_var = StringVar(value=current_month) # Ensure tkinter.StringVar
+        months = [str(i) for i in range(1, 13)]
+        self.finance_report_month_menu = CTkOptionMenu(finance_input_frame, variable=self.finance_report_month_var, values=months)
+        self.finance_report_month_menu.grid(row=0, column=3, padx=5, pady=5)
+
+        # NEW Generate Excel Report Button
+        self.generate_excel_report_button = CTkButton(finance_report_frame,
+                                                      text="Generate Excel Finance Report",
+                                                      command=self._handle_generate_finance_excel_report) # To be created
+        self.generate_excel_report_button.pack(pady=10)
+
+        # NEW Status Label for Excel Report
+        self.excel_report_status_label = CTkLabel(finance_report_frame, text="", font=CTkFont(size=12))
+        self.excel_report_status_label.pack(pady=5)
 
 
     # def setup_group_membership_frame(self, parent_frame): # Method removed
@@ -1300,16 +1464,41 @@ class App(customtkinter.CTk):
 
             self.member_specific_history_tree.insert('', 'end', values=values_tuple)
 
-    def on_generate_pending_renewals_click(self):
-        """Handles click for generating pending renewals report."""
-        success, message, renewals_data = self.controller.generate_pending_renewals_action()
+    def _handle_generate_custom_pending_renewals(self):
+        year_str = self.renewal_year_entry.get().strip()
+        month_str = self.renewal_month_var.get() # From CTkOptionMenu, should be "1" through "12"
+
+        if not year_str:
+            self.pending_renewals_status_label.configure(text="Year cannot be empty.", text_color="red")
+            return
+
+        try:
+            year_int = int(year_str)
+            # Optional: Add more specific year validation, e.g., if year_int < 2000 or year_int > 2100:
+            if not (2000 <= year_int <= 2100): # Basic range validation
+                 self.pending_renewals_status_label.configure(text="Please enter a valid year (e.g., 2020-2100).", text_color="red")
+                 return
+        except ValueError:
+            self.pending_renewals_status_label.configure(text="Year must be a valid number (e.g., 2023).", text_color="red")
+            return
+
+        try:
+            month_int = int(month_str) # Month from OptionMenu is already 1-12
+        except ValueError: # Should not happen with OptionMenu but good practice
+            self.pending_renewals_status_label.configure(text="Invalid month selected.", text_color="red")
+            return
+
+        # Call the controller action (to be created in the next step)
+        # For now, assume it exists. If subtask fails due to this, we'll adjust.
+        # This is a known dependency on the next step.
+        success, message, renewals_data = self.controller.generate_custom_pending_renewals_action(year_int, month_int)
 
         # Determine color: green for success, orange for "no renewals", red for error
         color = "green"
         if not success:
             color = "red"
         elif not renewals_data: # Success but no data
-            color = "orange"
+            color = "orange" # Or stick to green if message itself says "no renewals"
 
         self.pending_renewals_status_label.configure(text=message, text_color=color)
 
@@ -1319,29 +1508,49 @@ class App(customtkinter.CTk):
 
         if success and renewals_data:
             for record in renewals_data:
-                # record structure: client_name, phone, plan_name, end_date
+                # record structure expected: client_name, phone, plan_name, end_date
                 self.pending_renewals_tree.insert('', 'end', values=record)
+        # Optional: If success and no data, insert a "No renewals found" message into the tree
         # elif success and not renewals_data:
-            # No action needed for tree, it's just empty. Status label handles message.
-            # Optionally, insert a "No renewals" message into the tree if desired.
-            # self.pending_renewals_tree.insert('', 'end', values=("No renewals to display.", "", "", ""))
-        # elif not success:
-            # Error already handled by status label. Tree remains empty.
-            # self.pending_renewals_tree.insert('', 'end', values=("Error generating report.", "", "", ""))
+        #     self.pending_renewals_tree.insert('', 'end', values=("No pending renewals found for selected period.", "", "", ""))
 
-    def on_generate_finance_report_click(self):
-        """Handles click for generating monthly finance report."""
-        success, message, total_revenue = self.controller.generate_finance_report_action()
+    def _handle_generate_finance_excel_report(self):
+        year_str = self.finance_report_year_entry.get().strip()
+        month_str = self.finance_report_month_var.get()
 
-        if success:
-            # Message already contains formatted revenue or "no data" type info
-            # total_revenue being None after success might mean no transactions, which isn't an error but zero revenue
-            color = "green"
-            if total_revenue is None or total_revenue == 0: # Assuming controller returns 0 for no revenue
-                 color = "orange"
-            self.finance_report_label.configure(text=message, text_color=color)
-        else: # Not successful
-            self.finance_report_label.configure(text=message, text_color="red")
+        if not year_str:
+            self.excel_report_status_label.configure(text="Year cannot be empty.", text_color="red")
+            return
+
+        try:
+            year_int = int(year_str)
+            if not (2000 <= year_int <= 2100): # Basic range validation
+                 self.excel_report_status_label.configure(text="Please enter a valid year (e.g., 2020-2100).", text_color="red")
+                 return
+        except ValueError:
+            self.excel_report_status_label.configure(text="Year must be a valid number (e.g., 2023).", text_color="red")
+            return
+
+        try:
+            month_int = int(month_str)
+        except ValueError: # Should not happen with OptionMenu
+            self.excel_report_status_label.configure(text="Invalid month selected.", text_color="red")
+            return
+
+        save_path = customtkinter.filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")],
+            title="Save Finance Report As"
+        )
+
+        if not save_path:
+            self.excel_report_status_label.configure(text="Report generation cancelled.", text_color="grey")
+            return
+
+        # Call controller action (to be created in next step)
+        success, message = self.controller.generate_finance_report_excel_action(year_int, month_int, save_path)
+
+        self.excel_report_status_label.configure(text=message, text_color="green" if success else "red")
 
     def on_save_membership_click(self):
         """Handles the click event for the 'Save Membership' button."""
