@@ -31,31 +31,21 @@ def create_database(db_name: str):
         );
         """)
 
-        # Create group_memberships table
+        # Create transactions table
         cursor.execute("""
-        CREATE TABLE IF NOT EXISTS group_memberships (
-            membership_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        CREATE TABLE IF NOT EXISTS transactions (
+            transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
             member_id INTEGER NOT NULL,
-            plan_id INTEGER NOT NULL,
-            payment_date TEXT NOT NULL,
+            transaction_type TEXT NOT NULL,
+            plan_id INTEGER,
+            payment_date TEXT,
             start_date TEXT NOT NULL,
-            end_date TEXT NOT NULL,
+            end_date TEXT,
             amount_paid REAL NOT NULL,
             payment_method TEXT,
+            sessions INTEGER,
             FOREIGN KEY (member_id) REFERENCES members (member_id),
             FOREIGN KEY (plan_id) REFERENCES plans (plan_id)
-        );
-        """)
-
-        # Create pt_bookings table
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pt_bookings (
-            pt_booking_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            member_id INTEGER NOT NULL,
-            start_date TEXT NOT NULL,
-            sessions INTEGER NOT NULL,
-            amount_paid REAL NOT NULL,
-            FOREIGN KEY (member_id) REFERENCES members (member_id)
         );
         """)
         conn.commit()
