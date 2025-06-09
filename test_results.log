@@ -1,0 +1,38 @@
+2025-06-09 07:20:58
+============================= test session starts ==============================
+platform linux -- Python 3.10.17, pytest-8.3.5, pluggy-1.5.0
+rootdir: /app
+plugins: anyio-4.9.0, cov-6.1.1, json-report-1.5.0, metadata-3.1.1
+collected 34 items / 1 error
+
+==================================== ERRORS ====================================
+________________ ERROR collecting reporter/test_migrate_data.py ________________
+ImportError while importing test module '/app/reporter/test_migrate_data.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.10/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+reporter/test_migrate_data.py:10: in <module>
+    from reporter.database_manager import ( # Added import
+E   ImportError: cannot import name 'get_group_memberships_by_member_id' from 'reporter.database_manager' (/app/reporter/database_manager.py)
+=========================== short test summary info ============================
+ERROR reporter/test_migrate_data.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+=============================== 1 error in 0.47s ===============================
+
+
+--- New Test Run ---
+
+
+2025-06-09 07:22:24
+============================= test session starts ==============================
+platform linux -- Python 3.10.17, pytest-8.3.5, pluggy-1.5.0
+rootdir: /app
+plugins: anyio-4.9.0, cov-6.1.1, json-report-1.5.0, metadata-3.1.1
+collected 38 items
+
+reporter/test_migrate_data.py ....                                       [ 10%]
+reporter/tests/test_database.py ..                                       [ 15%]
+reporter/tests/test_database_manager.py ................................ [100%]
+
+============================== 38 passed in 0.98s ==============================

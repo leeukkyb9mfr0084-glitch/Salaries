@@ -3,7 +3,7 @@ import pytest
 from reporter.database import create_database, seed_initial_plans
 
 # Expected table names
-EXPECTED_TABLES = ["members", "plans", "group_memberships", "pt_bookings"]
+EXPECTED_TABLES = ["members", "plans", "transactions"]
 EXPECTED_INITIAL_PLANS = [
     ("Monthly - Unrestricted", 30),
     ("3 Months - Unrestricted", 90),

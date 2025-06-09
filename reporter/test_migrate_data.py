@@ -10,8 +10,7 @@ from reporter.database import create_database # Added import
 from reporter.database_manager import ( # Added import
     get_member_by_phone,
     get_plan_by_name_and_duration,
-    get_group_memberships_by_member_id,
-    get_pt_bookings_by_member_id
+    get_all_activity_for_member # Updated import
 )
 
 # Use an in-memory database for testing
@@ -107,23 +106,26 @@ class TestMigrationScript(unittest.TestCase):
         member1 = get_member_by_phone("1234567890")
         self.assertIsNotNone(member1, "Test User 1 (GC) should be found from sample GC.csv")
         self.assertEqual(member1[1], "Test User 1")
-        memberships1 = get_group_memberships_by_member_id(member1[0])
-        self.assertEqual(len(memberships1), 1)
-        self.assertEqual(memberships1[0][3], "2024-01-01") # payment_date
-        self.assertEqual(memberships1[0][4], "2024-01-01") # start_date
-        self.assertEqual(memberships1[0][6], 5000.0)       # amount_paid (index was 5, should be 6)
-        plan1 = get_plan_by_name_and_duration("Standard", 3)
-        self.assertIsNotNone(plan1)
-        self.assertEqual(memberships1[0][2], plan1[0])     # plan_id
+        all_activities_member1 = get_all_activity_for_member(member1[0])
+        gc_activities1 = [tx for tx in all_activities_member1 if tx[0] == 'Group Class']
+        self.assertEqual(len(gc_activities1), 1)
+        # Expected structure: (transaction_type, name_or_description, payment_date, start_date, end_date, amount_paid, payment_method_or_sessions, activity_id)
+        self.assertEqual(gc_activities1[0][2], "2024-01-01") # payment_date
+        self.assertEqual(gc_activities1[0][3], "2024-01-01") # start_date
+        self.assertEqual(gc_activities1[0][5], 5000.0)       # amount_paid
+        plan1_details = get_plan_by_name_and_duration("Standard", 3) # plan_name, duration_months
+        self.assertIsNotNone(plan1_details)
+        self.assertEqual(gc_activities1[0][1], plan1_details[1])     # name_or_description (plan_name)
 
         member2 = get_member_by_phone("0987654321")
         self.assertIsNotNone(member2, "Test User 2 (GC) should be found")
-        memberships2 = get_group_memberships_by_member_id(member2[0])
-        self.assertEqual(len(memberships2), 1)
-        self.assertEqual(memberships2[0][4], "2024-02-15") # start_date
-        plan2 = get_plan_by_name_and_duration("Premium", 12)
-        self.assertIsNotNone(plan2)
-        self.assertEqual(memberships2[0][2], plan2[0])
+        all_activities_member2 = get_all_activity_for_member(member2[0])
+        gc_activities2 = [tx for tx in all_activities_member2 if tx[0] == 'Group Class']
+        self.assertEqual(len(gc_activities2), 1)
+        self.assertEqual(gc_activities2[0][3], "2024-02-15") # start_date
+        plan2_details = get_plan_by_name_and_duration("Premium", 12) # plan_name, duration_months
+        self.assertIsNotNone(plan2_details)
+        self.assertEqual(gc_activities2[0][1], plan2_details[1]) # name_or_description (plan_name)
 
         member_err_date = get_member_by_phone("2233445566") # Error User Date
         self.assertIsNone(member_err_date, "Error User Date (GC) should not be created")
@@ -142,25 +144,35 @@ class TestMigrationScript(unittest.TestCase):
         member_pt1 = get_member_by_phone("1231231230")
         self.assertIsNotNone(member_pt1, "Test User PT1 should be found from sample PT.csv")
         self.assertEqual(member_pt1[1], "Test User PT1")
-        pt_bookings_pt1 = get_pt_bookings_by_member_id(member_pt1[0])
-        self.assertEqual(len(pt_bookings_pt1), 1)
-        self.assertEqual(pt_bookings_pt1[0][2], "2024-01-01") # start_date
-        self.assertEqual(pt_bookings_pt1[0][3], 10)          # sessions
-        self.assertEqual(pt_bookings_pt1[0][4], 3000.0)      # amount_paid
+        all_activities_pt1 = get_all_activity_for_member(member_pt1[0])
+        pt_activities_pt1 = [tx for tx in all_activities_pt1 if tx[0] == 'Personal Training']
+        self.assertEqual(len(pt_activities_pt1), 1)
+        # Expected structure: (transaction_type, name_or_description, payment_date, start_date, end_date, amount_paid, payment_method_or_sessions, activity_id)
+        self.assertEqual(pt_activities_pt1[0][0], "Personal Training")
+        self.assertEqual(pt_activities_pt1[0][1], "PT Session")
+        self.assertEqual(pt_activities_pt1[0][3], "2024-01-01") # start_date
+        self.assertEqual(pt_activities_pt1[0][4], None) # end_date
+        self.assertEqual(pt_activities_pt1[0][5], 3000.0)      # amount_paid
+        self.assertEqual(pt_activities_pt1[0][6], "10 sessions") # payment_method_or_sessions (sessions)
 
         member_gc_pt = get_member_by_phone("0987654321") # Test User 2, also in GC
         self.assertIsNotNone(member_gc_pt, "Test User 2 (GC/PT) should be found")
 
+        all_activities_gc_pt = get_all_activity_for_member(member_gc_pt[0])
+
         # Verify GC membership is intact
-        memberships_gc_pt = get_group_memberships_by_member_id(member_gc_pt[0])
-        self.assertEqual(len(memberships_gc_pt), 1, "Test User 2's GC membership should remain")
+        gc_activities_gc_pt = [tx for tx in all_activities_gc_pt if tx[0] == 'Group Class']
+        self.assertEqual(len(gc_activities_gc_pt), 1, "Test User 2's GC membership should remain")
+        # Add more assertions for GC if needed, e.g., check plan name or dates if relevant to this test's focus
 
         # Verify new PT booking for Test User 2
-        pt_bookings_gc_pt = get_pt_bookings_by_member_id(member_gc_pt[0])
-        self.assertEqual(len(pt_bookings_gc_pt), 1, "Test User 2 should have a PT booking")
-        self.assertEqual(pt_bookings_gc_pt[0][2], "2024-03-10") # start_date for PT
-        self.assertEqual(pt_bookings_gc_pt[0][3], 5)           # sessions for PT
-        self.assertEqual(pt_bookings_gc_pt[0][4], 1500.0)       # amount_paid for PT
+        pt_activities_gc_pt = [tx for tx in all_activities_gc_pt if tx[0] == 'Personal Training']
+        self.assertEqual(len(pt_activities_gc_pt), 1, "Test User 2 should have a PT booking")
+        self.assertEqual(pt_activities_gc_pt[0][0], "Personal Training")
+        self.assertEqual(pt_activities_gc_pt[0][1], "PT Session")
+        self.assertEqual(pt_activities_gc_pt[0][3], "2024-03-10") # start_date for PT
+        self.assertEqual(pt_activities_gc_pt[0][5], 1500.0)       # amount_paid for PT
+        self.assertEqual(pt_activities_gc_pt[0][6], "5 sessions")  # payment_method_or_sessions (sessions for PT)
 
         member_err_pt_date = get_member_by_phone("4324324320") # Error User PT Date
         self.assertIsNone(member_err_pt_date, "Error User PT Date should not be created")
