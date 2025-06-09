@@ -33,10 +33,6 @@ class App(customtkinter.CTk):
         # --- Membership Management Tab ---
         membership_tab = self.tab_view.tab("Membership Management")
         # self.membership_sub_tabview is created here but will be gridded in setup_membership_tab
-        self.membership_sub_tabview = customtkinter.CTkTabview(membership_tab)
-
-        self.add_member_sub_tab = self.membership_sub_tabview.add("Add Member")
-        self.add_membership_sub_tab = self.membership_sub_tabview.add("Add Membership") # Will be used in next task
 
         self.setup_membership_tab(membership_tab) # Pass the main tab
 
@@ -204,6 +200,11 @@ class App(customtkinter.CTk):
         top_level_frame.grid_columnconfigure(0, weight=1) # Column for sub-tabs (e.g., Add Member)
         top_level_frame.grid_columnconfigure(1, weight=2) # Column for display area (e.g., All Members list), give more space
         top_level_frame.grid_rowconfigure(0, weight=1)    # Single row to contain both columns
+
+        # ADD THESE LINES HERE
+        self.membership_sub_tabview = customtkinter.CTkTabview(top_level_frame)
+        self.add_member_sub_tab = self.membership_sub_tabview.add("Add Member")
+        self.add_membership_sub_tab = self.membership_sub_tabview.add("Add Membership")
 
         # Grid the self.membership_sub_tabview (created in __init__) into column 0 of top_level_frame
         # Its master is 'tab' (the main "Membership Management" tab from CTkTabview).
