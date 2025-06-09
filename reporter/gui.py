@@ -1,13 +1,232 @@
 import customtkinter
+from typing import Optional, List # For type hinting, List can be replaced by list in Python 3.9+
 from tkinter import StringVar # Explicitly import StringVar
 from datetime import datetime, date # Explicitly import datetime and date
 from customtkinter import CTkFrame, CTkLabel, CTkEntry, CTkButton, CTkOptionMenu, CTkFont, CTkScrollableFrame
 from tkcalendar import DateEntry
+from reporter import database_manager
+
+
+class GuiController:
+    def save_member_action(self, name: str, phone: str) -> tuple[bool, str]:
+        """Handles the save member action with input validation."""
+        # --- Input Validation ---
+        if not name or not phone:
+            return False, "Error: Name and Phone cannot be empty."
+
+        if not phone.isdigit():
+            return False, "Error: Phone number must contain only digits."
+        # Example: Validate phone length (e.g., 10 digits) - can be added if needed
+        # if len(phone) != 10:
+        #     return False, "Error: Phone number must be 10 digits."
+
+        try:
+            success = database_manager.add_member_to_db(name, phone)
+            if success:
+                return True, "Member added successfully! Join date will be set with first activity."
+            else:
+                return False, "Failed to add member. Phone number may already exist."
+        except Exception as e:
+            return False, f"An error occurred: {str(e)}"
+
+    def save_plan_action(self, plan_name: str, duration_str: str, plan_id_to_update: str) -> tuple[bool, str, list | None]:
+        """Saves a new plan or updates an existing one."""
+        if not plan_name or not duration_str:
+            return False, "Error: Plan Name and Duration cannot be empty.", None
+
+        try:
+            duration_days = int(duration_str)
+            if duration_days <= 0:
+                return False, "Error: Duration must be a positive integer.", None
+        except ValueError:
+            return False, "Error: Duration must be a valid integer.", None
+
+        success = False
+        message = ""
+        updated_plans = None
+
+        try:
+            if plan_id_to_update:  # Editing existing plan
+                plan_id = int(plan_id_to_update)
+                success = database_manager.update_plan(plan_id, plan_name, duration_days)
+                message = "Plan updated successfully!" if success else "Failed to update plan. Name might exist."
+            else:  # Adding new plan
+                new_plan_id = database_manager.add_plan(plan_name, duration_days)
+                if new_plan_id:
+                    success = True
+                message = "Plan added successfully!" if success else "Failed to add plan. Name might exist."
+
+            if success:
+                updated_plans = database_manager.get_all_plans_with_inactive()
+            return success, message, updated_plans
+        except Exception as e:
+            return False, f"An error occurred: {str(e)}", None
+
+    def toggle_plan_status_action(self, plan_id: int, current_status: bool) -> tuple[bool, str, list | None]:
+        """Activates or deactivates a plan."""
+        new_status = not current_status
+        success = database_manager.set_plan_active_status(plan_id, new_status)
+        updated_plans = None
+        message = ""
+        if success:
+            message = f"Plan status changed to {'Active' if new_status else 'Inactive'}."
+            updated_plans = database_manager.get_all_plans_with_inactive()
+        else:
+            message = "Failed to update plan status."
+        return success, message, updated_plans
+
+    def save_membership_action(self, membership_type: str, member_id: int | None,
+                               start_date_str: str, amount_paid_str: str,
+                               selected_plan_id: int | None = None,
+                               payment_date_str: str | None = None,
+                               payment_method: str | None = None,
+                               sessions_str: str | None = None) -> tuple[bool, str]:
+        """Handles the save membership action with validation based on membership type."""
+        from datetime import datetime # Moved import
+
+        # --- Basic Validation ---
+        if not member_id: # Simplified check, assuming member_id is directly passed
+            return False, "Error: Please select a valid member."
+
+        if not start_date_str:
+            return False, "Error: Start Date cannot be empty."
+        try:
+            datetime.strptime(start_date_str, '%Y-%m-%d')
+        except ValueError:
+            return False, "Error: Invalid Start Date format. Use YYYY-MM-DD."
+
+        try:
+            amount_paid = float(amount_paid_str)
+            if amount_paid < 0:
+                return False, "Error: Amount Paid cannot be negative."
+        except ValueError:
+            return False, "Error: Invalid Amount Paid. Must be a number."
+
+        success = False
+        try:
+            if membership_type == "Group Class":
+                if not selected_plan_id: # Simplified check
+                    return False, "Error: Please select a valid plan."
+                if not payment_date_str:
+                    return False, "Error: Payment Date cannot be empty for Group Class."
+                try:
+                    datetime.strptime(payment_date_str, '%Y-%m-%d')
+                except ValueError:
+                    return False, "Error: Invalid Payment Date format. Use YYYY-MM-DD."
+                if not payment_method: # Ensure payment_method is not None or empty
+                    return False, "Error: Payment Method cannot be empty for Group Class."
+
+                success = database_manager.add_transaction(
+                    transaction_type="Group Class",
+                    member_id=member_id,
+                    plan_id=selected_plan_id,
+                    payment_date=payment_date_str,
+                    start_date=start_date_str,
+                    amount_paid=amount_paid,
+                    payment_method=payment_method
+                )
+            elif membership_type == "Personal Training":
+                if not sessions_str:
+                    return False, "Error: Number of Sessions cannot be empty for PT."
+                try:
+                    sessions = int(sessions_str)
+                    if sessions <= 0:
+                        return False, "Error: Number of Sessions must be a positive integer."
+                except ValueError:
+                    return False, "Error: Number of Sessions must be an integer."
+
+                # For PT, payment_date is the start_date, payment_method is N/A by default
+                success = database_manager.add_transaction(
+                    transaction_type="Personal Training",
+                    member_id=member_id,
+                    plan_id=None, # No plan_id for PT
+                    payment_date=start_date_str,
+                    start_date=start_date_str,
+                    amount_paid=amount_paid,
+                    payment_method="N/A", # Default or could be an argument if needed
+                    sessions=sessions
+                )
+            else:
+                return False, "Error: Unknown membership type selected."
+
+            if success:
+                return True, f"{membership_type} membership added successfully!"
+            else:
+                # This path might be taken if add_transaction itself returns False (e.g., DB constraint)
+                return False, "Failed to add membership. Check logs or input."
+        except Exception as e:
+            # Log the exception e for debugging purposes if possible
+            return False, f"An error occurred: {str(e)}"
+
+    def generate_pending_renewals_action(self) -> tuple[bool, str, list | None]:
+        """Fetches pending renewals for the current month."""
+        from datetime import date
+        import calendar
+
+        today = date.today()
+        current_date_str = today.strftime('%Y-%m-%d')
+        month_name = calendar.month_name[today.month]
+        year = today.year
+
+        try:
+            renewals = database_manager.get_pending_renewals(current_date_str)
+            if renewals:
+                return True, f"Found {len(renewals)} pending renewals for {month_name} {year}:", renewals
+            else:
+                return True, f"No pending renewals found for {month_name} {year}.", []
+        except Exception as e:
+            return False, f"Error generating report: {str(e)}", None
+
+    def generate_finance_report_action(self) -> tuple[bool, str, float | None]:
+        """Fetches and returns the finance report for the previous month."""
+        from datetime import date, timedelta
+        import calendar
+
+        today = date.today()
+        first_day_current_month = today.replace(day=1)
+        last_day_previous_month = first_day_current_month - timedelta(days=1)
+        prev_month = last_day_previous_month.month
+        prev_year = last_day_previous_month.year
+        prev_month_name = calendar.month_name[prev_month]
+
+        try:
+            total_revenue = database_manager.get_finance_report(prev_year, prev_month)
+            if total_revenue is not None:
+                return True, f"Total revenue for {prev_month_name} {prev_year}: ${total_revenue:.2f}", total_revenue
+            else:
+                return False, f"Could not generate finance report for {prev_month_name} {prev_year}. Check logs.", None
+        except Exception as e:
+            return False, f"Error generating finance report: {str(e)}", None
+
+    def get_filtered_members(self, name_filter: Optional[str], phone_filter: Optional[str]) -> list:
+        """Fetches members based on name and/or phone filters."""
+        return database_manager.get_all_members(name_filter=name_filter, phone_filter=phone_filter)
+
+    def get_filtered_transaction_history(self, name_filter: Optional[str], phone_filter: Optional[str], join_date_filter: Optional[str]) -> list:
+        """Fetches transaction history based on name, phone, and/or join date filters."""
+        return database_manager.get_transactions_with_member_details(
+            name_filter=name_filter,
+            phone_filter=phone_filter,
+            join_date_filter=join_date_filter
+        )
+
+    def get_active_plans(self) -> list:
+        """Fetches all active plans."""
+        return database_manager.get_all_plans()
+
+    def get_all_plans_with_inactive(self) -> list:
+        """Fetches all plans, including inactive ones."""
+        return database_manager.get_all_plans_with_inactive()
+
+    def get_all_activity_for_member(self, member_id: int) -> list:
+        """Fetches all activity records for a given member_id."""
+        return database_manager.get_all_activity_for_member(member_id)
 
 
 class App(customtkinter.CTk):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.controller = GuiController() # Instantiating controller
 
         # Initialize selection state variables to None
         self.selected_member_id = None
@@ -108,32 +327,33 @@ class App(customtkinter.CTk):
         self.history_scrollable_frame = CTkScrollableFrame(history_main_frame)
         self.history_scrollable_frame.grid(row=1, column=0, padx=10, pady=(0,10), sticky="nsew")
 
-        self.refresh_membership_history_display() # Initial data load
+        initial_transactions = self.controller.get_filtered_transaction_history(None, None, None) # Initial data load
+        self.refresh_membership_history_display(initial_transactions)
 
-    def refresh_membership_history_display(self):
-        """Refreshes the transaction history display based on current filters."""
-        from reporter.database_manager import get_transactions_with_member_details # Ensure import
+    def refresh_membership_history_display(self, transactions: list):
+        """Refreshes the transaction history display with the provided transactions list."""
+        # from reporter.database_manager import get_transactions_with_member_details # No longer needed here
 
-        name_filter = self.history_name_filter_entry.get().strip() if hasattr(self, 'history_name_filter_entry') else None
-        phone_filter = self.history_phone_filter_entry.get().strip() if hasattr(self, 'history_phone_filter_entry') else None
-
-        join_date_str = ""
-        if hasattr(self, 'history_join_date_picker'):
-            join_date_str = self.history_join_date_picker.get() # This gets the string representation
-
-        join_date_filter = join_date_str.strip() if join_date_str else None
-
-
-        # Clear empty strings to None for database function
-        name_filter = name_filter if name_filter else None
-        phone_filter = phone_filter if phone_filter else None
-        join_date_filter = join_date_filter if join_date_filter else None
-
-        transactions = get_transactions_with_member_details(
-            name_filter=name_filter,
-            phone_filter=phone_filter,
-            join_date_filter=join_date_filter
-        )
+        # name_filter = self.history_name_filter_entry.get().strip() if hasattr(self, 'history_name_filter_entry') else None
+        # phone_filter = self.history_phone_filter_entry.get().strip() if hasattr(self, 'history_phone_filter_entry') else None
+        #
+        # join_date_str = ""
+        # if hasattr(self, 'history_join_date_picker'):
+        #     join_date_str = self.history_join_date_picker.get() # This gets the string representation
+        #
+        # join_date_filter = join_date_str.strip() if join_date_str else None
+        #
+        #
+        # # Clear empty strings to None for database function
+        # name_filter = name_filter if name_filter else None
+        # phone_filter = phone_filter if phone_filter else None
+        # join_date_filter = join_date_filter if join_date_filter else None
+        #
+        # transactions = get_transactions_with_member_details(
+        #     name_filter=name_filter,
+        #     phone_filter=phone_filter,
+        #     join_date_filter=join_date_filter
+        # )
 
         for widget in self.history_scrollable_frame.winfo_children():
             widget.destroy()
@@ -169,20 +389,27 @@ class App(customtkinter.CTk):
 
     def apply_history_filters(self):
         """Applies the filters from the history tab and refreshes the display."""
-        self.refresh_membership_history_display()
+        name_filter = self.history_name_filter_entry.get().strip()
+        phone_filter = self.history_phone_filter_entry.get().strip()
+        join_date_str = self.history_join_date_picker.get()
+
+        # Set filters to None if they are empty strings
+        name_filter = name_filter if name_filter else None
+        phone_filter = phone_filter if phone_filter else None
+        join_date_filter = join_date_str.strip() if join_date_str else None
+
+        filtered_transactions = self.controller.get_filtered_transaction_history(name_filter, phone_filter, join_date_filter)
+        self.refresh_membership_history_display(filtered_transactions)
 
     def clear_history_filters(self):
         """Clears all filter entries in the history tab and refreshes the display."""
         if hasattr(self, 'history_name_filter_entry'): self.history_name_filter_entry.delete(0, "end")
         if hasattr(self, 'history_phone_filter_entry'): self.history_phone_filter_entry.delete(0, "end")
         if hasattr(self, 'history_join_date_picker'):
-            # For tkcalendar DateEntry, clearing is done by setting an empty string
-            # or by deleting the content of its underlying Entry widget.
             self.history_join_date_picker.delete(0, "end")
-            # Alternatively, if it had an associated StringVar: self.history_join_date_var.set("")
-            # Or, if set_date(None) was a reliable way to clear it: self.history_join_date_picker.set_date(None)
-            # Using delete(0, "end") is common for Entry-like widgets.
-        self.refresh_membership_history_display()
+
+        all_transactions = self.controller.get_filtered_transaction_history(None, None, None)
+        self.refresh_membership_history_display(all_transactions)
 
     def setup_membership_tab(self, tab):
         """Configures the UI for the Membership Management tab."""
@@ -234,7 +461,7 @@ class App(customtkinter.CTk):
         self.phone_entry = CTkEntry(self.add_member_frame)
         self.phone_entry.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
 
-        save_button = CTkButton(self.add_member_frame, text="Save Member", command=self.save_member_action)
+        save_button = CTkButton(self.add_member_frame, text="Save Member", command=self.on_save_member_click)
         save_button.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
 
         self.member_status_label = CTkLabel(self.add_member_frame, text="", text_color="red")
@@ -332,7 +559,7 @@ class App(customtkinter.CTk):
         self.current_form_row += 1
 
         # Save Button
-        self.save_membership_button = CTkButton(self.add_membership_frame, text="Save Membership", command=self.save_membership_action)
+        self.save_membership_button = CTkButton(self.add_membership_frame, text="Save Membership", command=self.on_save_membership_click)
         self.save_membership_button.grid(row=self.current_form_row, column=0, columnspan=2, padx=10, pady=20)
         self.current_form_row += 1
 
@@ -391,25 +618,28 @@ class App(customtkinter.CTk):
         self.membership_history_frame.grid(row=4, column=0, padx=10, pady=10, sticky="nsew")
 
         # Initialize data displays
-        self.display_all_members()      # Populate the list of all members
+        # self.display_all_members() # This will be called via clear_member_filters or apply_member_filters
+        initial_members = self.controller.get_filtered_members(None, None) # Initial load
+        self.display_all_members(initial_members)
         self.populate_member_dropdown() # Populate the unified member dropdown
         self.populate_plan_dropdown()   # Populate plan dropdown (used by Group Class)
         # self.populate_pt_member_dropdown() # REMOVE THIS CALL - PT dropdown is gone
 
-        self.display_membership_history(None) # Show placeholder message in history view
+        self.display_membership_history([], None) # Show placeholder message in history view
 
     def apply_member_filters(self):
         """Applies filters to the member list display."""
         name_query = self.name_filter_entry.get().strip()
         phone_query = self.phone_filter_entry.get().strip()
-        self.display_all_members(name_filter=name_query if name_query else None,
-                                 phone_filter=phone_query if phone_query else None)
+        filtered_members = self.controller.get_filtered_members(name_query if name_query else None, phone_query if phone_query else None)
+        self.display_all_members(filtered_members)
 
     def clear_member_filters(self):
         """Clears active member filters and refreshes the list."""
         self.name_filter_entry.delete(0, "end")
         self.phone_filter_entry.delete(0, "end")
-        self.display_all_members()
+        all_members = self.controller.get_filtered_members(None, None)
+        self.display_all_members(all_members)
 
     def setup_plan_management_tab(self, tab):
         """Configures the UI for the Plan Management tab."""
@@ -440,7 +670,7 @@ class App(customtkinter.CTk):
         self.plan_duration_entry.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
 
         # Save Plan Button
-        self.save_plan_button = CTkButton(self.plan_form_frame, text="Save Plan", command=self.save_plan_action)
+        self.save_plan_button = CTkButton(self.plan_form_frame, text="Save Plan", command=self.on_save_plan_click)
         self.save_plan_button.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
 
         # Status Label for plan operations
@@ -452,22 +682,22 @@ class App(customtkinter.CTk):
         self.plans_display_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
 
         # Initial load of plans
-        self.load_plans_display()
+        initial_plans = self.controller.get_all_plans_with_inactive()
+        self.load_plans_display(initial_plans)
 
-    def load_plans_display(self):
-        """Loads and displays all plans in the plans_display_frame."""
-        from reporter import database_manager # Local import
+    def load_plans_display(self, plans_list: list):
+        """Loads and displays all plans in the plans_display_frame using the provided list."""
+        # from reporter import database_manager # No longer needed here
         # Clear existing widgets
         for widget in self.plans_display_frame.winfo_children():
             widget.destroy()
 
-        plans = database_manager.get_all_plans_with_inactive() # Fetch all plans
-
-        if not plans:
+        # plans = database_manager.get_all_plans_with_inactive() # Fetch all plans
+        if not plans_list:
             CTkLabel(self.plans_display_frame, text="No plans found.").pack(padx=10, pady=10)
             return
 
-        for i, plan_data in enumerate(plans):
+        for i, plan_data in enumerate(plans_list):
             plan_id, name, duration, is_active = plan_data
             status_text = "Active" if is_active else "Inactive"
 
@@ -483,53 +713,38 @@ class App(customtkinter.CTk):
 
             toggle_text = "Deactivate" if is_active else "Activate"
             toggle_button = CTkButton(plan_item_frame, text=toggle_text, width=90,
-                                       command=lambda p_id=plan_id, current_status=is_active: self.toggle_plan_status_action(p_id, current_status))
+                                       command=lambda p_id=plan_id, current_stat=is_active: self.on_toggle_plan_status_click(p_id, current_stat))
             toggle_button.pack(side="right", padx=5)
 
-            if i < len(plans) - 1:
+            if i < len(plans_list) - 1:
                 sep = CTkFrame(self.plans_display_frame, height=1, fg_color="gray70")
                 sep.pack(fill="x", padx=5, pady=2)
 
-    def save_plan_action(self):
-        """Saves a new plan or updates an existing one."""
-        from reporter import database_manager # Local import
-
+    def on_save_plan_click(self):
+        """Handles the click event for saving a plan."""
         plan_name = self.plan_name_entry.get().strip()
         duration_str = self.plan_duration_entry.get().strip()
         plan_id_to_update = self.current_plan_id_var.get()
 
-        if not plan_name or not duration_str:
-            self.plan_status_label.configure(text="Error: Plan Name and Duration cannot be empty.", text_color="red")
-            return
+        success, message, updated_plans = self.controller.save_plan_action(plan_name, duration_str, plan_id_to_update)
 
-        try:
-            duration_days = int(duration_str)
-            if duration_days <= 0:
-                self.plan_status_label.configure(text="Error: Duration must be a positive integer.", text_color="red")
-                return
-        except ValueError:
-            self.plan_status_label.configure(text="Error: Duration must be a valid integer.", text_color="red")
-            return
-
-        success = False
-        if plan_id_to_update: # Editing existing plan
-            plan_id = int(plan_id_to_update)
-            success = database_manager.update_plan(plan_id, plan_name, duration_days)
-            message = "Plan updated successfully!" if success else "Failed to update plan. Name might exist."
-        else: # Adding new plan
-            # When adding a new plan, it's active by default (as per database_manager.add_plan)
-            new_plan_id = database_manager.add_plan(plan_name, duration_days) # is_active defaults to True
-            if new_plan_id:
-                success = True
-            message = "Plan added successfully!" if success else "Failed to add plan. Name might exist."
+        self.plan_status_label.configure(text=message, text_color="green" if success else "red")
 
         if success:
-            self.plan_status_label.configure(text=message, text_color="green")
             self.clear_plan_form()
-            self.load_plans_display()
-            self.populate_plan_dropdown() # Update plan dropdown in membership tab
-        else:
-            self.plan_status_label.configure(text=message, text_color="red")
+            if updated_plans is not None: # Should always be a list on success
+                self.load_plans_display(updated_plans)
+            self.populate_plan_dropdown()
+
+    def on_toggle_plan_status_click(self, plan_id: int, current_status: bool):
+        """Handles the click event for toggling a plan's active status."""
+        success, message, updated_plans = self.controller.toggle_plan_status_action(plan_id, current_status)
+        self.plan_status_label.configure(text=message, text_color="green" if success else "red")
+
+        if success:
+            if updated_plans is not None: # Should always be a list on success
+                self.load_plans_display(updated_plans)
+            self.populate_plan_dropdown()
 
     def edit_plan_action(self, plan_id, name, duration):
         """Populates the plan form for editing."""
@@ -539,18 +754,6 @@ class App(customtkinter.CTk):
         self.plan_duration_entry.delete(0, "end")
         self.plan_duration_entry.insert(0, str(duration))
         self.plan_status_label.configure(text="") # Clear status
-
-    def toggle_plan_status_action(self, plan_id, current_status):
-        """Activates or deactivates a plan."""
-        from reporter import database_manager # Local import
-        new_status = not current_status
-        success = database_manager.set_plan_active_status(plan_id, new_status)
-        if success:
-            self.plan_status_label.configure(text=f"Plan status changed to {'Active' if new_status else 'Inactive'}.", text_color="green")
-            self.load_plans_display()
-            self.populate_plan_dropdown() # Update plan dropdown in membership tab
-        else:
-            self.plan_status_label.configure(text="Failed to update plan status.", text_color="red")
 
     def clear_plan_form(self):
         """Clears the plan add/edit form."""
@@ -585,7 +788,7 @@ class App(customtkinter.CTk):
         renewals_title.pack(pady=(5,10)) # pack is used here for simpler vertical layout
 
         generate_button = CTkButton(renewals_frame, text="Generate Pending Renewals for Current Month",
-                                    command=self.generate_pending_renewals_action)
+                                    command=self.on_generate_pending_renewals_click)
         generate_button.pack(pady=5)
 
         # Status label to provide feedback on the renewals report generation
@@ -606,102 +809,13 @@ class App(customtkinter.CTk):
         finance_title.pack(pady=(5,10))
 
         generate_finance_button = CTkButton(finance_report_frame, text="Generate Last Month's Finance Report",
-                                            command=self.generate_finance_report_action)
+                                            command=self.on_generate_finance_report_click)
         generate_finance_button.pack(pady=5)
 
         # Label to display the finance report result or status messages
         self.finance_report_label = CTkLabel(finance_report_frame, text="Finance report will appear here.", font=CTkFont(size=14))
         self.finance_report_label.pack(pady=10)
 
-
-    def generate_finance_report_action(self):
-        """Fetches and displays the finance report for the previous month."""
-        # Local import for database interaction
-        from reporter.database_manager import get_finance_report
-        from datetime import date, timedelta
-        import calendar # For getting month name
-
-        self.finance_report_label.configure(text="Generating report...", text_color="blue") # Intermediate status
-
-        today = date.today()
-        # Calculate the first day of the current month
-        first_day_current_month = today.replace(day=1)
-        # Calculate the last day of the previous month by subtracting one day from the first day of the current month
-        last_day_previous_month = first_day_current_month - timedelta(days=1)
-
-        # Extract year and month from the last day of the previous month
-        prev_month = last_day_previous_month.month
-        prev_year = last_day_previous_month.year
-
-        prev_month_name = calendar.month_name[prev_month] # Get the name of the month
-
-        try:
-            total_revenue = get_finance_report(prev_year, prev_month)
-            if total_revenue is not None: # Check if report generation was successful (None indicates error)
-                self.finance_report_label.configure(
-                    text=f"Total revenue for {prev_month_name} {prev_year}: ${total_revenue:.2f}",
-                    text_color="green" if total_revenue > 0 else "orange" # Green for revenue, orange for zero
-                )
-            else: # Error case from get_finance_report (e.g., database error)
-                 self.finance_report_label.configure(
-                    text=f"Could not generate finance report for {prev_month_name} {prev_year}. Check logs.",
-                    text_color="red"
-                )
-        except Exception as e: # Catch any other unexpected exceptions
-            self.finance_report_label.configure(
-                text=f"Error generating finance report: {str(e)}",
-                text_color="red"
-            )
-
-
-    def generate_pending_renewals_action(self):
-        """Fetches and displays pending renewals for the current month."""
-        # Local import for database interaction
-        from reporter.database_manager import get_pending_renewals
-        from datetime import date
-        import calendar # For getting month name
-
-        # Clear previous results from the scrollable frame
-        for widget in self.pending_renewals_frame.winfo_children():
-            widget.destroy()
-        self.pending_renewals_status_label.configure(text="Generating report...", text_color="blue") # Intermediate status
-
-
-        today = date.today()
-        current_date_str = today.strftime('%Y-%m-%d') # Format date as YYYY-MM-DD for the DB query
-
-        month_name = calendar.month_name[today.month] # Get current month name for display
-        year = today.year # Get current year for display
-
-        try:
-            renewals = get_pending_renewals(current_date_str) # Fetch data from database manager
-            if renewals:
-                self.pending_renewals_status_label.configure(
-                    text=f"Found {len(renewals)} pending renewals for {month_name} {year}:",
-                    text_color="green" # Success color (or system default)
-                )
-                # Display each renewal record
-                for i, record in enumerate(renewals):
-                    # record format: (client_name, phone, plan_name, end_date)
-                    client_name, phone, plan_name, end_date = record
-                    detail_text = f"Name: {client_name} | Phone: {phone}\nPlan: {plan_name} | Ends: {end_date}"
-
-                    record_label = customtkinter.CTkLabel(self.pending_renewals_frame, text=detail_text, anchor="w", justify="left")
-                    record_label.pack(padx=5, pady=3, fill="x", expand=True)
-                    # Add a separator line between records, except for the last one
-                    if i < len(renewals) - 1:
-                        sep = customtkinter.CTkFrame(self.pending_renewals_frame, height=1, fg_color="gray70") # Visual separator
-                        sep.pack(fill="x", padx=5, pady=2)
-            else:
-                self.pending_renewals_status_label.configure(
-                    text=f"No pending renewals found for {month_name} {year}.",
-                    text_color="orange" # Informative color for no results (or system default)
-                )
-        except Exception as e: # Catch any errors during report generation
-            self.pending_renewals_status_label.configure(
-                text=f"Error generating report: {str(e)}",
-                text_color="red"
-            )
 
     # def setup_group_membership_frame(self, parent_frame): # Method removed
     #     pass
@@ -748,11 +862,11 @@ class App(customtkinter.CTk):
         # self.amount_paid_entry.grid()
 
     def populate_member_dropdown(self):
-        """Populates the member selection dropdown with data from the database.
+        """Populates the member selection dropdown with data from the database using the controller.
         This dropdown is now used in the unified 'Add Membership' form."""
-        from reporter.database_manager import get_all_members # Local import
-        members = get_all_members()
-        self.member_name_to_id = {f"{m[1]} (ID: {m[0]})": m[0] for m in members} # Ensure self.member_name_to_id is populated
+        # from reporter.database_manager import get_all_members # No longer needed
+        members = self.controller.get_filtered_members(None, None)
+        self.member_name_to_id = {f"{m[1]} (ID: {m[0]})": m[0] for m in members}
         member_names_display = list(self.member_name_to_id.keys())
 
         # Ensure the dropdown variable and widget are initialized (should be done in setup_membership_tab)
@@ -773,10 +887,9 @@ class App(customtkinter.CTk):
 
 
     def populate_plan_dropdown(self):
-        """Populates the plan selection dropdown with data from the database."""
-        from reporter.database_manager import get_all_plans # Local import
-        plans = get_all_plans() # Fetches (plan_id, plan_name, duration_days)
-        # Create a mapping from plan name to plan ID
+        """Populates the plan selection dropdown with active plan data from the database via the controller."""
+        # from reporter.database_manager import get_all_plans # No longer needed
+        plans = self.controller.get_active_plans() # Fetches (plan_id, plan_name, duration_days)
         self.plan_name_to_id = {f"{p[1]} | {p[2]} days": p[0] for p in plans}
         plan_names_display = list(self.plan_name_to_id.keys())
 
@@ -789,145 +902,9 @@ class App(customtkinter.CTk):
         # Update the dropdown menu with the new list of plan names
         self.membership_plan_dropdown.configure(values=plan_names_display)
 
-    def save_membership_action(self): # Renamed from save_group_membership_action
-        """Handles the save membership button click event with validation based on membership type."""
-        from reporter.database_manager import add_transaction
-        from datetime import datetime
-
-        membership_type = self.membership_type_var.get()
-        selected_member_display_name = self.membership_member_dropdown_var.get()
-        member_id = self.member_name_to_id.get(selected_member_display_name)
-
-        # Get dates from DateEntry pickers
-        try:
-            start_date_obj = self.start_date_picker.get_date()
-            start_date_str = start_date_obj.strftime('%Y-%m-%d')
-        except ValueError: # Handle case where DateEntry might be empty or invalid (though less likely with DateEntry)
-            self.membership_status_label.configure(text="Error: Invalid Start Date.", text_color="red")
-            return
-
-        amount_paid_str = self.amount_paid_entry.get().strip()
-
-        # --- Basic Validation ---
-        if not member_id or selected_member_display_name in ["No members available", "Select Member", "Loading..."]:
-            self.membership_status_label.configure(text="Error: Please select a valid member.", text_color="red")
-            return
-
-        if not start_date_str:
-            self.membership_status_label.configure(text="Error: Start Date cannot be empty.", text_color="red")
-            return
-        try:
-            datetime.strptime(start_date_str, '%Y-%m-%d')
-        except ValueError:
-            self.membership_status_label.configure(text="Error: Invalid Start Date format. Use YYYY-MM-DD.", text_color="red")
-            return
-
-        try:
-            amount_paid = float(amount_paid_str)
-            if amount_paid < 0: # Allow zero amount for free memberships, but not negative
-                self.membership_status_label.configure(text="Error: Amount Paid cannot be negative.", text_color="red")
-                return
-        except ValueError:
-            self.membership_status_label.configure(text="Error: Invalid Amount Paid. Must be a number.", text_color="red")
-            return
-
-        success = False
-        try:
-            if membership_type == "Group Class":
-                selected_plan_display_name = self.membership_plan_dropdown_var.get()
-                plan_id = self.plan_name_to_id.get(selected_plan_display_name)
-                try:
-                    payment_date_obj = self.payment_date_picker.get_date()
-                    payment_date_str = payment_date_obj.strftime('%Y-%m-%d')
-                except ValueError:
-                    self.membership_status_label.configure(text="Error: Invalid Payment Date.", text_color="red")
-                    return
-                payment_method = self.payment_method_entry.get().strip()
-
-                if not plan_id or selected_plan_display_name in ["No plans available", "Select Plan", "Loading..."]:
-                    self.membership_status_label.configure(text="Error: Please select a valid plan.", text_color="red")
-                    return
-                if not payment_date_str:
-                    self.membership_status_label.configure(text="Error: Payment Date cannot be empty for Group Class.", text_color="red")
-                    return
-                try:
-                    datetime.strptime(payment_date_str, '%Y-%m-%d')
-                except ValueError:
-                    self.membership_status_label.configure(text="Error: Invalid Payment Date format. Use YYYY-MM-DD.", text_color="red")
-                    return
-                if not payment_method:
-                    self.membership_status_label.configure(text="Error: Payment Method cannot be empty for Group Class.", text_color="red")
-                    return
-
-                success = add_transaction(
-                    transaction_type="Group Class",
-                    member_id=member_id,
-                    plan_id=plan_id,
-                    payment_date=payment_date_str,
-                    start_date=start_date_str,
-                    amount_paid=amount_paid,
-                    payment_method=payment_method
-                )
-            elif membership_type == "Personal Training":
-                sessions_str = self.pt_sessions_entry.get().strip()
-                if not sessions_str:
-                    self.membership_status_label.configure(text="Error: Number of Sessions cannot be empty for PT.", text_color="red")
-                    return
-                try:
-                    sessions = int(sessions_str)
-                    if sessions <= 0:
-                        self.membership_status_label.configure(text="Error: Number of Sessions must be a positive integer.", text_color="red")
-                        return
-                except ValueError:
-                    self.membership_status_label.configure(text="Error: Number of Sessions must be an integer.", text_color="red")
-                    return
-
-                # For PT, payment_date is the start_date, payment_method is not explicitly collected here (can be added if needed)
-                success = add_transaction(
-                    transaction_type="Personal Training",
-                    member_id=member_id,
-                    plan_id=None,
-                    payment_date=start_date_str, # PT payment often same as start
-                    start_date=start_date_str,
-                    amount_paid=amount_paid,
-                    payment_method="N/A", # Or some default / collected if UI is changed
-                    sessions=sessions
-                )
-            else:
-                self.membership_status_label.configure(text="Error: Unknown membership type selected.", text_color="red")
-                return
-
-            if success:
-                self.membership_status_label.configure(text=f"{membership_type} membership added successfully!", text_color="green")
-                # Clear common fields
-                self.start_date_picker.set_date(date.today())
-                self.amount_paid_entry.delete(0, 'end')
-                # Clear type-specific fields
-                if membership_type == "Group Class":
-                    self.payment_date_picker.set_date(date.today())
-                    self.payment_method_entry.delete(0, 'end')
-                    # Optionally reset plan dropdown
-                    if self.plan_name_to_id:
-                         self.membership_plan_dropdown_var.set(list(self.plan_name_to_id.keys())[0])
-                elif membership_type == "Personal Training":
-                    self.pt_sessions_entry.delete(0, 'end')
-
-                # Optionally reset member dropdown
-                if self.member_name_to_id:
-                    self.membership_member_dropdown_var.set(list(self.member_name_to_id.keys())[0])
-
-                if self.selected_member_id == member_id:
-                    self.display_membership_history(member_id)
-            else:
-                self.membership_status_label.configure(text="Failed to add membership. Check logs or input.", text_color="red")
-
-        except Exception as e:
-            self.membership_status_label.configure(text=f"An error occurred: {str(e)}", text_color="red")
-
-
-    def display_all_members(self, name_filter=None, phone_filter=None):
-        """Clears and re-populates the scrollable frame with member data. Makes member labels clickable."""
-        from reporter.database_manager import get_all_members # Local import
+    def display_all_members(self, members_list: list):
+        """Clears and re-populates the scrollable frame with member data using the provided list. Makes member labels clickable."""
+        # from reporter.database_manager import get_all_members # No longer needed here
 
         # Check if the previously selected label widget still exists; if not, clear the reference
         if self.selected_member_label_widget and not self.selected_member_label_widget.winfo_exists():
@@ -938,8 +915,8 @@ class App(customtkinter.CTk):
         for widget in self.members_scrollable_frame.winfo_children():
             widget.destroy()
 
-        members = get_all_members(name_filter=name_filter, phone_filter=phone_filter) # Fetch members with filter
-        if not members:
+        # members = get_all_members(name_filter=name_filter, phone_filter=phone_filter) # Fetch members with filter
+        if not members_list:
             # Display a message if no members are found
             no_members_label = customtkinter.CTkLabel(self.members_scrollable_frame, text="No members found.")
             no_members_label.pack(padx=10, pady=10)
@@ -981,7 +958,7 @@ class App(customtkinter.CTk):
 
         # If the previously selected member is no longer in the (updated) list,
         # reset selection and clear history. This is relevant if members could be deleted.
-        if self.selected_member_id and not any(m[0] == self.selected_member_id for m in members):
+        if self.selected_member_id and not any(m[0] == self.selected_member_id for m in members_list):
             self.selected_member_id = None
             self.selected_member_label_widget = None # It's already gone from display, so no need to change color
             self.display_membership_history(None)
@@ -989,43 +966,36 @@ class App(customtkinter.CTk):
 
     def handle_member_selection(self, event, member_id, label_widget):
         """Handles click on a member label to display their membership history and highlight selection."""
-        # If a different member was previously selected, reset its appearance
         if self.selected_member_label_widget and self.selected_member_label_widget != label_widget:
-            # Ensure the old widget still exists before trying to configure it
             if self.selected_member_label_widget.winfo_exists():
-                self.selected_member_label_widget.configure(fg_color="transparent") # Reset to default background
+                self.selected_member_label_widget.configure(fg_color="transparent")
             else:
-                # If the old widget no longer exists, clear the reference
                 self.selected_member_label_widget = None
 
-        # Update the selected member ID and the widget reference
         self.selected_member_id = member_id
         self.selected_member_label_widget = label_widget
-        # Highlight the newly selected member's label
-        label_widget.configure(fg_color="gray20") # Use a theme-appropriate highlight color
+        label_widget.configure(fg_color="gray20")
 
-        # Display the membership history for the selected member
-        self.display_membership_history(member_id)
+        history_data = self.controller.get_all_activity_for_member(member_id)
+        self.display_membership_history(history_data, member_id)
 
-    def display_membership_history(self, member_id):
-        """Displays all activity (group memberships and PT bookings) for the given member_id."""
-        from reporter.database_manager import get_all_activity_for_member # Updated function import
+    def display_membership_history(self, history_records: list, member_id: Optional[int] = None):
+        """Displays all activity for the given member_id using the provided history_records."""
+        # from reporter.database_manager import get_all_activity_for_member # No longer needed here
 
-        # Clear any existing history records from the frame
         for widget in self.membership_history_frame.winfo_children():
             widget.destroy()
 
-        if member_id is None:
-            no_history_label = customtkinter.CTkLabel(self.membership_history_frame, text="Select a member to see their activity history.")
+        if not history_records:
+            if member_id is not None: # A specific member was selected, but they have no history
+                message_text = "No activity history found for this member."
+            else: # No member selected, or initial state
+                message_text = "Select a member to see their activity history."
+            no_history_label = customtkinter.CTkLabel(self.membership_history_frame, text=message_text)
             no_history_label.pack(padx=10, pady=10)
             return
 
-        history_records = get_all_activity_for_member(member_id)
-        if not history_records:
-            no_records_label = customtkinter.CTkLabel(self.membership_history_frame, text="No activity history found for this member.")
-            no_records_label.pack(padx=10, pady=10)
-            return
-
+        # history_records = get_all_activity_for_member(member_id) # Logic moved
         for i, record in enumerate(history_records):
             # New tuple structure:
             # (activity_type, name_or_description, payment_date, start_date, end_date, amount_paid, payment_method_or_sessions, activity_id)
@@ -1048,50 +1018,162 @@ class App(customtkinter.CTk):
                 sep = customtkinter.CTkFrame(self.membership_history_frame, height=1, fg_color="gray70")
                 sep.pack(fill="x", padx=5, pady=2)
 
+    def on_generate_pending_renewals_click(self):
+        """Handles click for generating pending renewals report."""
+        success, message, renewals_data = self.controller.generate_pending_renewals_action()
 
-    def save_member_action(self):
-        """Handles the save member button click event with input validation."""
-        from reporter.database_manager import add_member_to_db # Local import
+        # Determine color: green for success, orange for "no renewals", red for error
+        color = "green"
+        if not success:
+            color = "red"
+        elif not renewals_data: # Success but no data
+            color = "orange"
 
-        name = self.name_entry.get().strip() # Get name and remove leading/trailing whitespace
-        phone = self.phone_entry.get().strip() # Get phone and remove leading/trailing whitespace
+        self.pending_renewals_status_label.configure(text=message, text_color=color)
 
-        # --- Input Validation ---
-        # Check for empty fields
-        if not name or not phone:
-            self.member_status_label.configure(text="Error: Name and Phone cannot be empty.", text_color="red")
-            return
+        # Clear previous results from the scrollable frame
+        for widget in self.pending_renewals_frame.winfo_children():
+            widget.destroy()
 
-        # Basic phone validation: must contain only digits.
-        # More complex validation (e.g., length, specific country codes) could be added here.
-        if not phone.isdigit():
-            self.member_status_label.configure(text="Error: Phone number must contain only digits.", text_color="red")
-            return
-        # Example: Validate phone length (e.g., 10 digits) - uncomment and adjust as needed
-        # if len(phone) != 10:
-        #     self.member_status_label.configure(text="Error: Phone number must be 10 digits.", text_color="red")
-        #     return
+        if success and renewals_data:
+            for i, record in enumerate(renewals_data):
+                client_name, phone, plan_name, end_date = record
+                detail_text = f"Name: {client_name} | Phone: {phone}\nPlan: {plan_name} | Ends: {end_date}"
+                record_label = customtkinter.CTkLabel(self.pending_renewals_frame, text=detail_text, anchor="w", justify="left")
+                record_label.pack(padx=5, pady=3, fill="x", expand=True)
+                if i < len(renewals_data) - 1:
+                    sep = customtkinter.CTkFrame(self.pending_renewals_frame, height=1, fg_color="gray70")
+                    sep.pack(fill="x", padx=5, pady=2)
+        elif success and not renewals_data: # No renewals found
+            CTkLabel(self.pending_renewals_frame, text="No renewals to display.").pack(pady=10)
+        elif not success: # Error case
+            CTkLabel(self.pending_renewals_frame, text="Error generating report. Check status message above.").pack(pady=10)
 
-        # Attempt to add member to the database
+    def on_generate_finance_report_click(self):
+        """Handles click for generating monthly finance report."""
+        success, message, total_revenue = self.controller.generate_finance_report_action()
+
+        if success:
+            # Message already contains formatted revenue or "no data" type info
+            # total_revenue being None after success might mean no transactions, which isn't an error but zero revenue
+            color = "green"
+            if total_revenue is None or total_revenue == 0: # Assuming controller returns 0 for no revenue
+                 color = "orange"
+            self.finance_report_label.configure(text=message, text_color=color)
+        else: # Not successful
+            self.finance_report_label.configure(text=message, text_color="red")
+
+    def on_save_membership_click(self):
+        """Handles the click event for the 'Save Membership' button."""
+        membership_type = self.membership_type_var.get()
+        selected_member_display_name = self.membership_member_dropdown_var.get()
+        # Ensure member_id is None if default/placeholder is selected, otherwise get the ID.
+        if selected_member_display_name in ["Select Member", "Loading...", "No members available"]:
+            member_id = None
+        else:
+            member_id = self.member_name_to_id.get(selected_member_display_name)
+
+        start_date_str = ""
         try:
-            # Call add_member_to_db without join_date; it will default to NULL in the DB
-            # The join_date will be updated when the first activity is recorded.
-            success = add_member_to_db(name, phone)
-            if success:
-                self.member_status_label.configure(text="Member added successfully! Join date will be set with first activity.", text_color="green")
-                # Clear input fields after successful submission
-                self.name_entry.delete(0, 'end')
-                self.phone_entry.delete(0, 'end')
-                # Refresh the list of all members displayed in the GUI
-                self.display_all_members()
-                # Refresh the member dropdown in the group membership form
-                self.populate_member_dropdown()
+            # Ensure get_date() is called only if a date is actually set,
+            # or handle cases where it might return None or an empty string if not set by user.
+            # For DateEntry, get() returns the string, get_date() returns a datetime.date object.
+            start_date_obj = self.start_date_picker.get_date()
+            start_date_str = start_date_obj.strftime('%Y-%m-%d')
+        except ValueError: # This might occur if the DateEntry field is manipulated to be invalid
+            self.membership_status_label.configure(text="Error: Invalid Start Date.", text_color="red")
+            return
+        except AttributeError: # If get_date() returns None (e.g. if field was cleared and not handled by DateEntry)
+            self.membership_status_label.configure(text="Error: Start Date not selected.", text_color="red")
+            return
+
+
+        amount_paid_str = self.amount_paid_entry.get().strip()
+
+        plan_id = None
+        payment_date_str = None
+        payment_method = None
+        sessions_str = None
+
+        if membership_type == "Group Class":
+            selected_plan_display_name = self.membership_plan_dropdown_var.get()
+            # Ensure plan_id is None if default/placeholder is selected
+            if selected_plan_display_name in ["Select Plan", "Loading...", "No plans available"]:
+                plan_id = None
             else:
-                # This typically means the phone number already exists (due to UNIQUE constraint in DB)
-                self.member_status_label.configure(text="Failed to add member. Phone number may already exist.", text_color="red")
-            # Refresh the PT member dropdown as well, in case a new member was intended for PT
-        except Exception as e: # Catch any other unexpected errors from the database manager
-            self.member_status_label.configure(text=f"An error occurred: {str(e)}", text_color="red")
+                plan_id = self.plan_name_to_id.get(selected_plan_display_name)
+
+            try:
+                payment_date_obj = self.payment_date_picker.get_date()
+                payment_date_str = payment_date_obj.strftime('%Y-%m-%d')
+            except ValueError:
+                self.membership_status_label.configure(text="Error: Invalid Payment Date.", text_color="red")
+                return
+            except AttributeError:
+                self.membership_status_label.configure(text="Error: Payment Date not selected.", text_color="red")
+                return
+            payment_method = self.payment_method_entry.get().strip()
+        elif membership_type == "Personal Training":
+            payment_date_str = start_date_str
+            payment_method = "N/A"
+            sessions_str = self.pt_sessions_entry.get().strip()
+        else:
+            self.membership_status_label.configure(text="Error: Unknown membership type selected.", text_color="red")
+            return
+
+        # Now call the controller action
+        success, message = self.controller.save_membership_action(
+            membership_type=membership_type,
+            member_id=member_id,
+            start_date_str=start_date_str,
+            amount_paid_str=amount_paid_str,
+            selected_plan_id=plan_id,
+            payment_date_str=payment_date_str,
+            payment_method=payment_method,
+            sessions_str=sessions_str
+        )
+
+        self.membership_status_label.configure(text=message, text_color="green" if success else "red")
+
+        if success:
+            self.start_date_picker.set_date(date.today())
+            self.amount_paid_entry.delete(0, 'end')
+
+            if membership_type == "Group Class":
+                self.payment_date_picker.set_date(date.today())
+                self.payment_method_entry.delete(0, 'end')
+                if self.plan_name_to_id and list(self.plan_name_to_id.keys()): # Check if keys exist
+                    self.membership_plan_dropdown_var.set(list(self.plan_name_to_id.keys())[0])
+            elif membership_type == "Personal Training":
+                self.pt_sessions_entry.delete(0, 'end')
+
+            if self.member_name_to_id and list(self.member_name_to_id.keys()): # Check if keys exist
+                 self.membership_member_dropdown_var.set(list(self.member_name_to_id.keys())[0])
+
+            if self.selected_member_id == member_id: # Check if the affected member is currently selected
+                updated_history = self.controller.get_all_activity_for_member(member_id)
+                self.display_membership_history(updated_history, member_id)
+
+    def on_save_member_click(self):
+        """Handles the click event of the 'Save Member' button."""
+        name = self.name_entry.get().strip()
+        phone = self.phone_entry.get().strip()
+
+        success, message = self.controller.save_member_action(name, phone)
+
+        self.member_status_label.configure(text=message, text_color="green" if success else "red")
+
+        if success:
+            self.name_entry.delete(0, 'end')
+            self.phone_entry.delete(0, 'end')
+
+            # Refresh the list of all members displayed in the GUI
+            updated_members = self.controller.get_filtered_members(None, None)
+            self.display_all_members(updated_members)
+
+            # Refresh the member dropdown in the membership forms
+            self.populate_member_dropdown()
+            # Note: populate_pt_member_dropdown was removed, so no need to call it.
 
 
 if __name__ == '__main__':

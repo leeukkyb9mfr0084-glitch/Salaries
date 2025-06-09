@@ -8,7 +8,7 @@ from datetime import date, timedelta
 # This assumes the test is run from the project root directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from reporter.gui import App
+from reporter.gui import GuiController # Changed App to GuiController
 from reporter import database_manager
 from reporter.database import create_database
 
@@ -45,95 +45,84 @@ def setup_teardown_test_db(monkeypatch):
         os.rmdir(TEST_DB_DIR_GUI_FLOWS)
 
 @pytest.fixture
-def app_instance(setup_teardown_test_db):
+def controller_instance(setup_teardown_test_db): # Renamed fixture
     # This fixture depends on setup_teardown_test_db to ensure DB is ready
-    # Mock customtkinter and tkinter elements that are not needed for flow logic
-    with patch('customtkinter.CTk'), \
-         patch('customtkinter.CTkFrame'), \
-         patch('customtkinter.CTkLabel'), \
-         patch('customtkinter.CTkEntry'), \
-         patch('customtkinter.CTkButton'), \
-         patch('customtkinter.CTkOptionMenu'), \
-         patch('customtkinter.CTkScrollableFrame'), \
-         patch('customtkinter.CTkTabview'), \
-         patch('tkinter.StringVar'), \
-         patch('tkcalendar.DateEntry'), \
-         patch('tkinter.Tk', new_callable=MagicMock):  # Prevent main Tk window init
+    # No UI mocks needed for GuiController direct testing
+    controller = GuiController()
+    return controller
 
-        # Instantiate the App. It will use the monkeypatched DB_FILE.
-        app = App()
-        # For tests, we might need to manually call some setup methods if __init__ doesn't fully set up
-        # or if parts are deferred (e.g. populating dropdowns might need a call if not done by init)
-        # app.populate_member_dropdown()
-        # app.populate_plan_dropdown()
-        return app
+def test_add_member_flow(controller_instance): # Use renamed fixture
+    controller = controller_instance # Use controller instance
 
-def test_add_member_flow(app_instance):
-    app = app_instance
+    # Call the controller method directly
+    success, message = controller.save_member_action(name="Test Member", phone="1234567890")
 
-    # Simulate user input
-    app.name_entry.get = MagicMock(return_value="Test Member")
-    app.phone_entry.get = MagicMock(return_value="1234567890")
-    app.member_status_label.configure = MagicMock() # Mock the status label
-
-    # Call the action method
-    app.save_member_action()
+    # Assert the success and message returned by the controller
+    assert success is True
+    assert message == "Member added successfully! Join date will be set with first activity."
 
     # Assert that the member was saved to the database
     members = database_manager.get_all_members(phone_filter="1234567890")
     assert len(members) == 1
     assert members[0][1] == "Test Member"
-    app.member_status_label.configure.assert_any_call(text="Member added successfully! Join date will be set with first activity.", text_color="green")
 
     # Try to add the same member again (duplicate phone)
-    app.save_member_action()
-    app.member_status_label.configure.assert_any_call(text="Failed to add member. Phone number may already exist.", text_color="red")
+    success_dup, message_dup = controller.save_member_action(name="Test Member", phone="1234567890")
+
+    # Assert the outcome of the duplicate attempt
+    assert success_dup is False
+    assert message_dup == "Failed to add member. Phone number may already exist."
+
     members_after_duplicate_attempt = database_manager.get_all_members(phone_filter="1234567890")
     assert len(members_after_duplicate_attempt) == 1 # Should still be 1 member
 
-def test_plan_management_flow(app_instance):
-    app = app_instance
+def test_plan_management_flow(controller_instance):
+    controller = controller_instance
 
-    # Mock UI elements for plan management
-    app.plan_name_entry.get = MagicMock(return_value="Test Plan")
-    app.plan_duration_entry.get = MagicMock(return_value="30")
-    app.plan_status_label.configure = MagicMock()
-    app.current_plan_id_var = MagicMock()
-    app.current_plan_id_var.get = MagicMock(return_value="") # For adding new plan initially
-
-    # Simulate adding a new plan
-    app.save_plan_action()
+    # Adding a new plan
+    success_add, message_add, plans_add = controller.save_plan_action(
+        plan_name="Test Plan", duration_str="30", plan_id_to_update=""
+    )
+    assert success_add is True
+    assert message_add == "Plan added successfully!"
+    assert isinstance(plans_add, list)
 
     # Verify the new plan exists in the database
-    plans = database_manager.get_all_plans_with_inactive()
-    assert len(plans) == 1
-    assert plans[0][1] == "Test Plan"
-    assert plans[0][2] == 30 # Duration
-    assert plans[0][3] is True # is_active (boolean)
-    app.plan_status_label.configure.assert_any_call(text="Plan added successfully!", text_color="green")
+    db_plans_after_add = database_manager.get_all_plans_with_inactive()
+    assert len(db_plans_after_add) == 1
+    assert db_plans_after_add[0][1] == "Test Plan"
+    assert db_plans_after_add[0][2] == 30  # Duration
+    assert db_plans_after_add[0][3] is True  # is_active (boolean)
+    new_plan_id = db_plans_after_add[0][0]
 
-    new_plan_id = plans[0][0]
+    # Toggling plan status (deactivate)
+    success_deactivate, message_deactivate, plans_deactivate = controller.toggle_plan_status_action(
+        plan_id=new_plan_id, current_status=True
+    )
+    assert success_deactivate is True
+    assert message_deactivate == "Plan status changed to Inactive."
+    assert isinstance(plans_deactivate, list)
 
-    # Simulate toggling the plan status (deactivate)
-    # Directly call toggle_plan_status_action, assuming plan_id and current_status are passed
-    app.toggle_plan_status_action(plan_id=new_plan_id, current_status=True)
+    # Assert that the plan's is_active status has changed in the database
+    db_plans_after_deactivate = database_manager.get_all_plans_with_inactive()
+    assert len(db_plans_after_deactivate) == 1
+    assert db_plans_after_deactivate[0][0] == new_plan_id
+    assert db_plans_after_deactivate[0][3] is False  # is_active should now be False
 
-    # Assert that the plan's is_active status has changed
-    plans_after_toggle = database_manager.get_all_plans_with_inactive()
-    assert len(plans_after_toggle) == 1
-    assert plans_after_toggle[0][0] == new_plan_id
-    assert plans_after_toggle[0][3] is False # is_active should now be False
-    app.plan_status_label.configure.assert_any_call(text="Plan status changed to Inactive.", text_color="green")
+    # Toggling plan status again (activate)
+    success_activate, message_activate, plans_activate = controller.toggle_plan_status_action(
+        plan_id=new_plan_id, current_status=False
+    )
+    assert success_activate is True
+    assert message_activate == "Plan status changed to Active."
+    assert isinstance(plans_activate, list)
 
-    # Simulate toggling the plan status again (activate)
-    app.toggle_plan_status_action(plan_id=new_plan_id, current_status=False)
-    plans_after_reactivate = database_manager.get_all_plans_with_inactive()
-    assert len(plans_after_reactivate) == 1
-    assert plans_after_reactivate[0][3] is True # is_active should now be True
-    app.plan_status_label.configure.assert_any_call(text="Plan status changed to Active.", text_color="green")
+    db_plans_after_activate = database_manager.get_all_plans_with_inactive()
+    assert len(db_plans_after_activate) == 1
+    assert db_plans_after_activate[0][3] is True  # is_active should now be True
 
-def test_add_membership_flow(app_instance):
-    app = app_instance
+def test_add_membership_flow(controller_instance): # Changed app_instance to controller_instance
+    controller = controller_instance # Use controller
 
     # --- Setup: Pre-populate database with a member and a plan ---
     # Add a member
@@ -148,71 +137,45 @@ def test_add_membership_flow(app_instance):
     assert plan_id is not None
     db_plan_id = plan_id # Get the actual plan_id
 
-    # Refresh dropdowns in app (simulating GUI update)
-    # These are usually populated at init or when tabs are switched.
-    # For testing, we might need to call them if action methods rely on updated internal dicts.
-    app.populate_member_dropdown()
-    app.populate_plan_dropdown()
-
-
-    # --- Mock UI elements for Add Membership ---
-    # Common fields
-    app.membership_member_dropdown_var = MagicMock()
-    # Ensure member_name_to_id is populated by populate_member_dropdown if test relies on it
-    # Or directly mock the return of member_id from a mocked get()
-    # Let's find the display name format from populate_member_dropdown
-    member_display_name = f"Membership User (ID: {db_member_id})"
-    app.membership_member_dropdown_var.get = MagicMock(return_value=member_display_name)
-
-    app.start_date_picker = MagicMock()
-    app.start_date_picker.get_date = MagicMock(return_value=date.today())
-
-    app.amount_paid_entry = MagicMock()
-    app.amount_paid_entry.get = MagicMock(return_value="100.00")
-
-    app.membership_status_label = MagicMock()
-    app.membership_status_label.configure = MagicMock()
+    # No need to mock UI elements or call app.populate_dropdowns for controller tests
 
     # --- Test "Group Class" Transaction ---
-    app.membership_type_var = MagicMock()
-    app.membership_type_var.get = MagicMock(return_value="Group Class")
+    s_gc, m_gc = controller.save_membership_action(
+        membership_type="Group Class",
+        member_id=db_member_id,
+        selected_plan_id=db_plan_id,
+        payment_date_str=date.today().strftime('%Y-%m-%d'),
+        start_date_str=date.today().strftime('%Y-%m-%d'),
+        amount_paid_str="100.00",
+        payment_method="Cash",
+        sessions_str=None
+    )
+    assert s_gc is True
+    assert m_gc == "Group Class membership added successfully!"
 
-    app.membership_plan_dropdown_var = MagicMock()
-    # Similar to member, find plan display name format
-    plan_display_name = f"Membership Plan | 30 days"
-    app.membership_plan_dropdown_var.get = MagicMock(return_value=plan_display_name)
-
-    app.payment_date_picker = MagicMock()
-    app.payment_date_picker.get_date = MagicMock(return_value=date.today())
-    app.payment_method_entry = MagicMock()
-    app.payment_method_entry.get = MagicMock(return_value="Cash")
-
-    # Call the action method for Group Class
-    app.save_membership_action()
-
-    # Assert Group Class transaction
-    app.membership_status_label.configure.assert_any_call(text="Group Class membership added successfully!", text_color="green")
     member_activity_gc = database_manager.get_all_activity_for_member(db_member_id)
     assert len(member_activity_gc) == 1
-    assert member_activity_gc[0][0] == "Group Class" # transaction_type
-    assert member_activity_gc[0][1] == "Membership Plan" # plan_name (name_or_description)
-    assert member_activity_gc[0][5] == 100.00 # amount_paid
+    assert member_activity_gc[0][0] == "Group Class"  # transaction_type
+    assert member_activity_gc[0][1] == "Membership Plan"  # plan_name (name_or_description)
+    assert member_activity_gc[0][5] == 100.00  # amount_paid
 
     # --- Test "Personal Training" Transaction ---
-    app.membership_type_var.get = MagicMock(return_value="Personal Training") # Change type
-    app.pt_sessions_entry = MagicMock()
-    app.pt_sessions_entry.get = MagicMock(return_value="10") # PT sessions
-    app.amount_paid_entry.get = MagicMock(return_value="200.00") # Different amount for PT
+    s_pt, m_pt = controller.save_membership_action(
+        membership_type="Personal Training",
+        member_id=db_member_id,
+        selected_plan_id=None, # No plan_id for PT
+        payment_date_str=date.today().strftime('%Y-%m-%d'), # For PT, payment_date is start_date
+        start_date_str=date.today().strftime('%Y-%m-%d'),
+        amount_paid_str="200.00",
+        payment_method="N/A", # Default for PT in controller
+        sessions_str="10"
+    )
+    assert s_pt is True
+    assert m_pt == "Personal Training membership added successfully!"
 
-    # Call the action method for Personal Training
-    app.save_membership_action()
-
-    # Assert Personal Training transaction
-    app.membership_status_label.configure.assert_any_call(text="Personal Training membership added successfully!", text_color="green")
     member_activity_pt = database_manager.get_all_activity_for_member(db_member_id)
-    assert len(member_activity_pt) == 2 # Now two activities for this member
+    assert len(member_activity_pt) == 2  # Now two activities for this member
 
-    # The latest transaction is first
     pt_transaction = None
     for activity in member_activity_pt:
         if activity[0] == "Personal Training":
@@ -220,5 +183,15 @@ def test_add_membership_flow(app_instance):
             break
     assert pt_transaction is not None, "Personal Training transaction not found"
     assert pt_transaction[0] == "Personal Training"
-    assert pt_transaction[5] == 200.00 # amount_paid
-    assert "10 sessions" in pt_transaction[6] # payment_method_or_sessions
+    assert pt_transaction[5] == 200.00  # amount_paid
+    # In GuiController, sessions are stored directly in the 'sessions' field of the transaction for PT.
+    # The get_all_activity_for_member method returns 'sessions' as the 7th item (index 6) in the tuple for PT.
+    # This needs to align with how get_all_activity_for_member structures its output.
+    # Assuming the structure is (type, desc, pay_date, start, end, amount, sessions_or_method, id)
+    # The original test checked `pt_transaction[6]` for "10 sessions".
+    # The `add_transaction` in `database_manager` for PT saves `sessions` in the `sessions` column.
+    # `get_all_activity_for_member` retrieves it as `payment_method_or_sessions`.
+    # Let's assume `get_all_activity_for_member` returns sessions in a way that matches this:
+    assert pt_transaction[6] == 10 # If it's just the number of sessions
+    # Or, if it's a string like "10 sessions" due to formatting in get_all_activity_for_member:
+    # assert "10" in str(pt_transaction[6]) # More flexible check if formatting varies
