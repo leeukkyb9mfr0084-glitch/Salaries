@@ -105,7 +105,7 @@ if __name__ == '__main__':
     main_conn = None
     try:
         main_conn = sqlite3.connect(DB_FILE)
-        seed_initial_plans(main_conn)
+        # seed_initial_plans(main_conn)
     except sqlite3.Error as e:
         print(f"Error connecting to DB or seeding plans in main block: {e}")
     finally:

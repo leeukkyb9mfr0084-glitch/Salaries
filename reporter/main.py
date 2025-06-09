@@ -80,9 +80,9 @@ if __name__ == '__main__':
         os.makedirs(data_dir)
 
     create_database(DB_FILE)
-    conn = sqlite3.connect(DB_FILE)
-    seed_initial_plans(conn)
-    conn.close()
+    # conn = sqlite3.connect(DB_FILE)
+    # seed_initial_plans(conn)
+    # conn.close()
 
     app = App()
     app.mainloop()
