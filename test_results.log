@@ -1,12 +1,203 @@
 ============================= test session starts ==============================
-platform linux -- Python 3.10.18, pytest-8.3.5, pluggy-1.5.0
+platform linux -- Python 3.12.3, pytest-8.4.0, pluggy-1.6.0
 rootdir: /app
-plugins: anyio-4.9.0, cov-6.1.1, json-report-1.5.0, metadata-3.1.1
-collected 42 items
+collected 45 items
 
 reporter/tests/test_database.py ..                                       [  4%]
-reporter/tests/test_database_manager.py ................................ [ 80%]
-.......                                                                  [ 97%]
+reporter/tests/test_database_manager.py ................................ [ 75%]
+.......                                                                  [ 91%]
+reporter/tests/test_gui_flows.py EEE                                     [ 97%]
 reporter/tests/test_migrate_data.py .                                    [100%]
 
-============================== 42 passed in 0.70s ==============================
+==================================== ERRORS ====================================
+____________________ ERROR at setup of test_add_member_flow ____________________
+
+setup_teardown_test_db = None
+
+    @pytest.fixture
+    def app_instance(setup_teardown_test_db):
+        # This fixture depends on setup_teardown_test_db to ensure DB is ready
+        # Mock customtkinter and tkinter elements that are not needed for flow logic
+        with patch('customtkinter.CTk'), \
+             patch('customtkinter.CTkFrame'), \
+             patch('customtkinter.CTkLabel'), \
+             patch('customtkinter.CTkEntry'), \
+             patch('customtkinter.CTkButton'), \
+             patch('customtkinter.CTkOptionMenu'), \
+             patch('customtkinter.CTkScrollableFrame'), \
+             patch('customtkinter.CTkTabview'), \
+             patch('tkinter.StringVar'), \
+             patch('tkcalendar.DateEntry'), \
+             patch('tkinter.Tk', new_callable=MagicMock):  # Prevent main Tk window init
+
+            # Instantiate the App. It will use the monkeypatched DB_FILE.
+>           app = App()
+                  ^^^^^
+
+reporter/tests/test_gui_flows.py:64:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+reporter/gui.py:10: in __init__
+    super().__init__(*args, **kwargs)
+.venv/lib/python3.12/site-packages/customtkinter/windows/ctk_tk.py:40: in __init__
+    CTK_PARENT_CLASS.__init__(self, **pop_from_dict_by_set(kwargs, self._valid_tk_constructor_arguments))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <reporter.gui.App object .>, screenName = None, baseName = '__main__'
+className = 'Tk', useTk = True, sync = False, use = None
+
+    def __init__(self, screenName=None, baseName=None, className='Tk',
+                 useTk=True, sync=False, use=None):
+        """Return a new top level widget on screen SCREENNAME. A new Tcl interpreter will
+        be created. BASENAME will be used for the identification of the profile file (see
+        readprofile).
+        It is constructed from sys.argv[0] without extensions if None is given. CLASSNAME
+        is the name of the widget class."""
+        self.master = None
+        self.children = {}
+        self._tkloaded = False
+        # to avoid recursions in the getattr code in case of failure, we
+        # ensure that self.tk is always _something_.
+        self.tk = None
+        if baseName is None:
+            import os
+            baseName = os.path.basename(sys.argv[0])
+            baseName, ext = os.path.splitext(baseName)
+            if ext not in ('.py', '.pyc'):
+                baseName = baseName + ext
+        interactive = False
+>       self.tk = _tkinter.create(screenName, baseName, className, interactive, wantobjects, useTk, sync, use)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       _tkinter.TclError: no display name and no $DISPLAY environment variable
+
+/usr/lib/python3.12/tkinter/__init__.py:2345: TclError
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_gui_flows/test_gui_flows.db' created and tables ensured.
+_________________ ERROR at setup of test_plan_management_flow __________________
+
+setup_teardown_test_db = None
+
+    @pytest.fixture
+    def app_instance(setup_teardown_test_db):
+        # This fixture depends on setup_teardown_test_db to ensure DB is ready
+        # Mock customtkinter and tkinter elements that are not needed for flow logic
+        with patch('customtkinter.CTk'), \
+             patch('customtkinter.CTkFrame'), \
+             patch('customtkinter.CTkLabel'), \
+             patch('customtkinter.CTkEntry'), \
+             patch('customtkinter.CTkButton'), \
+             patch('customtkinter.CTkOptionMenu'), \
+             patch('customtkinter.CTkScrollableFrame'), \
+             patch('customtkinter.CTkTabview'), \
+             patch('tkinter.StringVar'), \
+             patch('tkcalendar.DateEntry'), \
+             patch('tkinter.Tk', new_callable=MagicMock):  # Prevent main Tk window init
+
+            # Instantiate the App. It will use the monkeypatched DB_FILE.
+>           app = App()
+                  ^^^^^
+
+reporter/tests/test_gui_flows.py:64:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+reporter/gui.py:10: in __init__
+    super().__init__(*args, **kwargs)
+.venv/lib/python3.12/site-packages/customtkinter/windows/ctk_tk.py:40: in __init__
+    CTK_PARENT_CLASS.__init__(self, **pop_from_dict_by_set(kwargs, self._valid_tk_constructor_arguments))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <reporter.gui.App object .>, screenName = None, baseName = '__main__'
+className = 'Tk', useTk = True, sync = False, use = None
+
+    def __init__(self, screenName=None, baseName=None, className='Tk',
+                 useTk=True, sync=False, use=None):
+        """Return a new top level widget on screen SCREENNAME. A new Tcl interpreter will
+        be created. BASENAME will be used for the identification of the profile file (see
+        readprofile).
+        It is constructed from sys.argv[0] without extensions if None is given. CLASSNAME
+        is the name of the widget class."""
+        self.master = None
+        self.children = {}
+        self._tkloaded = False
+        # to avoid recursions in the getattr code in case of failure, we
+        # ensure that self.tk is always _something_.
+        self.tk = None
+        if baseName is None:
+            import os
+            baseName = os.path.basename(sys.argv[0])
+            baseName, ext = os.path.splitext(baseName)
+            if ext not in ('.py', '.pyc'):
+                baseName = baseName + ext
+        interactive = False
+>       self.tk = _tkinter.create(screenName, baseName, className, interactive, wantobjects, useTk, sync, use)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       _tkinter.TclError: no display name and no $DISPLAY environment variable
+
+/usr/lib/python3.12/tkinter/__init__.py:2345: TclError
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_gui_flows/test_gui_flows.db' created and tables ensured.
+__________________ ERROR at setup of test_add_membership_flow __________________
+
+setup_teardown_test_db = None
+
+    @pytest.fixture
+    def app_instance(setup_teardown_test_db):
+        # This fixture depends on setup_teardown_test_db to ensure DB is ready
+        # Mock customtkinter and tkinter elements that are not needed for flow logic
+        with patch('customtkinter.CTk'), \
+             patch('customtkinter.CTkFrame'), \
+             patch('customtkinter.CTkLabel'), \
+             patch('customtkinter.CTkEntry'), \
+             patch('customtkinter.CTkButton'), \
+             patch('customtkinter.CTkOptionMenu'), \
+             patch('customtkinter.CTkScrollableFrame'), \
+             patch('customtkinter.CTkTabview'), \
+             patch('tkinter.StringVar'), \
+             patch('tkcalendar.DateEntry'), \
+             patch('tkinter.Tk', new_callable=MagicMock):  # Prevent main Tk window init
+
+            # Instantiate the App. It will use the monkeypatched DB_FILE.
+>           app = App()
+                  ^^^^^
+
+reporter/tests/test_gui_flows.py:64:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+reporter/gui.py:10: in __init__
+    super().__init__(*args, **kwargs)
+.venv/lib/python3.12/site-packages/customtkinter/windows/ctk_tk.py:40: in __init__
+    CTK_PARENT_CLASS.__init__(self, **pop_from_dict_by_set(kwargs, self._valid_tk_constructor_arguments))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <reporter.gui.App object .>, screenName = None, baseName = '__main__'
+className = 'Tk', useTk = True, sync = False, use = None
+
+    def __init__(self, screenName=None, baseName=None, className='Tk',
+                 useTk=True, sync=False, use=None):
+        """Return a new top level widget on screen SCREENNAME. A new Tcl interpreter will
+        be created. BASENAME will be used for the identification of the profile file (see
+        readprofile).
+        It is constructed from sys.argv[0] without extensions if None is given. CLASSNAME
+        is the name of the widget class."""
+        self.master = None
+        self.children = {}
+        self._tkloaded = False
+        # to avoid recursions in the getattr code in case of failure, we
+        # ensure that self.tk is always _something_.
+        self.tk = None
+        if baseName is None:
+            import os
+            baseName = os.path.basename(sys.argv[0])
+            baseName, ext = os.path.splitext(baseName)
+            if ext not in ('.py', '.pyc'):
+                baseName = baseName + ext
+        interactive = False
+>       self.tk = _tkinter.create(screenName, baseName, className, interactive, wantobjects, useTk, sync, use)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       _tkinter.TclError: no display name and no $DISPLAY environment variable
+
+/usr/lib/python3.12/tkinter/__init__.py:2345: TclError
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_gui_flows/test_gui_flows.db' created and tables ensured.
+=========================== short test summary info ============================
+ERROR reporter/tests/test_gui_flows.py::test_add_member_flow - _tkinter.TclEr...
+ERROR reporter/tests/test_gui_flows.py::test_plan_management_flow - _tkinter....
+ERROR reporter/tests/test_gui_flows.py::test_add_membership_flow - _tkinter.T...
+========================= 42 passed, 3 errors in 3.99s =========================
