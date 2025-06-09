@@ -794,3 +794,91 @@ def get_transactions_with_member_details(name_filter: str = None, phone_filter: 
 #         print(f"Total revenue for {calendar.month_name[current_month]} {current_year}: ${total_revenue_current_month:.2f}")
 #     else:
 #         print(f"Could not retrieve finance report for {calendar.month_name[current_month]} {current_year}.")
+
+
+def delete_member(member_id: int) -> bool:
+    """
+    Deletes a member and all their associated transactions from the database.
+    Args:
+        member_id (int): The ID of the member to delete.
+    Returns:
+        bool: True if the member and their transactions were deleted successfully, False otherwise.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # Start a transaction
+        cursor.execute("BEGIN TRANSACTION")
+        # Delete all transactions associated with member_id
+        cursor.execute("DELETE FROM transactions WHERE member_id = ?", (member_id,))
+        # Delete the member
+        cursor.execute("DELETE FROM members WHERE member_id = ?", (member_id,))
+        conn.commit()
+        return True
+    except sqlite3.Error as e:
+        if conn:
+            conn.rollback() # Rollback on error
+        print(f"Database error while deleting member {member_id}: {e}", file=sys.stderr)
+        return False
+    finally:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
+            conn.close()
+
+def delete_transaction(transaction_id: int) -> bool:
+    """
+    Deletes a specific transaction from the database.
+    Args:
+        transaction_id (int): The ID of the transaction to delete.
+    Returns:
+        bool: True if the transaction was deleted successfully (rowcount > 0), False otherwise.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM transactions WHERE transaction_id = ?", (transaction_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        print(f"Database error while deleting transaction {transaction_id}: {e}", file=sys.stderr)
+        return False
+    finally:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
+            conn.close()
+
+def delete_plan(plan_id: int) -> tuple[bool, str]:
+    """
+    Deletes a plan from the database if it's not in use by any transactions.
+    Args:
+        plan_id (int): The ID of the plan to delete.
+    Returns:
+        tuple[bool, str]: (True, "Plan deleted successfully.") if successful.
+                          (False, "Plan is in use and cannot be deleted.") if plan is in use.
+                          (False, "Error deleting plan or plan not found.") for other errors or if plan not found.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Check if any transaction references the plan
+        cursor.execute("SELECT 1 FROM transactions WHERE plan_id = ? LIMIT 1", (plan_id,))
+        if cursor.fetchone():
+            return False, "Plan is in use and cannot be deleted."
+
+        # If no transaction references the plan, delete it
+        cursor.execute("DELETE FROM plans WHERE plan_id = ?", (plan_id,))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return True, "Plan deleted successfully."
+        else:
+            return False, "Error deleting plan or plan not found." # Could be plan_id didn't exist
+
+    except sqlite3.Error as e:
+        print(f"Database error while deleting plan {plan_id}: {e}", file=sys.stderr)
+        return False, f"Database error while deleting plan {plan_id}: {e}"
+    finally:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
+            conn.close()

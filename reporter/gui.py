@@ -1,7 +1,7 @@
 import customtkinter
 from tkinter import ttk # Import ttk
 from typing import Optional, List # For type hinting, List can be replaced by list in Python 3.9+
-from tkinter import StringVar # Explicitly import StringVar
+from tkinter import StringVar, messagebox # Explicitly import StringVar and messagebox
 from datetime import datetime, date # Explicitly import datetime and date
 from customtkinter import CTkFrame, CTkLabel, CTkEntry, CTkButton, CTkOptionMenu, CTkFont, CTkScrollableFrame
 from tkcalendar import DateEntry
@@ -223,6 +223,39 @@ class GuiController:
         """Fetches all activity records for a given member_id."""
         return database_manager.get_all_activity_for_member(member_id)
 
+    def delete_member_action(self, member_id: int) -> tuple[bool, str]:
+        """Calls database_manager.delete_member and returns status."""
+        try:
+            success = database_manager.delete_member(member_id)
+            if success:
+                return True, "Member and associated transactions deleted successfully."
+            else:
+                # This specific message might be redundant if delete_member already prints detailed errors
+                return False, "Failed to delete member. Check logs for details."
+        except Exception as e:
+            # Log e for debugging if a logging mechanism is in place
+            return False, f"An error occurred while deleting the member: {str(e)}"
+
+    def delete_transaction_action(self, transaction_id: int) -> tuple[bool, str]:
+        """Calls database_manager.delete_transaction and returns status."""
+        try:
+            success = database_manager.delete_transaction(transaction_id)
+            if success:
+                return True, "Transaction deleted successfully."
+            else:
+                return False, "Failed to delete transaction. It might have already been deleted or does not exist."
+        except Exception as e:
+            return False, f"An error occurred while deleting the transaction: {str(e)}"
+
+    def delete_plan_action(self, plan_id: int) -> tuple[bool, str]:
+        """Calls database_manager.delete_plan and returns its result or an error status."""
+        try:
+            # delete_plan itself returns a tuple (bool, str)
+            success, message = database_manager.delete_plan(plan_id)
+            return success, message
+        except Exception as e:
+            return False, f"An error occurred while deleting the plan: {str(e)}"
+
 
 class App(customtkinter.CTk):
     def __init__(self, *args, **kwargs):
@@ -311,7 +344,10 @@ class App(customtkinter.CTk):
         history_main_frame = CTkFrame(tab, fg_color="transparent")
         history_main_frame.pack(expand=True, fill="both", padx=5, pady=5)
         history_main_frame.grid_columnconfigure(0, weight=1)
-        history_main_frame.grid_rowconfigure(1, weight=1) # For the scrollable display area
+        history_main_frame.grid_rowconfigure(0, weight=0) # For filter_controls_frame
+        history_main_frame.grid_rowconfigure(1, weight=1) # For history_tree_container
+        history_main_frame.grid_rowconfigure(2, weight=0) # For delete_transaction_button
+        history_main_frame.grid_rowconfigure(3, weight=0) # For history_status_label
 
         # Filter Controls Frame
         filter_controls_frame = CTkFrame(history_main_frame)
@@ -360,12 +396,13 @@ class App(customtkinter.CTk):
         history_tree_container.grid_columnconfigure(0, weight=1) # Treeview takes most space
         history_tree_container.grid_columnconfigure(1, weight=0) # Scrollbar
 
-        history_columns = ('client_name', 'phone', 'join_date', 'transaction_type',
+        history_columns = ('transaction_id', 'client_name', 'phone', 'join_date', 'transaction_type',
                            'amount_paid', 'payment_date', 'start_date', 'end_date',
                            'plan_id_or_sessions', 'payment_method')
 
         self.history_tree = ttk.Treeview(history_tree_container, columns=history_columns, show='headings', selectmode='browse', style="Treeview")
 
+        self.history_tree.heading('transaction_id', text='TXN ID')
         self.history_tree.heading('client_name', text='Name')
         self.history_tree.heading('phone', text='Phone')
         self.history_tree.heading('join_date', text='Joined')
@@ -378,6 +415,15 @@ class App(customtkinter.CTk):
         self.history_tree.heading('payment_method', text='Pay Method')
 
         # Setting column widths (adjust as needed for optimal display)
+        self.history_tree.column('client_name', width=120)
+        self.history_tree.column('phone', width=90)
+        self.history_tree.column('join_date', width=80, anchor='center')
+        self.history_tree.column('transaction_type', width=100)
+        self.history_tree.column('amount_paid', width=70, anchor='e')
+        self.history_tree.column('payment_date', width=80, anchor='center')
+        self.history_tree.column('start_date', width=80, anchor='center')
+        self.history_tree.column('end_date', width=80, anchor='center')
+        self.history_tree.column('transaction_id', width=60, anchor='center')
         self.history_tree.column('client_name', width=120)
         self.history_tree.column('phone', width=90)
         self.history_tree.column('join_date', width=80, anchor='center')
@@ -400,6 +446,15 @@ class App(customtkinter.CTk):
         self.history_tree.configure(xscrollcommand=history_tree_scrollbar_x.set)
         history_tree_scrollbar_x.grid(row=1, column=0, sticky="ew") # Below the tree, spans its width
         # self._bind_mouse_scroll(self.history_tree) # Treeview with scrollbars usually handles this
+
+        # --- Delete Transaction Button ---
+        self.delete_transaction_button = CTkButton(history_main_frame, text="Delete Selected Transaction", command=self.on_delete_selected_transaction_click)
+        self.delete_transaction_button.grid(row=2, column=0, padx=10, pady=(10,5), sticky="ew")
+
+        # --- History Status Label ---
+        self.history_status_label = CTkLabel(history_main_frame, text="", font=CTkFont(size=12))
+        self.history_status_label.grid(row=3, column=0, padx=10, pady=(0,10), sticky="ew")
+
 
         initial_transactions = self.controller.get_filtered_transaction_history(None, None, None) # Initial data load
         self.refresh_membership_history_display(initial_transactions)
@@ -462,7 +517,8 @@ class App(customtkinter.CTk):
                 amount_paid_formatted = "0.00"
             end_date_display = end_date if end_date else "N/A"
 
-            values_tuple = (client_name, phone, join_date, transaction_type,
+            # Ensure transaction_id is the first element in the tuple
+            values_tuple = (transaction_id, client_name, phone, join_date, transaction_type,
                             amount_paid_formatted, payment_date, start_date, end_date_display,
                             plan_id_or_sessions_display, payment_method_db)
 
@@ -668,8 +724,9 @@ class App(customtkinter.CTk):
 
         # Configure grid for content within display_frame
         display_frame.grid_rowconfigure(1, weight=0) # For filter_controls_frame
-        display_frame.grid_rowconfigure(2, weight=1) # Allows members_scrollable_frame to expand
-        display_frame.grid_rowconfigure(4, weight=1) # Allows membership_history_frame to expand
+        display_frame.grid_rowconfigure(2, weight=1) # Allows members_tree to expand
+        # Row 3 will be for the delete_member_button
+        display_frame.grid_rowconfigure(5, weight=1) # Allows membership_history_frame to expand (new row index)
         display_frame.grid_columnconfigure(0, weight=1) # Allows content within to expand horizontally
         display_frame.grid_columnconfigure(1, weight=0) # For scrollbar
 
@@ -721,15 +778,19 @@ class App(customtkinter.CTk):
         self.members_tree.configure(yscrollcommand=members_tree_scrollbar.set)
         members_tree_scrollbar.grid(row=2, column=1, padx=(0,10), pady=(0,10), sticky="ns") # Place scrollbar next to tree
 
+        # --- Delete Member Button ---
+        self.delete_member_button = CTkButton(display_frame, text="Delete Selected Member", command=self.on_delete_selected_member_click)
+        self.delete_member_button.grid(row=3, column=0, columnspan=2, padx=10, pady=(5,10), sticky="ew")
+
         # --- Membership History Frame (Below All Members) ---
         history_title = CTkLabel(display_frame, text="Membership History", font=CTkFont(weight="bold"))
-        history_title.grid(row=3, column=0, padx=10, pady=(10,0), sticky="ew")
+        history_title.grid(row=4, column=0, columnspan=2, padx=10, pady=(10,0), sticky="ew") # Adjusted row and columnspan
 
         # Scrollable frame to display history for a selected member
         # Container for the member-specific history Treeview and its scrollbar
         member_history_tree_container = CTkFrame(display_frame) # display_frame is the parent
-        member_history_tree_container.grid(row=4, column=0, padx=10, pady=10, sticky="nsew")
-        # display_frame.grid_rowconfigure(4, weight=1) # This was already set in setup_membership_tab
+        member_history_tree_container.grid(row=5, column=0, columnspan=2, padx=10, pady=10, sticky="nsew") # Adjusted row and columnspan
+        # display_frame.grid_rowconfigure(5, weight=1) # This was set above
 
         member_history_tree_container.grid_rowconfigure(0, weight=1)
         member_history_tree_container.grid_columnconfigure(0, weight=1) # Treeview
@@ -861,6 +922,9 @@ class App(customtkinter.CTk):
 
         self.toggle_selected_plan_status_button = CTkButton(self.plan_form_frame, text="Toggle Selected Plan Status", command=self.on_toggle_selected_plan_status_click)
         self.toggle_selected_plan_status_button.grid(row=6, column=0, columnspan=2, padx=10, pady=5)
+
+        self.delete_plan_button = CTkButton(self.plan_form_frame, text="Delete Selected Plan", command=self.on_delete_selected_plan_click)
+        self.delete_plan_button.grid(row=7, column=0, columnspan=2, padx=10, pady=(5,10))
 
         # --- Frame for Displaying Plans ---
         # Frame to hold the Treeview and its scrollbar
@@ -1390,6 +1454,138 @@ class App(customtkinter.CTk):
             # Refresh the member dropdown in the membership forms
             self.populate_member_dropdown()
             # Note: populate_pt_member_dropdown was removed, so no need to call it.
+
+    def on_delete_selected_member_click(self):
+        """Handles deleting the selected member from the members_tree."""
+        selected_item_iid = self.members_tree.focus() # Get IID of selected item
+        if not selected_item_iid:
+            self.member_status_label.configure(text="No member selected to delete.", text_color="orange")
+            return
+
+        item_details = self.members_tree.item(selected_item_iid)
+        if not item_details or not item_details.get('values'):
+            self.member_status_label.configure(text="Could not retrieve details for the selected member.", text_color="red")
+            return
+
+        try:
+            member_id_str = item_details['values'][0]
+            member_id = int(member_id_str)
+            member_name = item_details['values'][1] # For the confirmation message
+        except (ValueError, IndexError):
+            self.member_status_label.configure(text="Error parsing member ID from selection.", text_color="red")
+            return
+
+        confirm_delete = messagebox.askyesno("Confirm Delete",
+                                             f"Are you sure you want to delete member '{member_name}' (ID: {member_id}) "
+                                             "and all their associated transactions? This action cannot be undone.")
+        if confirm_delete:
+            success, message = self.controller.delete_member_action(member_id)
+            if success:
+                self.member_status_label.configure(text=message, text_color="green")
+                # Refresh members list (clear filters to show all, or use current filters)
+                current_name_filter = self.name_filter_entry.get().strip()
+                current_phone_filter = self.phone_filter_entry.get().strip()
+                updated_members = self.controller.get_filtered_members(
+                    current_name_filter if current_name_filter else None,
+                    current_phone_filter if current_phone_filter else None
+                )
+                self.display_all_members(updated_members)
+
+                # Refresh member dropdowns
+                self.populate_member_dropdown()
+
+                # If the deleted member was the one whose history is shown, clear history
+                if self.selected_member_id == member_id:
+                    self.selected_member_id = None
+                    self.display_membership_history([], None) # Clear history display
+            else:
+                self.member_status_label.configure(text=message, text_color="red")
+        else:
+            self.member_status_label.configure(text="Member deletion cancelled.", text_color="grey")
+
+    def on_delete_selected_plan_click(self):
+        """Handles deleting the selected plan from the plans_tree."""
+        selected_item_iid = self.plans_tree.focus() # Get IID of selected item
+        if not selected_item_iid:
+            self.plan_status_label.configure(text="No plan selected to delete.", text_color="orange")
+            return
+
+        item_details = self.plans_tree.item(selected_item_iid)
+        if not item_details or not item_details.get('values'):
+            self.plan_status_label.configure(text="Could not retrieve details for the selected plan.", text_color="red")
+            return
+
+        try:
+            plan_id_str = item_details['values'][0]
+            plan_id = int(plan_id_str)
+            plan_name = item_details['values'][1] # For the confirmation message
+        except (ValueError, IndexError):
+            self.plan_status_label.configure(text="Error parsing plan ID from selection.", text_color="red")
+            return
+
+        confirm_delete = messagebox.askyesno("Confirm Delete",
+                                             f"Are you sure you want to delete plan '{plan_name}' (ID: {plan_id})?\n"
+                                             "This action cannot be undone. If the plan is in use by any transactions, deletion will fail.")
+        if confirm_delete:
+            success, message = self.controller.delete_plan_action(plan_id)
+            # delete_plan_action already returns a tuple (bool, str)
+            # The message from delete_plan_action will indicate if it's in use or other errors.
+            self.plan_status_label.configure(text=message, text_color="green" if success else "red")
+
+            if success:
+                # Refresh plans list
+                updated_plans = self.controller.get_all_plans_with_inactive()
+                self.load_plans_display(updated_plans)
+
+                # Refresh plan dropdowns in other tabs (e.g., membership tab)
+                self.populate_plan_dropdown()
+
+                # Clear the plan editing form fields
+                self.clear_plan_form()
+        else:
+            self.plan_status_label.configure(text="Plan deletion cancelled.", text_color="grey")
+
+    def on_delete_selected_transaction_click(self):
+        """Handles deleting the selected transaction from the history_tree."""
+        selected_item_iid = self.history_tree.focus() # Get IID of selected item
+        if not selected_item_iid:
+            self.history_status_label.configure(text="No transaction selected to delete.", text_color="orange")
+            return
+
+        item_details = self.history_tree.item(selected_item_iid)
+        if not item_details or not item_details.get('values'):
+            self.history_status_label.configure(text="Could not retrieve details for the selected transaction.", text_color="red")
+            return
+
+        try:
+            transaction_id_str = item_details['values'][0] # transaction_id is now the first column
+            transaction_id = int(transaction_id_str)
+        except (ValueError, IndexError):
+            self.history_status_label.configure(text="Error parsing transaction ID from selection.", text_color="red")
+            return
+
+        confirm_delete = messagebox.askyesno("Confirm Delete",
+                                             f"Are you sure you want to delete transaction ID {transaction_id}? This action cannot be undone.")
+        if confirm_delete:
+            success, message = self.controller.delete_transaction_action(transaction_id)
+            self.history_status_label.configure(text=message, text_color="green" if success else "red")
+
+            if success:
+                # Refresh the main history view
+                self.apply_history_filters() # Re-applies current filters and refreshes
+
+                # If a member is selected in the Membership Management tab, refresh their specific history too
+                if self.selected_member_id is not None:
+                    try:
+                        current_member_history = self.controller.get_all_activity_for_member(self.selected_member_id)
+                        self.display_membership_history(current_member_history, self.selected_member_id)
+                    except Exception as e:
+                        # If there's an error refreshing the other tab's history,
+                        # display it on the member_status_label or print, but don't let it crash.
+                        # For now, using member_status_label from the "Add Member" tab, which might not be visible.
+                        self.member_status_label.configure(text=f"Error refreshing other history view: {e}", text_color="red")
+        else:
+            self.history_status_label.configure(text="Transaction deletion cancelled.", text_color="grey")
 
 
 if __name__ == '__main__':
