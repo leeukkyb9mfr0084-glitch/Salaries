@@ -1,0 +1,178 @@
+import os
+import sys
+from datetime import datetime, timedelta
+import time
+
+# --- Setup Project Path ---
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, project_root)
+
+from reporter.gui import GuiController
+from reporter import database_manager
+from reporter.database import create_database, seed_initial_plans
+
+# --- Simulation Database Setup ---
+SIMULATION_DB_DIR = os.path.join(project_root, "reporter", "simulations", "sim_data")
+SIMULATION_DB_FILE = os.path.join(SIMULATION_DB_DIR, "simulation_kranos_data.db")
+
+original_db_file = database_manager.DB_FILE
+
+def setup_simulation_environment():
+    print(f"--- Setting up Simulation Environment ---")
+    print(f"Using simulation database: {SIMULATION_DB_FILE}")
+    os.makedirs(SIMULATION_DB_DIR, exist_ok=True)
+    database_manager.DB_FILE = SIMULATION_DB_FILE
+    conn = create_database(db_name=SIMULATION_DB_FILE)
+    if conn:
+        try:
+            seed_initial_plans(conn)
+            conn.commit()
+            print("Simulation database created and initial plans seeded.")
+        except Exception as e:
+            print(f"Error seeding plans: {e}")
+        finally:
+            conn.close()
+    else:
+        print("Simulation database ensured (may have existed).")
+    print("--- Simulation Environment Setup Complete ---")
+
+def cleanup_simulation_environment():
+    database_manager.DB_FILE = original_db_file
+    print(f"--- Simulation Environment Cleaned Up (DB_FILE restored to {original_db_file}) ---")
+
+def main():
+    setup_simulation_environment()
+    controller = GuiController()
+    print("\n--- Starting Simulation: Delete Transaction Flow ---")
+
+    # 1. Add a test member
+    member_name = f"TxDeleteUser_{int(time.time())%1000}"
+    member_phone = f"TDEL{int(time.time())%100000}"
+    print(f"\nStep 1: Adding test member: Name='{member_name}', Phone='{member_phone}'")
+    if not database_manager.add_member_to_db(member_name, member_phone):
+        print(f"FAILURE: Could not add member '{member_name}'.")
+        cleanup_simulation_environment()
+        return
+
+    member_db_info = database_manager.get_all_members(phone_filter=member_phone)
+    if not member_db_info:
+        print(f"FAILURE: Member '{member_name}' not found after adding.")
+        cleanup_simulation_environment()
+        return
+    member_id = member_db_info[0][0]
+    print(f"Member added successfully. ID: {member_id}")
+
+    # 2. Add two transactions for the member
+    print(f"\nStep 2: Adding two transactions for member ID {member_id}")
+    plans = database_manager.get_all_plans()
+    if len(plans) < 1: # Need at least one plan
+        print("FAILURE: Not enough plans found. Seeding might have failed.")
+        cleanup_simulation_environment()
+        return
+    plan_id1 = plans[0][0]
+
+    tx1_details = {
+        'transaction_type': 'Group Class', 'member_id': member_id, 'plan_id': plan_id1,
+        'payment_date': (datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d'),
+        'start_date': (datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d'),
+        'amount_paid': 60.00, 'payment_method': "SimCash1"
+    }
+    tx2_details = {
+        'transaction_type': 'Personal Training', 'member_id': member_id,
+        'start_date': datetime.now().strftime('%Y-%m-%d'),
+        'sessions': 5, 'amount_paid': 200.00,
+        'payment_date': datetime.now().strftime('%Y-%m-%d'), # PT needs payment_date too
+        'payment_method': "SimCardPT" # PT can have payment_method
+    }
+
+    if not database_manager.add_transaction(**tx1_details):
+        print(f"FAILURE: Could not add transaction 1 for member ID {member_id}.")
+        cleanup_simulation_environment()
+        return
+    print("Transaction 1 added.")
+
+    if not database_manager.add_transaction(**tx2_details):
+        print(f"FAILURE: Could not add transaction 2 for member ID {member_id}.")
+        cleanup_simulation_environment()
+        return
+    print("Transaction 2 added.")
+
+    # Get IDs of the transactions
+    activity = database_manager.get_all_activity_for_member(member_id)
+    if len(activity) != 2:
+        print(f"FAILURE: Expected 2 transactions for member {member_id}, found {len(activity)}.")
+        cleanup_simulation_environment()
+        return
+
+    # Assuming order by start_date DESC from get_all_activity_for_member
+    # tx2 (PT, today) should be first, tx1 (GC, 10 days ago) second.
+    transaction_id_to_delete = None
+    other_transaction_id = None
+
+    for trans in activity:
+        # identify by amount or type, assuming amount is unique enough for this sim
+        if trans[5] == 60.00: # Amount for tx1
+            transaction_id_to_delete = trans[7] # activity_id
+        elif trans[5] == 200.00: # Amount for tx2
+            other_transaction_id = trans[7]
+
+    if not transaction_id_to_delete or not other_transaction_id:
+        print(f"FAILURE: Could not reliably identify transaction IDs from activity list: {activity}")
+        cleanup_simulation_environment()
+        return
+
+    print(f"Transaction to delete ID: {transaction_id_to_delete} (Amount: {tx1_details['amount_paid']})")
+    print(f"Other transaction ID: {other_transaction_id} (Amount: {tx2_details['amount_paid']})")
+
+    # 3. Call controller.delete_transaction_action
+    print(f"\nStep 3: Calling controller.delete_transaction_action for transaction ID {transaction_id_to_delete}")
+    # Based on test_gui_flows.py, controller.delete_transaction_action does NOT use askyesno.
+    delete_success, delete_message = controller.delete_transaction_action(transaction_id_to_delete)
+    print(f"Controller action message: '{delete_message}' (Success: {delete_success})")
+
+    if not delete_success:
+        print(f"WARNING: controller.delete_transaction_action reported failure for transaction ID {transaction_id_to_delete}.")
+        # Continue to verification to see state
+
+    # 4. Verify the specific transaction is deleted
+    print("\nStep 4: Verifying transaction deletion...")
+    activity_after_delete = database_manager.get_all_activity_for_member(member_id)
+
+    deleted_found = False
+    other_tx_found = False
+    if activity_after_delete:
+        for trans in activity_after_delete:
+            if trans[7] == transaction_id_to_delete:
+                deleted_found = True
+            if trans[7] == other_transaction_id:
+                other_tx_found = True
+
+    if not deleted_found:
+        print(f"SUCCESS: Transaction ID {transaction_id_to_delete} correctly deleted.")
+    else:
+        print(f"FAILURE: Transaction ID {transaction_id_to_delete} still found after deletion attempt.")
+
+    # 5. Verify the other transaction for the member still exists
+    print("\nStep 5: Verifying other transaction still exists...")
+    if other_tx_found:
+        print(f"SUCCESS: Other transaction (ID: {other_transaction_id}) still exists for member {member_id}.")
+        if len(activity_after_delete) == 1 and activity_after_delete[0][7] == other_transaction_id:
+            print("Correct number of transactions (1) remaining.")
+        else:
+            print(f"WARNING: Expected 1 transaction remaining, found {len(activity_after_delete)}.")
+    else:
+        print(f"FAILURE: Other transaction (ID: {other_transaction_id}) was also deleted or not found.")
+
+    # 6. Verify the member still exists
+    print("\nStep 6: Verifying member still exists...")
+    member_after_delete = database_manager.get_all_members(phone_filter=member_phone)
+    if member_after_delete and member_after_delete[0][0] == member_id:
+        print(f"SUCCESS: Member '{member_name}' (ID: {member_id}) still exists.")
+    else:
+        print(f"FAILURE: Member '{member_name}' (ID: {member_id}) was deleted or not found.")
+
+    print("\n--- Simulation: Delete Transaction Flow Complete ---")
+    cleanup_simulation_environment()
+
+if __name__ == "__main__":
+    main()

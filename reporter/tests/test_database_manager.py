@@ -12,7 +12,8 @@ from reporter.database_manager import (
     get_plan_by_name_and_duration, get_or_create_plan_id, # Added for testing
     get_all_activity_for_member,
     get_pending_renewals, get_finance_report, # add_pt_booking, # Removed
-    add_transaction # Added
+    add_transaction, # Added
+    delete_member, delete_transaction, delete_plan # Added for delete tests
 )
 # Module needed for setting up test DB
 from reporter.database import create_database, seed_initial_plans
@@ -777,8 +778,8 @@ def test_get_pending_renewals(db_conn):
     assert add_transaction(transaction_type='Group Class', member_id=member_p_id, plan_id=plan_id_30, payment_date=payment_date_p, start_date=start_date_p, amount_paid=50, payment_method="CashP")
 
     # 4. Call get_pending_renewals for today's date (current month)
-    target_date_for_query = today.strftime('%Y-%m-%d')
-    renewals = get_pending_renewals(target_date_for_query)
+    # target_date_for_query = today.strftime('%Y-%m-%d') # Old call
+    renewals = get_pending_renewals(today.year, today.month) # Corrected call
 
     assert len(renewals) == 2, "Should find exactly 2 renewals for the current month."
 
@@ -816,8 +817,8 @@ def test_get_pending_renewals_none_for_month(db_conn):
     start_date_prev_month = (last_month_end.replace(day=15) - timedelta(days=plan_30_days[2])).strftime('%Y-%m-%d')
     assert add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id_30, payment_date=start_date_prev_month, start_date=start_date_prev_month, amount_paid=50, payment_method="CashNR2")
 
-    target_date_for_query = today.strftime('%Y-%m-%d') # Query for current month
-    renewals = get_pending_renewals(target_date_for_query)
+    # target_date_for_query = today.strftime('%Y-%m-%d') # Query for current month # Old call
+    renewals = get_pending_renewals(today.year, today.month) # Corrected call
     assert len(renewals) == 0, "Should find no renewals for the current month."
 
 
@@ -1044,6 +1045,149 @@ def test_join_date_standardization_existing_member_later_activity(db_conn):
     cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
     final_join_date = cursor.fetchone()[0]
     assert final_join_date == initial_activity_date, "Join date should remain the earlier date."
+
+
+# --- Tests for delete operations ---
+
+def test_delete_member(db_conn):
+    """Tests deleting a member and ensures their transactions are also deleted."""
+    # 1. Add a member
+    member_name = "Member to Delete"
+    member_phone = "DEL001"
+    assert add_member_to_db(member_name, member_phone) is True
+    cursor = db_conn.cursor()
+    cursor.execute("SELECT member_id FROM members WHERE phone = ?", (member_phone,))
+    member_id_row = cursor.fetchone()
+    assert member_id_row is not None, "Failed to add member for deletion test."
+    member_id = member_id_row[0]
+
+    # 2. Add transactions for the member
+    plans = get_all_plans()
+    assert len(plans) > 0, "No plans available to create transactions."
+    plan_id = plans[0][0]
+
+    add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id,
+                    payment_date="2024-01-01", start_date="2024-01-01", amount_paid=50, payment_method="Cash")
+    add_transaction(transaction_type='Personal Training', member_id=member_id, start_date="2024-01-05",
+                    sessions=5, amount_paid=100)
+
+    # Verify transactions were added
+    cursor.execute("SELECT COUNT(*) FROM transactions WHERE member_id = ?", (member_id,))
+    assert cursor.fetchone()[0] == 2, "Failed to add transactions for the member."
+
+    # 3. Call delete_member
+    delete_member(member_id)
+
+    # 4. Assert member is deleted
+    cursor.execute("SELECT * FROM members WHERE member_id = ?", (member_id,))
+    assert cursor.fetchone() is None, "Member was not deleted from the members table."
+
+    # 5. Assert transactions for the member are deleted
+    cursor.execute("SELECT * FROM transactions WHERE member_id = ?", (member_id,))
+    assert cursor.fetchone() is None, "Transactions for the deleted member were not removed."
+
+
+def test_delete_transaction(db_conn):
+    """Tests deleting a single transaction and ensures the member still exists."""
+    # 1. Add a member
+    member_name = "Transaction Test Member"
+    member_phone = "TRXDEL001"
+    assert add_member_to_db(member_name, member_phone) is True
+    cursor = db_conn.cursor()
+    cursor.execute("SELECT member_id FROM members WHERE phone = ?", (member_phone,))
+    member_id_row = cursor.fetchone()
+    assert member_id_row is not None, "Failed to add member for transaction deletion test."
+    member_id = member_id_row[0]
+
+    # 2. Add a transaction for the member
+    plans = get_all_plans()
+    plan_id = plans[0][0]
+    add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id,
+                    payment_date="2024-02-01", start_date="2024-02-01", amount_paid=60, payment_method="Card")
+
+    # Get the transaction_id of the added transaction
+    cursor.execute("SELECT transaction_id FROM transactions WHERE member_id = ? ORDER BY transaction_id DESC LIMIT 1", (member_id,)) # Get the last one
+    transaction_id_row = cursor.fetchone()
+    assert transaction_id_row is not None, "Failed to retrieve the added transaction."
+    transaction_id_to_delete = transaction_id_row[0]
+
+    # Add a second transaction to ensure only the specific one is deleted
+    add_transaction(transaction_type='Personal Training', member_id=member_id, start_date="2024-02-05",
+                    sessions=3, amount_paid=70)
+
+    cursor.execute("SELECT transaction_id FROM transactions WHERE member_id = ? AND transaction_type = 'Personal Training'", (member_id,))
+    other_transaction_id_row = cursor.fetchone()
+    assert other_transaction_id_row is not None
+    other_transaction_id = other_transaction_id_row[0]
+
+
+    # 3. Call delete_transaction
+    delete_transaction(transaction_id_to_delete)
+
+    # 4. Assert the specific transaction is deleted
+    cursor.execute("SELECT * FROM transactions WHERE transaction_id = ?", (transaction_id_to_delete,))
+    assert cursor.fetchone() is None, "The specified transaction was not deleted."
+
+    # 5. Assert other transactions for the member still exist
+    cursor.execute("SELECT COUNT(*) FROM transactions WHERE member_id = ?", (member_id,))
+    assert cursor.fetchone()[0] == 1, "Other transactions for the member were unintentionally deleted."
+    cursor.execute("SELECT transaction_id FROM transactions WHERE member_id = ?", (member_id,))
+    remaining_transaction_id = cursor.fetchone()[0]
+    assert remaining_transaction_id == other_transaction_id, "The wrong transaction was deleted."
+
+
+    # 6. Assert the member still exists
+    cursor.execute("SELECT * FROM members WHERE member_id = ?", (member_id,))
+    assert cursor.fetchone() is not None, "Member was unintentionally deleted."
+
+
+def test_delete_plan(db_conn):
+    """Tests deleting a plan, including cases where it's in use."""
+    cursor = db_conn.cursor()
+
+    # Scenario 1: Delete a plan that is not in use
+    plan_name_unused = "Temporary Test Plan Unused"
+    plan_duration_unused = 15
+    # Use add_plan from database_manager, not direct SQL, to ensure consistency
+    unused_plan_id = add_plan(plan_name_unused, plan_duration_unused, is_active=True)
+    assert unused_plan_id is not None, "Failed to add unused plan for deletion test."
+
+    result_unused, message_unused = delete_plan(unused_plan_id)
+    assert result_unused is True, "delete_plan should return True for unused plan."
+    assert message_unused == "Plan deleted successfully.", f"Unexpected message: {message_unused}"
+
+    cursor.execute("SELECT * FROM plans WHERE plan_id = ?", (unused_plan_id,))
+    assert cursor.fetchone() is None, "Unused plan was not actually deleted from the database."
+
+    # Scenario 2: Attempt to delete a plan that is in use
+    plan_name_used = "Temporary Test Plan Used"
+    plan_duration_used = 45
+    used_plan_id = add_plan(plan_name_used, plan_duration_used, is_active=True)
+    assert used_plan_id is not None, "Failed to add used plan for deletion test."
+
+    # Add a member and a transaction linking to this plan
+    member_name = "Plan User"
+    member_phone = "PLANUSER01"
+    assert add_member_to_db(member_name, member_phone) is True
+    cursor.execute("SELECT member_id FROM members WHERE phone = ?", (member_phone,))
+    member_id_row = cursor.fetchone()
+    assert member_id_row is not None
+    member_id = member_id_row[0]
+
+    add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=used_plan_id,
+                    payment_date="2024-03-01", start_date="2024-03-01", amount_paid=80, payment_method="Online")
+
+    result_used, message_used = delete_plan(used_plan_id)
+    assert result_used is False, "delete_plan should return False for a plan in use."
+    assert message_used == "Plan is in use and cannot be deleted.", f"Unexpected message: {message_used}" # Corrected message
+
+    # Verify the plan was NOT deleted
+    cursor.execute("SELECT * FROM plans WHERE plan_id = ?", (used_plan_id,))
+    assert cursor.fetchone() is not None, "Used plan was deleted, but it shouldn't have been."
+
+    # Verify the transaction linking to the plan still exists
+    cursor.execute("SELECT COUNT(*) FROM transactions WHERE plan_id = ?", (used_plan_id,))
+    assert cursor.fetchone()[0] == 1, "Transaction linking to the used plan was unexpectedly deleted or altered."
 
 
 if __name__ == '__main__':
