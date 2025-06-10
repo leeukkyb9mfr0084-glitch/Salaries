@@ -400,6 +400,7 @@ class FletAppView(ft.UserControl):
         self.controller = GuiController()
         self.selected_member_id_flet: Optional[int] = None
         self.selected_transaction_id_flet: Optional[int] = None
+        self.selected_plan_id_flet: Optional[int] = None
         # self.page is available via self.page once the control is added to a page.
 
         self.members_table_flet = ft.DataTable(
@@ -452,7 +453,19 @@ class FletAppView(ft.UserControl):
                 ft.DataColumn(ft.Text("Duration (Days)")),
                 ft.DataColumn(ft.Text("Status")),
             ],
-            rows=[] # Initially empty
+            rows=[], # Initially empty
+            on_select_changed=self.on_plan_select_changed # Attach the handler
+        )
+        self.pending_renewals_table_flet = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("Member ID")),
+                ft.DataColumn(ft.Text("Name")),
+                ft.DataColumn(ft.Text("Phone")),
+                ft.DataColumn(ft.Text("Plan Name")),
+                ft.DataColumn(ft.Text("End Date")),
+                ft.DataColumn(ft.Text("Days Overdue")),
+            ],
+            rows=[]  # Initially empty
         )
         # Initialize other table references here if needed for future phases
 
@@ -488,6 +501,39 @@ class FletAppView(ft.UserControl):
         else:  # Selection was cleared
             self.selected_transaction_id_flet = None
             print("DEBUG: Full history table selection cleared.")
+        # self.update() # Not strictly necessary if only internal state is changed
+
+    def on_plan_select_changed(self, e: ft.ControlEvent):
+        """Handles row selection changes in the plans_table_flet."""
+        selected_index_str = e.data
+        if selected_index_str:  # If a row is actually selected
+            try:
+                selected_index = int(selected_index_str)
+                if 0 <= selected_index < len(self.plans_table_flet.rows):
+                    selected_row = self.plans_table_flet.rows[selected_index]
+                    # Assuming Plan ID is in the first cell
+                    plan_id_cell = selected_row.cells[0]
+                    if isinstance(plan_id_cell.content, ft.Text):
+                        self.selected_plan_id_flet = int(plan_id_cell.content.value)
+                        print(f"DEBUG: Selected Plan ID: {self.selected_plan_id_flet}")
+                    else:
+                        print(f"DEBUG: Plan ID cell content is not ft.Text: {type(plan_id_cell.content)}")
+                        self.selected_plan_id_flet = None
+                else:
+                    self.selected_plan_id_flet = None  # Index out of bounds
+                    print(f"DEBUG: Selected index {selected_index} out of bounds for plans_table_flet.")
+            except ValueError:
+                plan_val = 'unknown cell'
+                if 'plan_id_cell' in locals() and hasattr(plan_id_cell, 'content') and hasattr(plan_id_cell.content, 'value'):
+                    plan_val = plan_id_cell.content.value
+                print(f"DEBUG: Error parsing Plan ID. Cell value: '{plan_val}'")
+                self.selected_plan_id_flet = None
+            except Exception as ex:
+                print(f"DEBUG: An unexpected error occurred during plan selection: {ex}")
+                self.selected_plan_id_flet = None
+        else:  # Selection was cleared
+            self.selected_plan_id_flet = None
+            print("DEBUG: Plans table selection cleared.")
         # self.update() # Not strictly necessary if only internal state is changed
 
     def _get_membership_status_flet(self, end_date_str: Optional[str]) -> str:
@@ -716,6 +762,52 @@ class FletAppView(ft.UserControl):
         self.display_all_members_flet(self.controller.get_filtered_members(None, None))
         # self.update() # display_all_members_flet already calls self.update()
 
+    def display_all_plans_flet(self, plans_list: Optional[list] = None):
+        """Populates the plans_table_flet with plan data."""
+        if plans_list is None:
+            # Fetches (plan_id, plan_name, duration_days, is_active)
+            plans_list = self.controller.get_all_plans_with_inactive()
+
+        self.plans_table_flet.rows.clear()
+        if plans_list:
+            for plan_data in plans_list:
+                plan_id, plan_name, duration_days, is_active = plan_data
+                status = "Active" if is_active else "Inactive"
+                row = ft.DataRow(cells=[
+                    ft.DataCell(ft.Text(str(plan_id))),
+                    ft.DataCell(ft.Text(str(plan_name))),
+                    ft.DataCell(ft.Text(str(duration_days))),
+                    ft.DataCell(ft.Text(status)),
+                ])
+                self.plans_table_flet.rows.append(row)
+        else:
+            self.plans_table_flet.rows.append(
+                ft.DataRow(cells=[
+                    ft.DataCell(ft.Text("No plans found."), colspan=len(self.plans_table_flet.columns))
+                ])
+            )
+        self.update()
+
+    def display_pending_renewals_flet(self):
+        """Populates the pending_renewals_table_flet with current month's pending renewal data."""
+        success, message, renewals_data = self.controller.generate_pending_renewals_action()
+        self.pending_renewals_table_flet.rows.clear()
+
+        if success and renewals_data:
+            for renewal_item in renewals_data:
+                # (member_id, client_name, phone, plan_name, end_date, days_overdue)
+                cells = [ft.DataCell(ft.Text(str(item))) for item in renewal_item]
+                self.pending_renewals_table_flet.rows.append(ft.DataRow(cells=cells))
+        else:
+            # Use the message from controller if an error occurred, otherwise a default message
+            display_message = message if not success else "No pending renewals found for the current month."
+            self.pending_renewals_table_flet.rows.append(
+                ft.DataRow(cells=[
+                    ft.DataCell(ft.Text(display_message), colspan=len(self.pending_renewals_table_flet.columns))
+                ])
+            )
+        self.update()
+
     def build(self):
         # Initial population of the members table
         # This needs to be called after members_table_flet is initialized but before the UI is built,
@@ -825,16 +917,23 @@ class FletAppView(ft.UserControl):
                     text="Reporting",
                     content=ft.Column(
                         controls=[
-                            ft.Container(
-                                content=ft.Text("Renewals Report Placeholder"),
-                                expand=1, # Adjusted expand for Column layout
-                                bgcolor=ft.colors.TEAL_200,
+                            ft.Container( # Container for Renewals Table
+                                content=ft.Column(
+                                    controls=[
+                                        ft.Text("Pending Renewals (Current Month)", weight=ft.FontWeight.BOLD),
+                                        self.pending_renewals_table_flet
+                                    ],
+                                    scroll=ft.ScrollMode.AUTO, # Scroll for the column containing table and title
+                                    expand=True
+                                ),
+                                expand=1, # Adjust expand factor as needed
+                                bgcolor=ft.colors.TEAL_200, # Or your choice
                                 padding=10,
-                                alignment=ft.alignment.center,
+                                alignment=ft.alignment.top_center
                             ),
-                            ft.Container(
+                            ft.Container( # Existing Finance Report Placeholder
                                 content=ft.Text("Finance Report Placeholder"),
-                                expand=1, # Adjusted expand for Column layout
+                                expand=1,
                                 bgcolor=ft.colors.TEAL_300,
                                 padding=10,
                                 alignment=ft.alignment.center,
@@ -864,6 +963,10 @@ class FletAppView(ft.UserControl):
         self.display_all_members_flet()
         # Populate full history table as well
         self.refresh_membership_history_display_flet()
+        # Populate plans table
+        self.display_all_plans_flet()
+        # Populate pending renewals table
+        self.display_pending_renewals_flet()
 
         return self.tabs_control
 
