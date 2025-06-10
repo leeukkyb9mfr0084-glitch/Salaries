@@ -15,6 +15,36 @@ from reporter.gui import main as start_flet_gui # Import main from the new gui.p
 # import sqlite3 # No longer directly used here
 # from reporter.database import create_database, seed_initial_plans # Replaced by initialize_database
 
+def handle_database_migration():
+    """
+    Checks for a data migration script and runs it if found.
+    """
+    # Attempt data migration if migrate_data.py exists
+    # __file__ in this context will be reporter/main.py
+    migrate_script_path = os.path.join(os.path.dirname(__file__), 'migrate_data.py')
+    if os.path.exists(migrate_script_path):
+        print("Attempting data migration...")
+        try:
+            # Ensure the module is run as reporter.migrate_data
+            result = subprocess.run(
+                [sys.executable, '-m', 'reporter.migrate_data'],
+                capture_output=True, text=True, check=False # check=False to handle errors manually
+            )
+            if result.returncode == 0:
+                print("Data migration script executed successfully.")
+                if result.stdout:
+                    print("Migration output:\n", result.stdout)
+            else:
+                print(f"Data migration script failed with error (exit code {result.returncode}):")
+                if result.stderr:
+                    print(result.stderr)
+                if result.stdout: # Also print stdout for more context on failure
+                    print("Migration output (stdout):\n", result.stdout)
+        except Exception as e:
+            print(f"An exception occurred while trying to run the migration script: {e}")
+    else:
+        print(f"Data migration script ('{os.path.basename(migrate_script_path)}') not found. Skipping migration.")
+
 def check_and_install_requirements():
     """
     Checks if packages in requirements.txt are installed and installs them if not.
@@ -82,6 +112,8 @@ if __name__ == '__main__':
     # Initialize the database using the consistent function
     initialize_database()
     print(f"Database initialized at: {DB_FILE}")
+
+    handle_database_migration() # Call the refactored function
 
     # Start the Flet application
     print("Starting Flet application...")

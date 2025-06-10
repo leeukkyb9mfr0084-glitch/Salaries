@@ -1,6 +1,8 @@
 import sqlite3
 import os
 
+DB_FILE = 'reporter/data/kranos_data.db'
+
 def create_database(db_name: str):
     """
     Connects to an SQLite database and creates the necessary tables if they don't exist.
@@ -89,27 +91,41 @@ def seed_initial_plans(conn: sqlite3.Connection):
     except sqlite3.Error as e:
         print(f"Error seeding initial plans: {e}")
 
-if __name__ == '__main__':
-    DB_FILE = 'reporter/data/kranos_data.db'
-
-    # Create the data directory if it doesn't exist
+def initialize_database():
+    """
+    Initializes the database: creates the directory, database, tables, and seeds initial data.
+    """
+    # Get the directory path from DB_FILE
     data_dir = os.path.dirname(DB_FILE)
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir)
-        print(f"Created directory: {data_dir}")
 
-    # For file-based DB, create_database handles connection and closure.
+    # If the directory doesn't exist, create it
+    if not os.path.exists(data_dir):
+        try:
+            os.makedirs(data_dir)
+            print(f"Created directory: {data_dir}")
+        except OSError as e:
+            print(f"Error creating directory {data_dir}: {e}")
+            return # Stop if directory creation fails
+
+    # Call create_database(DB_FILE)
+    # This function already prints success or error messages.
+    # It also handles its own connection opening and closing for file-based DBs.
     create_database(DB_FILE)
 
-    # Re-open connection for seeding, specific to the main block's operation
-    main_conn = None
+    # Establish a new connection to DB_FILE for seeding
+    conn = None
     try:
-        main_conn = sqlite3.connect(DB_FILE)
-        # seed_initial_plans(main_conn)
+        conn = sqlite3.connect(DB_FILE)
+        # If the connection is successful, call seed_initial_plans(conn)
+        seed_initial_plans(conn)
+        print(f"Database initialized and seeded at {DB_FILE}.")
     except sqlite3.Error as e:
-        print(f"Error connecting to DB or seeding plans in main block: {e}")
+        print(f"Error during database initialization or seeding: {e}")
     finally:
-        if main_conn:
-            main_conn.close()
+        # Ensure the connection is closed in a finally block
+        if conn:
+            conn.close()
 
+if __name__ == '__main__':
+    initialize_database()
     print("Database setup complete.")
