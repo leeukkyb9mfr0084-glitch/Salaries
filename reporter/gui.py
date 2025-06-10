@@ -1655,6 +1655,58 @@ class App(customtkinter.CTk):
         status_message = self.controller.get_book_status_action(year_int, month_int)
         self.book_status_display_label.configure(text=status_message, text_color="white")
 
+    def _handle_close_books_action(self):
+        """Handles the close books button click, including confirmation."""
+        year_str = self.book_closing_year_entry.get().strip()
+        month_str = self.book_closing_month_var.get()
+        try:
+            year_int = int(year_str)
+            month_int = int(month_str)
+            if not (2000 <= year_int <= 2100): # Basic year validation
+                self.book_status_display_label.configure(text="Invalid year for closing books.", text_color="red")
+                return
+            month_key = f"{year_int:04d}-{month_int:02d}"
+        except ValueError:
+            self.book_status_display_label.configure(text="Year and month must be valid numbers.", text_color="red")
+            return
+
+        confirm = messagebox.askyesno("Confirm Close Books",
+                                      f"Are you sure you want to close the books for {month_key}?\n"
+                                      "This will prevent new transactions or modifications for this month.")
+        if confirm:
+            success, message = self.controller.close_books_action(year_int, month_int)
+            self.book_status_display_label.configure(text=message, text_color="green" if success else "red")
+            if success: # Refresh status
+                self._handle_check_book_status()
+        else:
+            self.book_status_display_label.configure(text="Book closing cancelled.", text_color="grey")
+
+    def _handle_open_books_action(self):
+        """Handles the re-open books button click, including confirmation."""
+        year_str = self.book_closing_year_entry.get().strip()
+        month_str = self.book_closing_month_var.get()
+        try:
+            year_int = int(year_str)
+            month_int = int(month_str)
+            if not (2000 <= year_int <= 2100): # Basic year validation
+                self.book_status_display_label.configure(text="Invalid year for re-opening books.", text_color="red")
+                return
+            month_key = f"{year_int:04d}-{month_int:02d}"
+        except ValueError:
+            self.book_status_display_label.configure(text="Year and month must be valid numbers.", text_color="red")
+            return
+
+        confirm = messagebox.askyesno("Confirm Re-open Books",
+                                      f"Are you sure you want to re-open the books for {month_key}?\n"
+                                      "This will allow new transactions and modifications for this month.")
+        if confirm:
+            success, message = self.controller.open_books_action(year_int, month_int)
+            self.book_status_display_label.configure(text=message, text_color="green" if success else "red")
+            if success: # Refresh status
+                self._handle_check_book_status()
+        else:
+            self.book_status_display_label.configure(text="Book re-opening cancelled.", text_color="grey")
+
     def on_save_membership_click(self):
         """Handles the click event for the 'Save Membership' button."""
         membership_type = self.membership_type_var.get()
