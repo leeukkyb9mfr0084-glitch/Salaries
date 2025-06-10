@@ -405,9 +405,6 @@ class FletAppView(ft.Container):
         super().__init__() # Calls ft.Container.__init__
         self.controller = GuiController()
         # self.selected_member_id_flet: Optional[int] = None # Moved to MembershipTab
-        self.selected_transaction_id_flet: Optional[int] = None
-        self.selected_plan_id_flet: Optional[int] = None
-        self.current_plan_id_to_update_flet: Optional[int] = None
         # self.selected_start_date_flet: Optional[date] = None # Managed by MembershipTab locally
         # self.selected_payment_date_flet: Optional[date] = None # Managed by MembershipTab locally
         # self.active_date_picker_target: Optional[str] = None # Managed by MembershipTab locally
@@ -415,18 +412,11 @@ class FletAppView(ft.Container):
 
         # UI declarations
         # self.member_actions_feedback_text: Optional[ft.Text] = None # Moved to MembershipTab
-        self.history_actions_feedback_text: Optional[ft.Text] = None
         # self.delete_member_button_flet: Optional[ft.ElevatedButton] = None # Moved to MembershipTab
-        self.delete_transaction_button_flet: Optional[ft.ElevatedButton] = None
         # self.member_name_input: Optional[ft.TextField] = None # Moved to MembershipTab
         # self.member_phone_input: Optional[ft.TextField] = None # Moved to MembershipTab
         # self.add_member_button: Optional[ft.ElevatedButton] = None # Moved to MembershipTab
         # self.member_form_feedback_text: Optional[ft.Text] = None # Moved to MembershipTab (specific instance)
-        self.history_name_filter_input: Optional[ft.TextField] = None
-        self.history_phone_filter_input: Optional[ft.TextField] = None
-        self.history_join_date_filter_input: Optional[ft.TextField] = None
-        self.apply_history_filters_button: Optional[ft.ElevatedButton] = None
-        self.clear_history_filters_button: Optional[ft.ElevatedButton] = None
         # self.membership_type_dropdown: Optional[ft.Dropdown] = None # Moved to MembershipTab
         # self.membership_member_dropdown: Optional[ft.Dropdown] = None # Moved to MembershipTab
         # self.membership_plan_dropdown: Optional[ft.Dropdown] = None # Moved to MembershipTab
@@ -449,7 +439,6 @@ class FletAppView(ft.Container):
         self.finance_report_feedback_text: Optional[ft.Text] = None
         # self.members_table_flet: Optional[ft.DataTable] = None # Moved to MembershipTab
         # self.member_specific_history_table_flet: Optional[ft.DataTable] = None # Moved to MembershipTab
-        self.full_history_table_flet: Optional[ft.DataTable] = None
         self.pending_renewals_table_flet: Optional[ft.DataTable] = None
         self.tabs_control: Optional[ft.Tabs] = None
 
@@ -465,112 +454,6 @@ class FletAppView(ft.Container):
 
 
     # Event Handlers and Helper Methods (methods specific to MembershipTab have been moved)
-    def on_full_history_select_changed(self, e: ft.ControlEvent):
-        """Handles row selection changes in the full_history_table_flet."""
-        selected_index_str = e.data
-        if selected_index_str:
-            try:
-                selected_index = int(selected_index_str)
-                if 0 <= selected_index < len(self.full_history_table_flet.rows):
-                    selected_row = self.full_history_table_flet.rows[selected_index]
-                    txn_id_cell = selected_row.cells[0]
-                    if isinstance(txn_id_cell.content, ft.Text):
-                        self.selected_transaction_id_flet = int(txn_id_cell.content.value)
-                    else:
-                        self.selected_transaction_id_flet = None
-                else:
-                    self.selected_transaction_id_flet = None
-            except ValueError:
-                self.selected_transaction_id_flet = None
-            except Exception:
-                self.selected_transaction_id_flet = None
-        else:
-            self.selected_transaction_id_flet = None
-        # print(f"DEBUG: FletAppView - Selected Transaction ID: {self.selected_transaction_id_flet}")
-        # self.update()
-
-    def _get_membership_status_flet(self, end_date_str: Optional[str]) -> str:
-        """Helper to determine membership status based on end date string.
-           This can remain if other tabs use it, or be moved/duplicated if only used by one tab's logic.
-           For now, keeping it here as full_history_table_flet uses it.
-        """
-        if not end_date_str or end_date_str.lower() == "n/a" or end_date_str.strip() == "":
-            return "N/A"
-        try:
-            end_date_obj = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-            return "Active" if end_date_obj >= date.today() else "Inactive"
-        except ValueError:
-            return "Invalid Date"
-
-    def refresh_membership_history_display_flet(self, transactions_list: Optional[list] = None):
-        """Populates the full_history_table_flet with transaction data."""
-        if not hasattr(self, 'full_history_table_flet') or self.full_history_table_flet is None:
-            return # Table not initialized yet
-
-        self.full_history_table_flet.rows.clear()
-        if transactions_list is None:
-            transactions_data = self.controller.get_filtered_transaction_history(None, None, None)
-        else:
-            transactions_data = transactions_list
-
-        if not transactions_data:
-            self.full_history_table_flet.rows.append(
-                ft.DataRow(cells=[ft.DataCell(ft.Text("No transaction records found."), colspan=len(self.full_history_table_flet.columns))])
-            )
-        else:
-            for record in transactions_data:
-                (transaction_id, _member_id, transaction_type, plan_id, payment_date,
-                 start_date, end_date, amount_paid, payment_method_db, sessions,
-                 client_name, phone, join_date) = record
-                plan_id_or_sessions_display = str(plan_id) if transaction_type == "Group Class" and plan_id is not None else (str(sessions) if transaction_type == "Personal Training" and sessions is not None else "N/A")
-                amount_paid_formatted = f"{float(amount_paid):.2f}" if amount_paid is not None else "0.00"
-                end_date_display = str(end_date) if end_date is not None else "N/A"
-                status = self._get_membership_status_flet(str(end_date) if end_date else None)
-                ordered_values = [
-                    str(transaction_id), str(client_name or "N/A"), str(phone or "N/A"), str(join_date or "N/A"),
-                    str(transaction_type or "N/A"), amount_paid_formatted, str(payment_date or "N/A"),
-                    str(start_date or "N/A"), end_date_display, status, plan_id_or_sessions_display,
-                    str(payment_method_db or "N/A")
-                ]
-                data_cells = [ft.DataCell(ft.Text(value)) for value in ordered_values]
-                self.full_history_table_flet.rows.append(ft.DataRow(cells=data_cells))
-
-        if self.full_history_table_flet.page: self.full_history_table_flet.update()
-        # self.update()
-
-    def apply_history_filters_flet(self, e):
-        name_filter = self.history_name_filter_input.value or None
-        phone_filter = self.history_phone_filter_input.value or None
-        join_date_filter = self.history_join_date_filter_input.value or None
-        if join_date_filter:
-            try:
-                datetime.strptime(join_date_filter, '%Y-%m-%d')
-            except ValueError:
-                self.history_actions_feedback_text.value = "Error: Invalid Join Date format. Use YYYY-MM-DD."
-                self.history_actions_feedback_text.color = ft.colors.RED
-                if self.history_actions_feedback_text.page: self.history_actions_feedback_text.update()
-                return
-        filtered_data = self.controller.get_filtered_transaction_history(name_filter, phone_filter, join_date_filter)
-        self.refresh_membership_history_display_flet(filtered_data)
-        feedback_msg = f"Filters applied. Found {len(filtered_data)} records." if filtered_data else "No results for current filters."
-        self.history_actions_feedback_text.value = feedback_msg
-        self.history_actions_feedback_text.color = ft.colors.GREEN if filtered_data else ft.colors.ORANGE
-        if self.history_actions_feedback_text.page: self.history_actions_feedback_text.update()
-        # self.update()
-
-    def clear_history_filters_flet(self, e):
-        self.history_name_filter_input.value = ""
-        self.history_phone_filter_input.value = ""
-        self.history_join_date_filter_input.value = ""
-        if self.history_name_filter_input.page: self.history_name_filter_input.update()
-        if self.history_phone_filter_input.page: self.history_phone_filter_input.update()
-        if self.history_join_date_filter_input.page: self.history_join_date_filter_input.update()
-        self.refresh_membership_history_display_flet()
-        self.history_actions_feedback_text.value = "Filters cleared. Displaying all history."
-        self.history_actions_feedback_text.color = ft.colors.BLUE
-        if self.history_actions_feedback_text.page: self.history_actions_feedback_text.update()
-        # self.update()
-
     def display_pending_renewals_flet(self): # This seems to be for the "Reporting" tab, keep here.
         if not hasattr(self, 'pending_renewals_table_flet') or self.pending_renewals_table_flet is None: return
         success, message, renewals_data = self.controller.generate_pending_renewals_action()
@@ -667,6 +550,10 @@ class FletAppView(ft.Container):
         if hasattr(self, 'membership_tab_ref'):
             self.membership_tab_ref.populate_plan_dropdowns_flet()
 
+    def refresh_member_specific_history_after_deletion(self, member_id: Optional[int]):
+        if hasattr(self, 'membership_tab_ref') and self.membership_tab_ref:
+            self.membership_tab_ref.display_membership_history_flet(member_id)
+
     def build(self):
         # DatePicker and FilePicker are already initialized in __init__
         # self.date_picker = ft.DatePicker(...) # Removed specific handlers
@@ -674,20 +561,13 @@ class FletAppView(ft.Container):
 
         # UI Element Initializations for controls remaining in FletAppView
         # self.member_actions_feedback_text = ft.Text("") # Moved
-        self.history_actions_feedback_text = ft.Text("")
 
         # self.delete_member_button_flet = ft.ElevatedButton(...) # Moved
-        self.delete_transaction_button_flet = ft.ElevatedButton(text="Delete Selected Transaction", on_click=self.on_delete_selected_transaction_click_flet)
 
         # Member form controls moved to MembershipTab
         # Plan form controls are now part of PlansTab
 
         # History filter controls remain for Membership History Tab
-        self.history_name_filter_input = ft.TextField(label="Filter by Name")
-        self.history_phone_filter_input = ft.TextField(label="Filter by Phone")
-        self.history_join_date_filter_input = ft.TextField(label="Filter by Join Date (YYYY-MM-DD)")
-        self.apply_history_filters_button = ft.ElevatedButton(text="Apply History Filters", on_click=self.apply_history_filters_flet)
-        self.clear_history_filters_button = ft.ElevatedButton(text="Clear History Filters", on_click=self.clear_history_filters_flet)
 
         # Membership form controls moved to MembershipTab
 
@@ -708,15 +588,6 @@ class FletAppView(ft.Container):
 
         # Tables: members_table_flet and member_specific_history_table_flet moved to MembershipTab
         # Full history table remains for Membership History Tab
-        self.full_history_table_flet = ft.DataTable(
-            columns=[
-                ft.DataColumn(ft.Text("TXN ID")), ft.DataColumn(ft.Text("Name")), ft.DataColumn(ft.Text("Phone")),
-                ft.DataColumn(ft.Text("Joined")), ft.DataColumn(ft.Text("Type")), ft.DataColumn(ft.Text("Amount ($)")),
-                ft.DataColumn(ft.Text("Paid Date")), ft.DataColumn(ft.Text("Start Date")), ft.DataColumn(ft.Text("End Date")),
-                ft.DataColumn(ft.Text("Status")), ft.DataColumn(ft.Text("Plan/Sessions")), ft.DataColumn(ft.Text("Pay Method")),
-            ],
-            rows=[], on_select_changed=self.on_full_history_select_changed
-        )
         # Plans table is now part of PlansTab
         # Pending renewals table remains for Reporting Tab
         self.pending_renewals_table_flet = ft.DataTable(
@@ -732,6 +603,7 @@ class FletAppView(ft.Container):
         # Instantiate SettingsTab
         self.settings_tab_ref = SettingsTab(self.controller)
         self.plans_tab_ref = PlansTab(self.controller, self)
+        self.history_tab_ref = HistoryTab(self.controller, self.date_picker, self)
 
 
         # UI Assembly
@@ -745,30 +617,7 @@ class FletAppView(ft.Container):
                 ),
                 ft.Tab(
                     text="Membership History",
-                    content=ft.Column(
-                        controls=[
-                            ft.Container(
-                                content=ft.Column(
-                                    controls=[
-                                        ft.Text("Filter Transaction History", weight=ft.FontWeight.BOLD),
-                                        self.history_name_filter_input,
-                                        self.history_phone_filter_input,
-                                        self.history_join_date_filter_input,
-                                        ft.Row(
-                                            controls=[self.apply_history_filters_button, self.clear_history_filters_button],
-                                            alignment=ft.MainAxisAlignment.START,
-                                        ),
-                                    ], spacing=10
-                                ), bgcolor=ft.colors.GREEN_200, padding=10, border_radius=5,
-                            ),
-                            ft.Container(
-                                content=ft.Column(controls=[self.full_history_table_flet], scroll=ft.ScrollMode.AUTO, expand=True),
-                                expand=4, bgcolor=ft.colors.GREEN_300, padding=10, alignment=ft.alignment.top_center
-                            ),
-                            self.delete_transaction_button_flet,
-                            self.history_actions_feedback_text,
-                        ], spacing=10
-                    )
+                    content=self.history_tab_ref
                 ),
                 ft.Tab(
                     text="Plan Management",
@@ -815,8 +664,6 @@ class FletAppView(ft.Container):
 
         # Initial data population for tables remaining in FletAppView
         # self.display_all_members_flet() # Moved to MembershipTab
-        self.refresh_membership_history_display_flet() # For full history table
-        self.display_all_plans_flet() # For plans table
 
         # Populate dropdowns related to MembershipTab are handled within MembershipTab itself.
         # self.populate_member_dropdowns_flet() # Moved to MembershipTab
@@ -977,59 +824,6 @@ if __name__ == "__main__":
         self.member_actions_feedback_text.update()
         if self.members_table_flet: self.members_table_flet.update() # Update table
         self.update() # General view update
-
-    def on_delete_selected_transaction_click_flet(self, e):
-        if self.selected_transaction_id_flet is None:
-            self.history_actions_feedback_text.value = "No transaction selected to delete."
-            self.history_actions_feedback_text.color = ft.colors.ORANGE
-            self.history_actions_feedback_text.update()
-            return
-
-        # Transaction details for confirmation are not easily fetched without another controller call or complex table parsing.
-        # Using just the ID is acceptable for now.
-        dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Confirm Delete Transaction"),
-            content=ft.Text(f"Are you sure you want to PERMANENTLY delete transaction ID: {self.selected_transaction_id_flet}? This action cannot be undone."),
-            actions=[
-                ft.TextButton("Yes, Delete Transaction", on_click=lambda ev: self._perform_delete_transaction_action(True, self.selected_transaction_id_flet)),
-                ft.TextButton("No, Cancel", on_click=lambda ev: self._perform_delete_transaction_action(False, self.selected_transaction_id_flet)),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-        if self.page:
-            self.page.dialog = dialog
-            dialog.open = True
-            self.page.update()
-
-    def _perform_delete_transaction_action(self, confirmed: bool, transaction_id: int):
-        if self.page.dialog:
-            self.page.dialog.open = False
-            self.page.update()
-
-        if confirmed:
-            # Preserve current member selection if any, to refresh their specific history if needed
-            member_id_for_specific_history_refresh = self.selected_member_id_flet
-
-            success, message = self.controller.delete_transaction_action(transaction_id)
-            self.history_actions_feedback_text.value = message
-            self.history_actions_feedback_text.color = ft.colors.GREEN if success else ft.colors.RED
-            if success:
-                self.selected_transaction_id_flet = None
-                # self.full_history_table_flet.selected_index = None # As above
-                self.refresh_membership_history_display_flet() # Refresh full history table
-
-                # If a member was selected and their specific history is shown, refresh it
-                if member_id_for_specific_history_refresh is not None:
-                    self.display_membership_history_flet(member_id_for_specific_history_refresh)
-        else:
-            self.history_actions_feedback_text.value = "Transaction deletion cancelled."
-            self.history_actions_feedback_text.color = ft.colors.ORANGE
-
-        self.history_actions_feedback_text.update()
-        if self.full_history_table_flet: self.full_history_table_flet.update()
-        self.update()
-
 
 # Final check on GuiController.save_membership_action:
 # It was returning `success` which was a tuple (bool, str) instead of just the boolean.
