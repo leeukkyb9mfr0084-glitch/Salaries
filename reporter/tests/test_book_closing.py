@@ -116,8 +116,9 @@ def test_add_transaction_to_closed_month(setup_database):
 
     plan_name = "Test Plan for Closed Month"
     plan_duration = 30
-    plan_id = database_manager.add_plan(plan_name, plan_duration)
-    assert plan_id is not None, "Test plan setup failed"
+    success_add_plan, message_add_plan, plan_id = database_manager.add_plan(plan_name, plan_duration)
+    assert success_add_plan is True, f"Failed to add plan during test setup: {message_add_plan}"
+    assert plan_id is not None, "Test plan setup failed to return a valid plan_id"
 
     # 2. Close the books for the test month
     close_success, _ = controller.close_books_action(test_year, test_month)
@@ -169,12 +170,21 @@ def test_delete_transaction_from_closed_month(setup_database):
     month_key = f"{test_year:04d}-{test_month:02d}"
 
     # 1. Add a dummy member and plan
-    member_id = database_manager.add_member_to_db("Delete Test Member", "789012345")
+    member_name_del = "Delete Test Member"
+    member_phone_del = "789012345"
+    # Assuming add_member_to_db now returns (bool, str)
+    success_add_member_del, _ = database_manager.add_member_to_db(member_name_del, member_phone_del)
+    assert success_add_member_del is True, "Failed to add member for delete test setup"
     cursor = conn.cursor()
-    cursor.execute("SELECT member_id FROM members WHERE phone = ?", ("789012345",))
-    member_id = cursor.fetchone()[0]
+    cursor.execute("SELECT member_id FROM members WHERE phone = ?", (member_phone_del,))
+    member_id_row = cursor.fetchone()
+    assert member_id_row is not None, "Failed to retrieve member_id for delete test setup"
+    member_id = member_id_row[0]
 
-    plan_id = database_manager.add_plan("Delete Test Plan", 30)
+    success_add_plan_del, message_add_plan_del, plan_id_del = database_manager.add_plan("Delete Test Plan", 30)
+    assert success_add_plan_del is True, f"Failed to add plan for delete test setup: {message_add_plan_del}"
+    assert plan_id_del is not None, "Test plan setup for delete test failed to return a valid plan_id"
+
 
     # 2. Add a transaction in an open month first
     # Note: save_membership_action returns tuple (bool, str). add_transaction directly might be simpler here
@@ -185,7 +195,7 @@ def test_delete_transaction_from_closed_month(setup_database):
     add_tx_success, _ = database_manager.add_transaction(
         transaction_type="Group Class",
         member_id=member_id,
-        plan_id=plan_id,
+        plan_id=plan_id_del,
         payment_date=payment_date_str,
         start_date=payment_date_str, # For simplicity
         amount_paid=50.0,

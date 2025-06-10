@@ -34,19 +34,18 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
     plan_duration_days = 30
 
     # Add plan and member
-    if not database_manager.add_member_to_db(member_name_renew, member_phone_renew):
+    add_member_success, _ = database_manager.add_member_to_db(member_name_renew, member_phone_renew)
+    if not add_member_success:
         print(f"FAILURE: Could not add member '{member_name_renew}'.")
-        cleanup_simulation_environment()
         return
     member_id_renew = database_manager.get_all_members(phone_filter=member_phone_renew)[0][0]
 
-    plan_id_renew = database_manager.add_plan(plan_name_renew, plan_duration_days, is_active=True)
-    if plan_id_renew is None:
+    add_plan_success, _, plan_id_renew_val = database_manager.add_plan(plan_name_renew, plan_duration_days, is_active=True)
+    if not add_plan_success or plan_id_renew_val is None:
         print(f"FAILURE: Could not add plan '{plan_name_renew}'.")
-        cleanup_simulation_environment()
         return
 
-    print(f"Added member '{member_name_renew}' (ID: {member_id_renew}) and plan '{plan_name_renew}' (ID: {plan_id_renew}).")
+    print(f"Added member '{member_name_renew}' (ID: {member_id_renew}) and plan '{plan_name_renew}' (ID: {plan_id_renew_val}).")
 
     # Calculate dates for renewal ~2 months from now
     today = datetime.now()
@@ -61,14 +60,14 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
     payment_date_for_tx = start_date_for_tx - timedelta(days=1) # Payment a day before start
 
     tx_details_renew = {
-        'transaction_type': 'Group Class', 'member_id': member_id_renew, 'plan_id': plan_id_renew,
+        'transaction_type': 'Group Class', 'member_id': member_id_renew, 'plan_id': plan_id_renew_val, # Use integer ID
         'payment_date': payment_date_for_tx.strftime('%Y-%m-%d'),
         'start_date': start_date_for_tx.strftime('%Y-%m-%d'),
         'amount_paid': 120.00, 'payment_method': "SimRenewCash"
     }
-    if not database_manager.add_transaction(**tx_details_renew):
+    add_tx_success, _ = database_manager.add_transaction(**tx_details_renew)
+    if not add_tx_success:
         print(f"FAILURE: Could not add transaction for member ID {member_id_renew} to set up renewal.")
-        cleanup_simulation_environment()
         return
     print(f"Added transaction for member {member_name_renew} with end date {end_date_target.strftime('%Y-%m-%d')}.")
 
