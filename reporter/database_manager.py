@@ -266,10 +266,10 @@ def get_all_plans_with_inactive() -> list:
 
 def add_transaction(transaction_type: str, member_id: int, start_date: str, amount_paid: float,
                     plan_id: int = None, sessions: int = None, payment_method: str = None,
-                    payment_date: str = None, end_date_override: str = None) -> bool:
+                    payment_date: str = None, end_date: str = None) -> bool: # Changed end_date_override to end_date
     """
     Adds a new transaction to the database.
-    For 'Group Class' transactions, calculates end_date based on plan_id's duration, unless end_date_override is provided.
+    For 'Group Class' transactions, if end_date is not provided, it's calculated based on plan_id's duration.
     Updates member's join_date if the transaction's start_date is earlier.
     Args:
         transaction_type (str): Type of transaction (e.g., 'Group Class', 'Personal Training').
@@ -298,35 +298,36 @@ def add_transaction(transaction_type: str, member_id: int, start_date: str, amou
         if payment_date is None:
             payment_date = start_date
 
-        end_date = None
-        if transaction_type == 'Group Class':
-            if end_date_override:
-                # Validate end_date_override format if necessary, or trust it's 'YYYY-MM-DD'
-                try:
-                    datetime.strptime(end_date_override, '%Y-%m-%d') # Validate format
-                    end_date = end_date_override
-                except ValueError:
-                    print(f"Warning: Invalid end_date_override format '{end_date_override}'. It will be ignored.")
-                    # Proceed to calculate end_date based on plan duration
-                    end_date = None # Ensure it's None so the block below executes
+        # Use the provided end_date directly if available.
+        # For 'Group Class', if end_date is not provided or invalid, calculate it.
+        final_end_date = end_date
 
-            if end_date is None: # If override not provided or was invalid
+        if transaction_type == 'Group Class':
+            if final_end_date:
+                try:
+                    datetime.strptime(final_end_date, '%Y-%m-%d') # Validate format
+                except ValueError:
+                    print(f"Warning: Invalid supplied end_date format '{final_end_date}'. Will attempt to calculate from plan.")
+                    final_end_date = None # Invalidate to trigger calculation
+
+            if not final_end_date: # If not supplied or was invalid
                 if not plan_id:
-                    print("Error: plan_id is required for Group Class transactions when end_date_override is not used.")
-                    return False # Connection closed in finally
+                    print("Error: plan_id is required for Group Class transactions when end_date is not supplied or invalid.")
+                    return False
 
                 cursor.execute("SELECT duration_days FROM plans WHERE plan_id = ?", (plan_id,))
                 plan_duration_row = cursor.fetchone()
                 if not plan_duration_row:
                     print(f"Error: Plan with ID {plan_id} not found.")
-                    return False # Connection closed in finally
+                    return False
 
                 duration_days = plan_duration_row[0]
                 start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
                 end_date_obj = start_date_obj + timedelta(days=duration_days)
-                end_date = end_date_obj.strftime('%Y-%m-%d')
-        # For other transaction types like 'Personal Training', end_date remains None
-        # unless explicitly handled otherwise, which is current behavior.
+                final_end_date = end_date_obj.strftime('%Y-%m-%d')
+
+        # For 'Personal Training', if an end_date was supplied, it's used. Otherwise, final_end_date remains None.
+        # For other types, final_end_date will be what was passed in (None or a value).
 
         cursor.execute(
             """
@@ -334,7 +335,7 @@ def add_transaction(transaction_type: str, member_id: int, start_date: str, amou
             (member_id, transaction_type, plan_id, payment_date, start_date, end_date, amount_paid, payment_method, sessions)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (member_id, transaction_type, plan_id, payment_date, start_date, end_date, amount_paid, payment_method, sessions)
+            (member_id, transaction_type, plan_id, payment_date, start_date, final_end_date, amount_paid, payment_method, sessions)
         )
 
         _update_member_join_date_if_earlier(member_id, start_date, cursor)
@@ -396,50 +397,37 @@ def get_all_activity_for_member(member_id: int) -> list:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
-def get_pending_renewals(year: int, month: int) -> list:
+def get_pending_renewals() -> list: # Removed year and month parameters
     """
-    Retrieves 'Group Class' transactions ending in the specified year and month.
-    Args:
-        year (int): The target year (e.g., 2023).
-        month (int): The target month (1-12).
+    Retrieves 'Group Class' transactions with end_date within the next 30 days.
     Returns:
         list: A list of tuples, where each tuple contains:
               (client_name, phone, plan_name, end_date)
-              Ordered by end_date, then client_name. Returns empty list on error or if none found.
+              Ordered by end_date. Returns empty list on error or if none found.
     """
     conn = None
     try:
-        if not (1 <= month <= 12):
-            print(f"Error: Invalid month '{month}'. Must be between 1 and 12.", file=sys.stderr)
-            return []
-
-        month_str = f"{month:02d}" # Format month to two digits
-
         conn = get_db_connection()
         cursor = conn.cursor()
 
         query = """
-            SELECT
-                m.client_name,
-                m.phone,
-                p.plan_name,
-                t.end_date
+            SELECT m.client_name, m.phone, p.plan_name, t.end_date
             FROM transactions t
             JOIN members m ON t.member_id = m.member_id
             JOIN plans p ON t.plan_id = p.plan_id
-            WHERE t.transaction_type = 'Group Class'
-              AND strftime('%Y', t.end_date) = ?
-              AND strftime('%m', t.end_date) = ?
-            ORDER BY t.end_date ASC, m.client_name ASC;
+            WHERE
+                t.end_date >= CURRENT_DATE AND
+                t.end_date <= DATE('now', '+30 days')
+            ORDER BY t.end_date ASC
         """
-        cursor.execute(query, (str(year), month_str)) # Pass year as string
+        cursor.execute(query) # No parameters needed for this query
         renewals = cursor.fetchall()
         return renewals
     except sqlite3.Error as e: # Catch specific sqlite errors
-        print(f"Database error while fetching pending renewals for {year}-{month_str}: {e}", file=sys.stderr)
+        print(f"Database error while fetching pending renewals: {e}", file=sys.stderr)
         return []
     except Exception as e: # Catch any other unexpected errors
-        print(f"An unexpected error occurred in get_pending_renewals for {year}-{month_str}: {e}", file=sys.stderr)
+        print(f"An unexpected error occurred in get_pending_renewals: {e}", file=sys.stderr)
         return []
     finally:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
