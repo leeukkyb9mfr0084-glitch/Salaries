@@ -1,5 +1,75 @@
 #!/bin/bash
 
+# Ensure script exits on error
+set -e
+
+# Initialize LOG_FILE early
+TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+LOG_FILE="test_results_${TIMESTAMP}.log"
+echo "Logging results to ${LOG_FILE}" # Announce log file at the very start
+
+echo "Installing dependencies..." | tee -a ${LOG_FILE}
+
+# Install python3.10-tk specifically
+echo "Installing python3.10-tk..." | tee -a ${LOG_FILE}
+sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y python3.10-tk
+
+# Install customtkinter and other dependencies
+if [ -f "requirements.txt" ]; then
+  pip install -r requirements.txt --user
+else
+  pip install customtkinter --user
+fi
+
+# Add .local/bin to PATH if it's not already there, for scripts installed by pip --user
+if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+    export PATH="$HOME/.local/bin:$PATH"
+    echo "Updated PATH: $PATH"
+fi
+
+echo "Dependencies installed."
+
+echo "Setting up Xvfb for headless GUI tests..."
+sudo apt-get install -y xvfb
+
+# Clean up previous Xvfb lock file and processes
+echo "Cleaning up any existing Xvfb processes and lock files..."
+sudo rm -f /tmp/.X99-lock
+# Kill any processes that might be listening on the X11 port for display 99
+# Use pkill to find processes associated with Xvfb display 99
+sudo pkill -f "Xvfb :99" || echo "No existing Xvfb process found for display 99."
+sleep 1 # Give a moment for processes to terminate
+
+export DISPLAY=:99
+echo "Starting Xvfb on display $DISPLAY..."
+Xvfb $DISPLAY -screen 0 1280x1024x24 &
+XVFB_PID=$!
+# Wait a bit for Xvfb to start
+sleep 3
+# Check if Xvfb started successfully
+if ! ps -p $XVFB_PID > /dev/null; then
+    echo "Xvfb failed to start. Check Xorg.0.log or similar for errors."
+    # Attempt to read Xorg log if it exists for more details
+    if [ -f "/var/log/Xorg.0.log" ]; then # Path might vary
+        echo "Contents of /var/log/Xorg.0.log:"
+        cat /var/log/Xorg.0.log >> ${LOG_FILE}
+    fi
+    exit 1
+fi
+echo "Xvfb started with PID $XVFB_PID."
+
+echo "Directly testing tkinter import with /usr/bin/python3..." | tee -a ${LOG_FILE}
+if /usr/bin/python3 -c "import tkinter; print('tkinter imported successfully')" >> ${LOG_FILE} 2>&1; then
+    echo "Direct tkinter import successful." | tee -a ${LOG_FILE}
+else
+    echo "CRITICAL: Direct tkinter import FAILED." | tee -a ${LOG_FILE}
+    echo "Python version: $(/usr/bin/python3 --version)" | tee -a ${LOG_FILE}
+    echo "Sys Path: " >> ${LOG_FILE}
+    /usr/bin/python3 -c "import sys; print(sys.path)" >> ${LOG_FILE} 2>&1
+    echo "Exiting due to tkinter import failure." | tee -a ${LOG_FILE}
+    exit 1
+fi
+
 echo "Starting test execution..."
 
 # 1. Delete old log files
@@ -18,7 +88,8 @@ echo "
 --- Running Pytest Unit & Integration Tests ---" | tee -a ${LOG_FILE}
 # Ensure pytest runs from the project root so 'reporter.tests' is found.
 # Add -v for verbose output, and --tb=short for shorter tracebacks.
-pytest -v --tb=short reporter/tests/ >> ${LOG_FILE} 2>&1
+# Explicitly use /usr/bin/python3 to ensure system tkinter is accessible
+/usr/bin/python3 -m pytest -v --tb=short reporter/tests/ >> ${LOG_FILE} 2>&1
 PYTEST_EXIT_CODE=$? # Capture pytest exit code
 
 echo "Pytest execution finished."
@@ -68,3 +139,7 @@ else
 fi
 
 echo "Test execution complete. See ${LOG_FILE} for details."
+
+# Clean up Xvfb
+echo "Stopping Xvfb..."
+kill $XVFB_PID || echo "Xvfb already stopped or failed to stop."
