@@ -2,62 +2,60 @@ import pytest
 from unittest.mock import patch, MagicMock
 import os
 import sys
-from datetime import date, timedelta, datetime # Added datetime
+from unittest.mock import patch, MagicMock # Ensure MagicMock is imported
+import os # Ensure os is imported
+from datetime import date, timedelta, datetime
+
+# Proactively mock tkinter and customtkinter modules
+sys.modules['tkinter'] = MagicMock()
+sys.modules['tkinter.messagebox'] = MagicMock()
+sys.modules['customtkinter'] = MagicMock()
+sys.modules['customtkinter.filedialog'] = MagicMock()
+sys.modules['tkcalendar'] = MagicMock() # Mock tkcalendar
+sys.modules['pandas'] = MagicMock() # Mock pandas
+
+# Now that the modules are mocked, we can "import" them
 import tkinter.messagebox as messagebox # For mocking
-from customtkinter import filedialog # For mocking - Changed import style
+from customtkinter import filedialog # For mocking
 
 # Mock tkinter main window classes to prevent actual GUI instantiation
 patch('tkinter.Tk', MagicMock()).start()
 patch('customtkinter.CTk', MagicMock()).start()
+# This patch should now work as customtkinter.filedialog is a MagicMock
+patch('customtkinter.filedialog.asksaveasfilename', MagicMock()).start()
+
 
 # Add project root to sys.path to allow importing reporter modules
 # This assumes the test is run from the project root directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from reporter.gui import GuiController # Changed App to GuiController
+from reporter import database
 from reporter import database_manager
-from reporter.database import create_database
+from reporter.gui import GuiController
 
-# Define a test database for GUI flow tests
-TEST_DB_GUI_FLOWS = 'reporter/tests/test_data_gui_flows/test_gui_flows.db'
-TEST_DB_DIR_GUI_FLOWS = 'reporter/tests/test_data_gui_flows'
-
-@pytest.fixture(autouse=True)
-def setup_teardown_test_db(monkeypatch):
-    # Create directory for test database if it doesn't exist
-    os.makedirs(TEST_DB_DIR_GUI_FLOWS, exist_ok=True)
-
-    # Ensure create_database uses the test DB
-    # Patch DB_FILE in database_manager and database (if used directly for path)
-    monkeypatch.setattr(database_manager, 'DB_FILE', TEST_DB_GUI_FLOWS)
-
-    # For create_database itself, it takes db_name as an argument.
-    # So, we ensure it's called with the test DB path.
-    # If gui.App or other components were to call create_database without arguments,
-    # or expecting a global DB_FILE in reporter.database, that would need patching too.
-    # For now, we assume App operations go through database_manager or direct calls with db_name.
-
-    # Create a clean database for each test
-    conn = create_database(db_name=TEST_DB_GUI_FLOWS)
-    if conn: # For in-memory, it returns a connection
-        conn.close()
-
-    yield # Test runs here
-
-    # Teardown: Remove the test database file and directory
-    if os.path.exists(TEST_DB_GUI_FLOWS):
-        os.remove(TEST_DB_GUI_FLOWS)
-    if os.path.exists(TEST_DB_DIR_GUI_FLOWS) and not os.listdir(TEST_DB_DIR_GUI_FLOWS):
-        os.rmdir(TEST_DB_DIR_GUI_FLOWS)
 
 @pytest.fixture
-def controller_instance(setup_teardown_test_db): # Renamed fixture
-    # This fixture depends on setup_teardown_test_db to ensure DB is ready
-    # No UI mocks needed for GuiController direct testing
-    controller = GuiController()
-    return controller
+def controller_instance(monkeypatch):
+    db_path = os.path.abspath("test_gui_flows.db") # Ensure absolute path
+    if os.path.exists(db_path):
+        os.remove(db_path)
 
-def test_add_member_flow(controller_instance): # Use renamed fixture
+    # Patch DB_FILE in database_manager for the scope of this fixture
+    monkeypatch.setattr(database_manager, 'DB_FILE', db_path)
+
+    database.create_database(db_path) # This creates the db at the specified path
+
+    controller = GuiController()
+    yield controller
+
+    # Teardown
+    if os.path.exists(db_path):
+        print(f"Tearing down, removing {db_path}")
+        os.remove(db_path)
+    else:
+        print(f"Tearing down, {db_path} does not exist.")
+
+def test_add_member_flow(controller_instance):
     controller = controller_instance # Use controller instance
 
     # Call the controller method directly
@@ -441,8 +439,7 @@ def test_generate_finance_report_excel_action_flow(mock_asksaveasfilename, contr
     )
 
     # 2. Mock asksaveasfilename
-    # Ensure TEST_DB_DIR_GUI_FLOWS is created by the fixture
-    test_report_filename = os.path.join(TEST_DB_DIR_GUI_FLOWS, "test_finance_report.xlsx")
+    test_report_filename = os.path.abspath("test_finance_report.xlsx") # Ensure absolute path
     mock_asksaveasfilename.return_value = test_report_filename
 
     # 3. Call controller action
