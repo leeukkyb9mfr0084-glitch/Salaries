@@ -53,8 +53,9 @@ def create_database(db_name: str):
         # Create monthly_book_status table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS monthly_book_status (
-            month_key TEXT PRIMARY KEY, -- Format: "YYYY-MM", e.g., "2025-07"
-            status TEXT NOT NULL      -- Values: "open" or "closed"
+            month_key TEXT PRIMARY KEY, -- e.g., "2025-06"
+            status TEXT NOT NULL CHECK(status IN ('open', 'closed')),
+            closed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
         conn.commit()

@@ -3,9 +3,10 @@
 # Ensure script exits on error
 set -e
 
-# Initialize LOG_FILE early
-TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-LOG_FILE="test_results_${TIMESTAMP}.log"
+# Initialize LOG_FILE
+LOG_FILE="test_results.log"
+# Clear the log file at the beginning of the script run
+rm -f ${LOG_FILE}
 echo "Logging results to ${LOG_FILE}" # Announce log file at the very start
 
 echo "Installing dependencies..." | tee -a ${LOG_FILE}
@@ -72,18 +73,9 @@ fi
 
 echo "Starting test execution..."
 
-# 1. Delete old log files
-# Use find to delete only files matching the pattern to avoid deleting other .log files
-find . -maxdepth 1 -name 'test_results_*.log' -delete
-echo "Old test_results_*.log files deleted."
+# Note: Old log file deletion for pattern 'test_results_*.log' is removed.
+# LOG_FILE is now consistently 'test_results.log' and cleared at the start.
 
-# 2. Set up a new timestamped log file
-TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-LOG_FILE="test_results_${TIMESTAMP}.log"
-
-echo "Logging results to ${LOG_FILE}"
-
-# 3. Run pytest and append output to log
 echo "
 --- Running Pytest Unit & Integration Tests ---" | tee -a ${LOG_FILE}
 # Ensure pytest runs from the project root so 'reporter.tests' is found.
