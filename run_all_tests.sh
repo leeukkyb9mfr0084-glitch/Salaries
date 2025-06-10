@@ -4,7 +4,7 @@
 set -e
 
 # Initialize LOG_FILE
-LOG_FILE="test_results.log"
+LOG_FILE="reporter/tests/test_results.log"
 # Clear the log file at the beginning of the script run
 rm -f ${LOG_FILE}
 echo "Logging results to ${LOG_FILE}" # Announce log file at the very start
