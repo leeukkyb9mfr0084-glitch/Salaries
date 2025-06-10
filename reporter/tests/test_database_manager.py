@@ -13,7 +13,8 @@ from reporter.database_manager import (
     get_all_activity_for_member,
     get_pending_renewals, get_finance_report, # add_pt_booking, # Removed
     add_transaction, # Added
-    delete_member, delete_transaction, delete_plan # Added for delete tests
+    delete_member, delete_transaction, delete_plan, # Added for delete tests
+    get_book_status, set_book_status # Added for book closing tests
 )
 # Module needed for setting up test DB
 from reporter.database import create_database, seed_initial_plans
@@ -1325,3 +1326,231 @@ def test_get_transactions_with_member_details_no_results(db_conn):
 
     results = get_transactions_with_member_details(name_filter="Alice", phone_filter="999-999-9999") # Alice exists, but not this phone
     assert len(results) == 0, "Should return 0 transactions for existing name but non-existent phone"
+
+
+# --- Tests for Monthly Book Closing ---
+
+def test_get_book_status_non_existent(db_conn):
+    """Tests get_book_status for a month_key that doesn't exist, expecting 'open'."""
+    month_key = "2099-12" # Assuming this key won't exist
+    status = get_book_status(month_key)
+    assert status == "open", f"Expected 'open' for non-existent month_key '{month_key}', got '{status}'"
+
+def test_set_and_get_book_status_closed(db_conn):
+    """Tests setting a month's book status to 'closed' and then retrieving it."""
+    month_key = "2023-11"
+
+    # Set status to closed
+    set_success = set_book_status(month_key, "closed")
+    assert set_success is True, f"set_book_status for '{month_key}' to 'closed' should return True."
+
+    # Get status
+    status = get_book_status(month_key)
+    assert status == "closed", f"Expected status 'closed' for '{month_key}', got '{status}'"
+
+def test_set_and_get_book_status_open(db_conn):
+    """Tests setting a month's book status to 'open' and then retrieving it."""
+    month_key = "2023-10"
+
+    # Set status to open (might be default, but explicit set is good)
+    set_success = set_book_status(month_key, "open")
+    assert set_success is True, f"set_book_status for '{month_key}' to 'open' should return True."
+
+    # Get status
+    status = get_book_status(month_key)
+    assert status == "open", f"Expected status 'open' for '{month_key}', got '{status}'"
+
+def test_set_book_status_update_existing(db_conn):
+    """Tests updating an existing month's book status from 'closed' to 'open'."""
+    month_key = "2023-09"
+
+    # Initial set to closed
+    set_initial_success = set_book_status(month_key, "closed")
+    assert set_initial_success is True, "Initial set_book_status to 'closed' failed."
+
+    # Update to open
+    set_update_success = set_book_status(month_key, "open")
+    assert set_update_success is True, "Updating set_book_status to 'open' should return True."
+
+    # Get status
+    status = get_book_status(month_key)
+    assert status == "open", f"Expected status 'open' for '{month_key}' after update, got '{status}'"
+
+    # Verify directly in DB
+    cursor = db_conn.cursor()
+    cursor.execute("SELECT status FROM monthly_book_status WHERE month_key = ?", (month_key,))
+    db_record = cursor.fetchone()
+    assert db_record is not None, f"No record found in DB for month_key '{month_key}'"
+    assert db_record[0] == "open", f"DB status for '{month_key}' should be 'open', got '{db_record[0]}'"
+
+    cursor.execute("SELECT COUNT(*) FROM monthly_book_status WHERE month_key = ?", (month_key,))
+    count = cursor.fetchone()[0]
+    assert count == 1, f"Expected exactly one record for month_key '{month_key}', found {count}"
+
+
+def _setup_member_and_plan_for_transaction_tests(db_conn, member_phone_suffix="TRN"):
+    """Helper to create a member and get a plan_id for transaction tests."""
+    cursor = db_conn.cursor()
+    # Add a member
+    member_name = f"Test Member {member_phone_suffix}"
+    member_phone = f"MEMBER{member_phone_suffix}"
+    add_member_to_db(member_name, member_phone) # Using existing function
+    cursor.execute("SELECT member_id FROM members WHERE phone = ?", (member_phone,))
+    member_id_row = cursor.fetchone()
+    assert member_id_row is not None, "Failed to create member for transaction test."
+    member_id = member_id_row[0]
+
+    # Get a plan_id (assuming plans are seeded by db_conn fixture)
+    cursor.execute("SELECT plan_id FROM plans LIMIT 1")
+    plan_id_row = cursor.fetchone()
+    assert plan_id_row is not None, "No plans found in DB; needed for transaction test."
+    plan_id = plan_id_row[0]
+
+    return member_id, plan_id
+
+def test_add_transaction_when_books_closed(db_conn):
+    """Tests that add_transaction is blocked when books for the payment_date month are closed."""
+    member_id, plan_id = _setup_member_and_plan_for_transaction_tests(db_conn, "BC_ADD")
+
+    month_key_closed = "2024-07"
+    payment_date_in_closed_month = "2024-07-15"
+    start_date = "2024-07-10" # Can be different from payment_date
+
+    assert set_book_status(month_key_closed, "closed") is True, "Failed to close books for the test."
+
+    success, message = add_transaction(
+        transaction_type='Group Class',
+        member_id=member_id,
+        plan_id=plan_id,
+        payment_date=payment_date_in_closed_month,
+        start_date=start_date,
+        amount_paid=100.00,
+        payment_method="Cash"
+    )
+
+    assert success is False, "add_transaction should have failed due to closed books."
+    expected_message = f"Cannot add transaction. Books for {month_key_closed} are closed."
+    # Check if the returned message starts with the expected string, as it might have suffixes from DB manager.
+    assert message.startswith(expected_message), f"Expected message '{expected_message}', got '{message}'"
+
+
+    # Verify no transaction was added
+    cursor = db_conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM transactions WHERE member_id = ? AND payment_date = ?",
+                   (member_id, payment_date_in_closed_month))
+    count = cursor.fetchone()[0]
+    assert count == 0, "Transaction was added despite books being closed."
+
+def test_delete_transaction_when_books_closed(db_conn):
+    """Tests that delete_transaction is blocked when books for the transaction's month are closed."""
+    member_id, plan_id = _setup_member_and_plan_for_transaction_tests(db_conn, "BC_DEL")
+
+    month_key_closed = "2024-08"
+    payment_date_in_closed_month = "2024-08-10"
+
+    # Add a transaction first
+    add_success, _ = add_transaction(
+        transaction_type='Group Class',
+        member_id=member_id,
+        plan_id=plan_id,
+        payment_date=payment_date_in_closed_month,
+        start_date=payment_date_in_closed_month,
+        amount_paid=120.00,
+        payment_method="Card"
+    )
+    assert add_success is True, "Failed to add initial transaction for the test."
+
+    cursor = db_conn.cursor()
+    cursor.execute("SELECT transaction_id FROM transactions WHERE member_id = ? AND payment_date = ?",
+                   (member_id, payment_date_in_closed_month))
+    transaction_id_row = cursor.fetchone()
+    assert transaction_id_row is not None, "Failed to retrieve the added transaction_id."
+    transaction_id_to_delete = transaction_id_row[0]
+
+    # Now, close the books for that month
+    assert set_book_status(month_key_closed, "closed") is True, "Failed to close books for the test."
+
+    # Attempt to delete the transaction
+    delete_success, message = delete_transaction(transaction_id_to_delete)
+
+    assert delete_success is False, "delete_transaction should have failed due to closed books."
+    expected_message = f"Cannot delete transaction. Books for {month_key_closed} are closed."
+    assert message.startswith(expected_message), f"Expected message '{expected_message}', got '{message}'"
+
+
+    # Verify the transaction still exists
+    cursor.execute("SELECT COUNT(*) FROM transactions WHERE transaction_id = ?", (transaction_id_to_delete,))
+    count = cursor.fetchone()[0]
+    assert count == 1, "Transaction was deleted despite books being closed."
+
+def test_add_transaction_when_books_open(db_conn):
+    """Tests that add_transaction succeeds when books for the payment_date month are open."""
+    member_id, plan_id = _setup_member_and_plan_for_transaction_tests(db_conn, "BO_ADD")
+
+    month_key_open = "2024-09"
+    payment_date_in_open_month = "2024-09-15"
+
+    # Ensure books are open (either by default or explicitly setting)
+    assert set_book_status(month_key_open, "open") is True
+
+    success, message = add_transaction(
+        transaction_type='Group Class',
+        member_id=member_id,
+        plan_id=plan_id,
+        payment_date=payment_date_in_open_month,
+        start_date=payment_date_in_open_month,
+        amount_paid=100.00,
+        payment_method="Cash"
+    )
+
+    assert success is True, f"add_transaction should succeed when books are open. Message: {message}"
+    # The exact success message might vary, but a general check for "success" or similar could be done.
+    # For now, checking boolean True is the primary concern.
+    # assert "Transaction added successfully" in message # Example if checking message content
+
+    # Verify transaction was added
+    cursor = db_conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM transactions WHERE member_id = ? AND payment_date = ?",
+                   (member_id, payment_date_in_open_month))
+    count = cursor.fetchone()[0]
+    assert count == 1, "Transaction was not added even though books were open."
+
+def test_delete_transaction_when_books_open(db_conn):
+    """Tests that delete_transaction succeeds when books for the transaction's month are open."""
+    member_id, plan_id = _setup_member_and_plan_for_transaction_tests(db_conn, "BO_DEL")
+
+    month_key_open = "2024-10"
+    payment_date_in_open_month = "2024-10-10"
+
+    # Add a transaction first
+    add_success, _ = add_transaction(
+        transaction_type='Group Class',
+        member_id=member_id,
+        plan_id=plan_id,
+        payment_date=payment_date_in_open_month,
+        start_date=payment_date_in_open_month,
+        amount_paid=130.00,
+        payment_method="Online"
+    )
+    assert add_success is True, "Failed to add initial transaction for the test."
+
+    cursor = db_conn.cursor()
+    cursor.execute("SELECT transaction_id FROM transactions WHERE member_id = ? AND payment_date = ?",
+                   (member_id, payment_date_in_open_month))
+    transaction_id_row = cursor.fetchone()
+    assert transaction_id_row is not None, "Failed to retrieve the added transaction_id."
+    transaction_id_to_delete = transaction_id_row[0]
+
+    # Ensure books are open
+    assert set_book_status(month_key_open, "open") is True
+
+    # Attempt to delete the transaction
+    delete_success, message = delete_transaction(transaction_id_to_delete)
+
+    assert delete_success is True, f"delete_transaction should succeed when books are open. Message: {message}"
+    # assert "Transaction deleted successfully" in message
+
+    # Verify the transaction was deleted
+    cursor.execute("SELECT COUNT(*) FROM transactions WHERE transaction_id = ?", (transaction_id_to_delete,))
+    count = cursor.fetchone()[0]
+    assert count == 0, "Transaction was not deleted even though books were open."

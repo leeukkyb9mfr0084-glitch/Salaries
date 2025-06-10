@@ -32,6 +32,7 @@ SIMULATION_SUCCESS=true # Flag to track overall simulation success
 
 # Check if simulation directory exists
 if [ -d "${SIMULATION_SCRIPTS_DIR}" ]; then
+    # This loop runs all python scripts starting with 'simulate_' in the ${SIMULATION_SCRIPTS_DIR}
     for script in ${SIMULATION_SCRIPTS_DIR}/simulate_*.py; do
         if [ -f "${script}" ]; then
             echo "

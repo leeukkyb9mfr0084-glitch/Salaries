@@ -1,6 +1,7 @@
 import sys
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date # Added date for type hinting if needed, and strptime/strftime are part of datetime
+from typing import Tuple, Optional, Union # For type hints
 
 DB_FILE = 'reporter/data/kranos_data.db'
 _TEST_IN_MEMORY_CONNECTION = None # Global for test connection
@@ -272,7 +273,7 @@ def get_all_plans_with_inactive() -> list:
 
 def add_transaction(transaction_type: str, member_id: int, start_date: str, amount_paid: float,
                     plan_id: int = None, sessions: int = None, payment_method: str = None,
-                    payment_date: str = None, end_date: str = None) -> bool: # Changed end_date_override to end_date
+                    payment_date: str = None, end_date: str = None) -> Tuple[bool, str]:
     """
     Adds a new transaction to the database.
     For 'Group Class' transactions, if end_date is not provided, it's calculated based on plan_id's duration.
@@ -287,14 +288,43 @@ def add_transaction(transaction_type: str, member_id: int, start_date: str, amou
         payment_method (str, optional): Method of payment. Defaults to None.
         payment_date (str, optional): Payment date in 'YYYY-MM-DD' format. Defaults to start_date if None.
     Returns:
-        bool: True if successful, False otherwise.
+        Tuple[bool, str]: (True, "Transaction added successfully.") if successful,
+                          (False, "Error message") otherwise.
     """
+    # Guard Clause for Book Closing
+    if payment_date: # payment_date is used to determine the book month
+        try:
+            transaction_month_key = datetime.strptime(payment_date, '%Y-%m-%d').strftime('%Y-%m')
+            book_status = get_book_status(transaction_month_key)
+            if book_status == "closed":
+                message = f"Failed: Books for month {transaction_month_key} are closed."
+                print(message, file=sys.stderr)
+                return False, f"Cannot add transaction. Books for {transaction_month_key} are closed."
+        except ValueError:
+            # Handle cases where payment_date might not be in the expected format, though it should be.
+            message = f"Failed: Invalid payment_date format '{payment_date}'. Cannot determine book status."
+            print(message, file=sys.stderr)
+            return False, message
+    else: # If payment_date is None, it defaults to start_date. Check start_date for book closing.
+        try:
+            transaction_month_key = datetime.strptime(start_date, '%Y-%m-%d').strftime('%Y-%m')
+            book_status = get_book_status(transaction_month_key)
+            if book_status == "closed":
+                message = f"Failed: Books for month {transaction_month_key} are closed (based on start_date)."
+                print(message, file=sys.stderr)
+                return False, f"Cannot add transaction. Books for {transaction_month_key} are closed (based on start_date)."
+        except ValueError:
+            message = f"Failed: Invalid start_date format '{start_date}'. Cannot determine book status."
+            print(message, file=sys.stderr)
+            return False, message
+
+
     if amount_paid <= 0:
         print("Error: Amount paid must be a positive number.", file=sys.stderr)
-        return False
+        return False, "Amount paid must be a positive number."
     if transaction_type == 'Personal Training' and sessions is not None and sessions <= 0:
         print("Error: Number of sessions must be a positive number for Personal Training.", file=sys.stderr)
-        return False
+        return False, "Number of sessions must be a positive number for Personal Training."
 
     conn = None
     try:
@@ -318,14 +348,16 @@ def add_transaction(transaction_type: str, member_id: int, start_date: str, amou
 
             if not final_end_date: # If not supplied or was invalid
                 if not plan_id:
-                    print("Error: plan_id is required for Group Class transactions when end_date is not supplied or invalid.")
-                    return False
+                    message = "Error: plan_id is required for Group Class transactions when end_date is not supplied or invalid."
+                    print(message, file=sys.stderr)
+                    return False, message
 
                 cursor.execute("SELECT duration_days FROM plans WHERE plan_id = ?", (plan_id,))
                 plan_duration_row = cursor.fetchone()
                 if not plan_duration_row:
-                    print(f"Error: Plan with ID {plan_id} not found.")
-                    return False
+                    message = f"Error: Plan with ID {plan_id} not found."
+                    print(message, file=sys.stderr)
+                    return False, message
 
                 duration_days = plan_duration_row[0]
                 start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
@@ -347,13 +379,13 @@ def add_transaction(transaction_type: str, member_id: int, start_date: str, amou
         _update_member_join_date_if_earlier(member_id, start_date, cursor)
 
         conn.commit()
-        return True
+        return True, "Transaction added successfully."
     except ValueError as ve:
-        print(f"Data validation or date parsing error: {ve}")
-        return False
+        print(f"Data validation or date parsing error: {ve}", file=sys.stderr)
+        return False, f"Data validation or date parsing error: {ve}"
     except sqlite3.Error as e:
-        print(f"Database error while adding transaction: {e}")
-        return False
+        print(f"Database error while adding transaction: {e}", file=sys.stderr)
+        return False, f"Database error while adding transaction: {e}"
     finally:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
@@ -685,6 +717,60 @@ def get_transactions_for_month(year: int, month: int) -> list:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
+def get_book_status(month_key: str) -> str:
+    """
+    Checks the status of the books for a given month.
+    Args:
+        month_key (str): The month key in "YYYY-MM" format.
+    Returns:
+        str: "closed" if the book for the month is closed, "open" otherwise.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT status FROM monthly_book_status WHERE month_key = ?", (month_key,))
+        result = cursor.fetchone()
+        if result and result[0] == "closed":
+            return "closed"
+        return "open"
+    except sqlite3.Error as e:
+        print(f"Database error while fetching book status for {month_key}: {e}", file=sys.stderr)
+        return "open" # Default to open on error to prevent accidental locking
+    finally:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
+            conn.close()
+
+def set_book_status(month_key: str, status: str) -> bool:
+    """
+    Sets the status of the books for a given month.
+    Args:
+        month_key (str): The month key in "YYYY-MM" format.
+        status (str): The status to set ("open" or "closed").
+    Returns:
+        bool: True if successful, False otherwise.
+    """
+    if status not in ["open", "closed"]:
+        print(f"Error: Invalid status '{status}'. Must be 'open' or 'closed'.", file=sys.stderr)
+        return False
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO monthly_book_status (month_key, status) VALUES (?, ?)",
+            (month_key, status)
+        )
+        conn.commit()
+        return True
+    except sqlite3.Error as e:
+        print(f"Database error while setting book status for {month_key} to {status}: {e}", file=sys.stderr)
+        return False
+    finally:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
+            conn.close()
+
 # def get_group_memberships_by_member_id(member_id: int) -> list:
 #     """Retrieves all group memberships for a given member ID."""
 #     conn = None
@@ -894,24 +980,56 @@ def deactivate_member(member_id: int) -> bool:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
-def delete_transaction(transaction_id: int) -> bool:
+def delete_transaction(transaction_id: int) -> Tuple[bool, str]:
     """
     Deletes a specific transaction from the database.
     Args:
         transaction_id (int): The ID of the transaction to delete.
     Returns:
-        bool: True if the transaction was deleted successfully (rowcount > 0), False otherwise.
+        Tuple[bool, str]: (True, "Transaction deleted successfully.") if successful,
+                          (False, "Error message") otherwise.
     """
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+
+        # Get payment_date to check book status
+        cursor.execute("SELECT payment_date FROM transactions WHERE transaction_id = ?", (transaction_id,))
+        transaction_data = cursor.fetchone()
+
+        if not transaction_data:
+            return False, f"Transaction with ID {transaction_id} not found."
+
+        payment_date_str = transaction_data[0]
+        if payment_date_str: # It's possible payment_date could be NULL, though unlikely for most transactions
+            try:
+                transaction_month_key = datetime.strptime(payment_date_str, '%Y-%m-%d').strftime('%Y-%m')
+                book_status = get_book_status(transaction_month_key)
+                if book_status == "closed":
+                    message = f"Failed: Books for month {transaction_month_key} are closed."
+                    print(message, file=sys.stderr)
+                    return False, f"Cannot delete transaction. Books for {transaction_month_key} are closed."
+            except ValueError:
+                # This case might occur if payment_date has an unexpected format.
+                message = f"Failed: Invalid payment_date format '{payment_date_str}' for transaction {transaction_id}. Cannot determine book status."
+                print(message, file=sys.stderr)
+                # Depending on policy, you might allow deletion or block it. For safety, block it.
+                return False, message
+
+        # Proceed with deletion if books are not closed or payment_date is not set (e.g. old data)
         cursor.execute("DELETE FROM transactions WHERE transaction_id = ?", (transaction_id,))
         conn.commit()
-        return cursor.rowcount > 0
+        if cursor.rowcount > 0:
+            return True, "Transaction deleted successfully."
+        else:
+            # This case should ideally be caught by the "transaction_data not found" check earlier,
+            # but included for robustness.
+            return False, f"Transaction with ID {transaction_id} not found or already deleted."
+
     except sqlite3.Error as e:
         print(f"Database error while deleting transaction {transaction_id}: {e}", file=sys.stderr)
-        return False
+        return False, f"Database error while deleting transaction {transaction_id}: {e}"
     finally:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
