@@ -6,6 +6,10 @@ from datetime import date, timedelta, datetime # Added datetime
 import tkinter.messagebox as messagebox # For mocking
 from customtkinter import filedialog # For mocking - Changed import style
 
+# Mock tkinter main window classes to prevent actual GUI instantiation
+patch('tkinter.Tk', MagicMock()).start()
+patch('customtkinter.CTk', MagicMock()).start()
+
 # Add project root to sys.path to allow importing reporter modules
 # This assumes the test is run from the project root directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
