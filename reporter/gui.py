@@ -393,6 +393,14 @@ class GuiController:
         except Exception as e:
             return False, f"An error occurred while deleting the plan: {str(e)}"
 
+    def get_plan_details(self, plan_id: int) -> Optional[tuple]:
+        """Fetches plan details by plan_id."""
+        return database_manager.get_plan_by_id(plan_id)
+
+    def get_member_id_for_transaction(self, transaction_id: int) -> Optional[int]:
+        """Fetches member_id for a given transaction_id."""
+        return database_manager.get_member_id_from_transaction(transaction_id)
+
 
 from .components.membership_tab import MembershipTab
 from .components.history_tab import HistoryTab
@@ -429,17 +437,9 @@ class FletAppView(ft.Container):
         # self.membership_payment_method_input: Optional[ft.TextField] = None # Moved to MembershipTab
         # self.save_membership_button: Optional[ft.ElevatedButton] = None # Moved to MembershipTab
         # self.membership_form_feedback_text: Optional[ft.Text] = None # Moved to MembershipTab (specific instance)
-        self.renewal_report_year_input: Optional[ft.TextField] = None
-        self.renewal_report_month_dropdown: Optional[ft.Dropdown] = None
-        self.generate_renewals_report_button: Optional[ft.ElevatedButton] = None
-        self.renewals_report_feedback_text: Optional[ft.Text] = None
-        self.finance_report_year_input: Optional[ft.TextField] = None
-        self.finance_report_month_dropdown: Optional[ft.Dropdown] = None
-        self.generate_finance_report_button: Optional[ft.ElevatedButton] = None
-        self.finance_report_feedback_text: Optional[ft.Text] = None
+        # Reporting tab UI elements are now managed by ReportingTab class
         # self.members_table_flet: Optional[ft.DataTable] = None # Moved to MembershipTab
         # self.member_specific_history_table_flet: Optional[ft.DataTable] = None # Moved to MembershipTab
-        self.pending_renewals_table_flet: Optional[ft.DataTable] = None
         self.tabs_control: Optional[ft.Tabs] = None
 
         # Date Picker and File Picker are declared here and initialized in build
@@ -452,99 +452,37 @@ class FletAppView(ft.Container):
         self.date_picker = ft.DatePicker()
         self.file_picker = ft.FilePicker(on_result=self.on_file_picker_result_flet)
 
+        # Instantiate Tab components and store as instance members
+        self.membership_tab_ref = MembershipTab(self.controller, self.date_picker)
+        self.settings_tab_ref = SettingsTab(self.controller)
+        self.plans_tab_ref = PlansTab(self.controller, self) # Pass self for FletAppView callbacks
+        self.history_tab_ref = HistoryTab(self.controller, self.date_picker, self) # Pass self for FletAppView callbacks
+        self.reporting_tab_ref = ReportingTab(self.controller, self.file_picker, self) # Pass self for FletAppView callbacks
 
-    # Event Handlers and Helper Methods (methods specific to MembershipTab have been moved)
-    def display_pending_renewals_flet(self): # This seems to be for the "Reporting" tab, keep here.
-        if not hasattr(self, 'pending_renewals_table_flet') or self.pending_renewals_table_flet is None: return
-        success, message, renewals_data = self.controller.generate_pending_renewals_action()
-        self.pending_renewals_table_flet.rows.clear()
-        if success and renewals_data:
-            for renewal_item in renewals_data:
-                cells = [ft.DataCell(ft.Text(str(item))) for item in renewal_item]
-                self.pending_renewals_table_flet.rows.append(ft.DataRow(cells=cells))
+
+    # Event Handlers and Helper Methods
+    # Methods related to reporting (display_pending_renewals_flet, on_generate_renewals_report_click,
+    # on_generate_finance_report_click) are now part of the ReportingTab class.
+
+    def on_file_picker_result_flet(self, e: ft.FilePickerResultEvent):
+        # This method is a callback from the FilePicker.
+        # It delegates the result to the reporting_tab_ref.
+        if hasattr(self, 'reporting_tab_ref') and self.reporting_tab_ref:
+            year = self.reporting_tab_ref._pending_finance_report_year
+            month = self.reporting_tab_ref._pending_finance_report_month
+
+            if e.path:  # A file path was chosen
+                save_path = e.path
+                if year is not None and month is not None:
+                    success, message = self.controller.generate_finance_report_excel_action(year, month, save_path)
+                    self.reporting_tab_ref.process_finance_report_save(success, message, save_path)
+                else:
+                    self.reporting_tab_ref.process_finance_report_save(False, "Error: Report context (year/month) lost.", None)
+            else:  # File save dialog was cancelled
+                self.reporting_tab_ref.process_finance_report_save(False, "File save cancelled by user.", None)
         else:
-            display_message = message if not success else "No pending renewals found for the current month."
-            self.pending_renewals_table_flet.rows.append(
-                ft.DataRow(cells=[ft.DataCell(ft.Text(display_message), colspan=len(self.pending_renewals_table_flet.columns))])
-            )
-        if self.pending_renewals_table_flet.page: self.pending_renewals_table_flet.update()
-        # self.update()
-
-    # populate_plan_dropdowns_flet removed (moved to MembershipTab)
-    # open_date_picker removed (functionality moved to MembershipTab's local date picker)
-    # on_date_picker_change removed
-    # on_date_picker_dismiss removed
-    # on_membership_type_change_flet removed (moved to MembershipTab)
-    # on_save_membership_click removed (moved to MembershipTab)
-
-    def on_generate_renewals_report_click(self, e): # For Reporting Tab
-        year_str = self.renewal_report_year_input.value
-        month_str = self.renewal_report_month_dropdown.value
-        if not year_str or not month_str:
-            self.renewals_report_feedback_text.value = "Year and Month cannot be empty."
-            self.renewals_report_feedback_text.color = ft.colors.RED
-            if self.renewals_report_feedback_text.page: self.renewals_report_feedback_text.update()
-            return
-        try:
-            year = int(year_str); month = int(month_str)
-            if not (1 <= month <= 12): raise ValueError("Month out of range.")
-        except ValueError:
-            self.renewals_report_feedback_text.value = "Invalid Year or Month format."
-            self.renewals_report_feedback_text.color = ft.colors.RED
-            if self.renewals_report_feedback_text.page: self.renewals_report_feedback_text.update()
-            return
-        success, message, renewals_data = self.controller.generate_custom_pending_renewals_action(year, month)
-        self.renewals_report_feedback_text.value = message
-        self.renewals_report_feedback_text.color = ft.colors.GREEN if success else ft.colors.RED
-        if self.renewals_report_feedback_text.page: self.renewals_report_feedback_text.update()
-        self.pending_renewals_table_flet.rows.clear()
-        if success and renewals_data:
-            for item in renewals_data:
-                cells = [ft.DataCell(ft.Text(str(val))) for val in item]
-                self.pending_renewals_table_flet.rows.append(ft.DataRow(cells=cells))
-        elif success and not renewals_data:
-             self.pending_renewals_table_flet.rows.append(ft.DataRow(cells=[ft.DataCell(ft.Text(message), colspan=len(self.pending_renewals_table_flet.columns))]))
-        else:
-            error_message = message if message else "Error generating report or no data."
-            self.pending_renewals_table_flet.rows.append(ft.DataRow(cells=[ft.DataCell(ft.Text(error_message), colspan=len(self.pending_renewals_table_flet.columns))]))
-        if self.pending_renewals_table_flet.page: self.pending_renewals_table_flet.update()
-        # self.update()
-
-    def on_generate_finance_report_click(self, e): # For Reporting Tab
-        year_str = self.finance_report_year_input.value
-        month_str = self.finance_report_month_dropdown.value
-        if not year_str or not month_str:
-            self.finance_report_feedback_text.value = "Year and Month cannot be empty."
-            self.finance_report_feedback_text.color = ft.colors.RED
-            if self.finance_report_feedback_text.page: self.finance_report_feedback_text.update()
-            return
-        try:
-            int(year_str);
-            if not (1 <= int(month_str) <= 12): raise ValueError("Month out of range.")
-        except ValueError:
-            self.finance_report_feedback_text.value = "Invalid Year or Month format."
-            self.finance_report_feedback_text.color = ft.colors.RED
-            if self.finance_report_feedback_text.page: self.finance_report_feedback_text.update()
-            return
-        self.file_picker.save_file(
-            dialog_title="Save Finance Report",
-            file_name=f"finance_report_{year_str}_{month_str}.xlsx",
-            allowed_extensions=["xlsx"]
-        )
-
-    def on_file_picker_result_flet(self, e: ft.FilePickerResultEvent): # Used by Finance Report
-        if e.path:
-            save_path = e.path
-            year = int(self.finance_report_year_input.value)
-            month = int(self.finance_report_month_dropdown.value)
-            success, message = self.controller.generate_finance_report_excel_action(year, month, save_path)
-            self.finance_report_feedback_text.value = message
-            self.finance_report_feedback_text.color = ft.colors.GREEN if success else ft.colors.RED
-        else:
-            self.finance_report_feedback_text.value = "File save cancelled."
-            self.finance_report_feedback_text.color = ft.colors.ORANGE
-        if self.finance_report_feedback_text.page: self.finance_report_feedback_text.update()
-        # self.update()
+            print("CRITICAL ERROR: reporting_tab_ref not found in on_file_picker_result_flet.")
+        # ReportingTab is responsible for its own UI updates.
 
     def refresh_membership_plan_dropdowns(self):
         if hasattr(self, 'membership_tab_ref'):
@@ -571,40 +509,9 @@ class FletAppView(ft.Container):
 
         # Membership form controls moved to MembershipTab
 
-        # Reporting controls remain for Reporting Tab
-        self.renewal_report_year_input = ft.TextField(label="Year", value=str(datetime.now().year))
-        self.renewal_report_month_dropdown = ft.Dropdown(
-            label="Month", options=[ft.dropdown.Option(str(i), str(i)) for i in range(1, 13)], value=str(datetime.now().month)
-        )
-        self.generate_renewals_report_button = ft.ElevatedButton(text="Generate Renewals Report", on_click=self.on_generate_renewals_report_click)
-        self.renewals_report_feedback_text = ft.Text("")
-
-        self.finance_report_year_input = ft.TextField(label="Year", value=str(datetime.now().year))
-        self.finance_report_month_dropdown = ft.Dropdown(
-            label="Month", options=[ft.dropdown.Option(str(i), str(i)) for i in range(1, 13)], value=str(datetime.now().month)
-        )
-        self.generate_finance_report_button = ft.ElevatedButton(text="Generate Excel Finance Report", on_click=self.on_generate_finance_report_click)
-        self.finance_report_feedback_text = ft.Text("")
-
-        # Tables: members_table_flet and member_specific_history_table_flet moved to MembershipTab
-        # Full history table remains for Membership History Tab
-        # Plans table is now part of PlansTab
-        # Pending renewals table remains for Reporting Tab
-        self.pending_renewals_table_flet = ft.DataTable(
-            columns=[
-                ft.DataColumn(ft.Text("Member ID")), ft.DataColumn(ft.Text("Name")), ft.DataColumn(ft.Text("Phone")),
-                ft.DataColumn(ft.Text("Plan Name")), ft.DataColumn(ft.Text("End Date")), ft.DataColumn(ft.Text("Days Overdue")),
-            ],
-            rows=[]
-        )
-
-        # Instantiate MembershipTab
-        self.membership_tab_ref = MembershipTab(self.controller, self.date_picker)
-        # Instantiate SettingsTab
-        self.settings_tab_ref = SettingsTab(self.controller)
-        self.plans_tab_ref = PlansTab(self.controller, self)
-        self.history_tab_ref = HistoryTab(self.controller, self.date_picker, self)
-
+        # UI Element Initializations for controls that were part of FletAppView for reporting
+        # are now removed as they are handled by ReportingTab.
+        # Tab instances (e.g., self.reporting_tab_ref) are already created in __init__.
 
         # UI Assembly
         # table_area_container related to members_table_flet is now part of MembershipTab.build()
@@ -625,35 +532,7 @@ class FletAppView(ft.Container):
                 ),
                 ft.Tab(
                     text="Reporting",
-                    content=ft.Column(
-                        controls=[
-                            ft.Container(
-                                content=ft.Column(
-                                    controls=[
-                                        ft.Text("Custom Pending Renewals Report", weight=ft.FontWeight.BOLD),
-                                        self.renewal_report_year_input,
-                                        self.renewal_report_month_dropdown,
-                                        self.generate_renewals_report_button,
-                                        self.renewals_report_feedback_text,
-                                        ft.Divider(),
-                                        ft.Text("Pending Renewals Results", weight=ft.FontWeight.BOLD),
-                                        self.pending_renewals_table_flet
-                                    ], scroll=ft.ScrollMode.AUTO, expand=True
-                                ), expand=1, bgcolor=ft.colors.TEAL_200, padding=10, alignment=ft.alignment.top_center
-                            ),
-                            ft.Container(
-                                content=ft.Column(
-                                    controls=[
-                                        ft.Text("Generate Monthly Finance Report (Excel)", weight=ft.FontWeight.BOLD),
-                                        self.finance_report_year_input,
-                                        self.finance_report_month_dropdown,
-                                        self.generate_finance_report_button,
-                                        self.finance_report_feedback_text,
-                                    ]
-                                ), expand=1, bgcolor=ft.colors.TEAL_300, padding=10, alignment=ft.alignment.top_center,
-                            ),
-                        ]
-                    )
+                    content=self.reporting_tab_ref # Assign the ReportingTab instance here
                 ),
                 ft.Tab(
                     text="Settings",
@@ -673,8 +552,8 @@ class FletAppView(ft.Container):
         # self.on_membership_type_change_flet(None) # Moved to MembershipTab
 
         # Add DatePicker to the page overlay. This is done in did_mount.
-        # Initial population of the pending renewals table with default/current month's data
-        self.on_generate_renewals_report_click(None) # For Reporting Tab
+        # Initial data loading for tabs is managed by the tabs themselves.
+        # Removed self.on_generate_renewals_report_click(None)
 
         return self.tabs_control
 
@@ -760,70 +639,8 @@ if __name__ == "__main__":
     # Methods for Book Closing/Opening Dialogs and Actions MOVED to SettingsTab
 
     # Methods for Deleting Member, Plan, Transaction with Dialogs
-    def on_delete_selected_member_click_flet(self, e):
-        if self.selected_member_id_flet is None:
-            self.member_actions_feedback_text.value = "No member selected to deactivate."
-            self.member_actions_feedback_text.color = ft.colors.ORANGE
-            self.member_actions_feedback_text.update()
-            return
-
-        member_name = "Unknown Member"
-        # Find member name for confirmation from the table data
-        # This assumes members_table_flet.rows contains DataRow objects with ft.Text in cells
-        if self.members_table_flet and self.members_table_flet.rows:
-            for row in self.members_table_flet.rows:
-                if row.cells and len(row.cells) > 1 and isinstance(row.cells[0].content, ft.Text) and isinstance(row.cells[1].content, ft.Text):
-                    try:
-                        if int(row.cells[0].content.value) == self.selected_member_id_flet:
-                            member_name = row.cells[1].content.value
-                            break
-                    except ValueError:
-                        continue # Skip if cell content is not a valid int for ID
-
-        dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Confirm Deactivate Member"),
-            content=ft.Text(f"Are you sure you want to deactivate member '{member_name}' (ID: {self.selected_member_id_flet})? This member will be marked as inactive."),
-            actions=[
-                ft.TextButton("Yes, Deactivate", on_click=lambda ev: self._perform_delete_member_action(True, self.selected_member_id_flet)),
-                ft.TextButton("No, Cancel", on_click=lambda ev: self._perform_delete_member_action(False, self.selected_member_id_flet)),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-        if self.page:
-            self.page.dialog = dialog
-            dialog.open = True
-            self.page.update()
-
-    def _perform_delete_member_action(self, confirmed: bool, member_id: int):
-        if self.page.dialog:
-            self.page.dialog.open = False
-            self.page.update()
-
-        if confirmed:
-            success, message = self.controller.deactivate_member_action(member_id)
-            self.member_actions_feedback_text.value = message
-            self.member_actions_feedback_text.color = ft.colors.GREEN if success else ft.colors.RED
-            if success:
-                # Refresh member list (which will exclude inactive ones by default or show status)
-                self.display_all_members_flet()
-                # Refresh member dropdowns (to remove/update deactivated member)
-                self.populate_member_dropdowns_flet()
-
-                # If the deactivated member was the one selected, clear the specific history view
-                if self.selected_member_id_flet == member_id:
-                    self.selected_member_id_flet = None
-                    # No direct members_table_flet.selected_index = None in Flet.
-                    # Re-rendering the table via display_all_members_flet should visually clear selection
-                    # if selection appearance depends on self.selected_member_id_flet.
-                    self.display_membership_history_flet(None) # Clear specific member history
-        else:
-            self.member_actions_feedback_text.value = "Member deactivation cancelled."
-            self.member_actions_feedback_text.color = ft.colors.ORANGE
-
-        self.member_actions_feedback_text.update()
-        if self.members_table_flet: self.members_table_flet.update() # Update table
-        self.update() # General view update
+    # on_delete_selected_member_click_flet and _perform_delete_member_action
+    # were moved to MembershipTab.py as they are specific to member management.
 
 # Final check on GuiController.save_membership_action:
 # It was returning `success` which was a tuple (bool, str) instead of just the boolean.

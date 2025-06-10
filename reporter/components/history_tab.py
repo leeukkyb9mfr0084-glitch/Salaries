@@ -156,19 +156,42 @@ class HistoryTab(ft.Column):  # Changed base class to ft.Column
         self.full_history_table.rows.clear()
         if transactions_list:
             for trx_data in transactions_list:
-                status = self._get_membership_status(str(trx_data[7]) if trx_data[7] else None) # trx_data[7] is end_date
+                # New column order:
+                # 0: t.transaction_id, 1: t.member_id, 2: t.transaction_type, 3: t.plan_id,
+                # 4: t.payment_date, 5: t.start_date, 6: t.end_date,
+                # 7: t.amount_paid, 8: t.payment_method, 9: t.sessions,
+                # 10: m.client_name, 11: m.phone, 12: m.join_date,
+                # 13: p.plan_name
+
+                transaction_type = str(trx_data[2]) if trx_data[2] else "N/A"
+
+                plan_details = "N/A"
+                if transaction_type == 'Group Class':
+                    plan_details = str(trx_data[13]) if trx_data[13] else "N/A" # p.plan_name
+                elif transaction_type == 'Personal Training':
+                    plan_details = f"{str(trx_data[9])} sessions" if trx_data[9] else "N/A" # t.sessions
+
+                method_sessions = "N/A"
+                if transaction_type == 'Group Class':
+                    method_sessions = str(trx_data[8]) if trx_data[8] else "N/A" # t.payment_method
+                elif transaction_type == 'Personal Training':
+                    # For PT, "Method/Sessions" column could show sessions or be N/A if details are in "Plan/Details"
+                    method_sessions = f"{str(trx_data[9])} sessions" if trx_data[9] else "N/A" # t.sessions
+
+                status = self._get_membership_status(str(trx_data[6]) if trx_data[6] else None) # t.end_date is at index 6
+
                 row = ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(str(trx_data[0]))),  # Transaction ID
-                    ft.DataCell(ft.Text(str(trx_data[1]))),  # Member Name
-                    ft.DataCell(ft.Text(str(trx_data[2]))),  # Member Phone
-                    ft.DataCell(ft.Text(str(trx_data[3]))),  # Type (Membership/PT)
-                    ft.DataCell(ft.Text(str(trx_data[4]))),  # Plan Name / Details
-                    ft.DataCell(ft.Text(str(trx_data[5]))),  # Paid Date
-                    ft.DataCell(ft.Text(str(trx_data[6]))),  # Start Date
-                    ft.DataCell(ft.Text(str(trx_data[7]))),  # End Date
-                    ft.DataCell(ft.Text(f"{trx_data[8]:.2f}" if isinstance(trx_data[8], (int,float)) else str(trx_data[8]))), # Amount
-                    ft.DataCell(ft.Text(str(trx_data[9]))),  # Method / Sessions
-                    ft.DataCell(ft.Text(status)), # Membership Status
+                    ft.DataCell(ft.Text(str(trx_data[0]))),  # Trx ID (t.transaction_id)
+                    ft.DataCell(ft.Text(str(trx_data[10]))), # Member Name (m.client_name)
+                    ft.DataCell(ft.Text(str(trx_data[11]))), # Member Phone (m.phone)
+                    ft.DataCell(ft.Text(transaction_type)),  # Type (t.transaction_type)
+                    ft.DataCell(ft.Text(plan_details)),      # Plan/Details
+                    ft.DataCell(ft.Text(str(trx_data[4]))),  # Paid Date (t.payment_date)
+                    ft.DataCell(ft.Text(str(trx_data[5]))),  # Start Date (t.start_date)
+                    ft.DataCell(ft.Text(str(trx_data[6]))),  # End Date (t.end_date)
+                    ft.DataCell(ft.Text(f"{trx_data[7]:.2f}" if isinstance(trx_data[7], (int,float)) else str(trx_data[7]))), # Amount (t.amount_paid)
+                    ft.DataCell(ft.Text(method_sessions)),   # Method/Sessions
+                    ft.DataCell(ft.Text(status)),            # Membership Status
                 ])
                 self.full_history_table.rows.append(row)
 

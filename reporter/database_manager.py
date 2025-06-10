@@ -236,6 +236,29 @@ def set_plan_active_status(plan_id: int, is_active: bool) -> Tuple[bool, str]:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
+def get_plan_by_id(plan_id: int) -> Optional[tuple]:
+    """
+    Retrieves a specific plan by its ID.
+    Args:
+        plan_id (int): The ID of the plan.
+    Returns:
+        Optional[tuple]: A tuple representing the plan (plan_id, plan_name, duration_days, is_active),
+                         or None if not found or an error occurs.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT plan_id, plan_name, duration_days, is_active FROM plans WHERE plan_id = ?", (plan_id,))
+        plan = cursor.fetchone()
+        return plan
+    except sqlite3.Error as e:
+        print(f"Database error while fetching plan by ID {plan_id}: {e}")
+        return None
+    finally:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
+            conn.close()
+
 def get_all_plans() -> list:
     """
     Retrieves all active plans from the database.
@@ -277,6 +300,30 @@ def get_all_plans_with_inactive() -> list:
     except sqlite3.Error as e:
         print(f"Database error while fetching all plans (including inactive): {e}")
         return []
+    finally:
+        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
+            conn.close()
+
+def get_member_id_from_transaction(transaction_id: int) -> Optional[int]:
+    """
+    Retrieves the member_id for a given transaction_id.
+    Args:
+        transaction_id (int): The ID of the transaction.
+    Returns:
+        Optional[int]: The member_id if found, None otherwise.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT member_id FROM transactions WHERE transaction_id = ?", (transaction_id,))
+        result = cursor.fetchone()
+        if result:
+            return result[0]
+        return None
+    except sqlite3.Error as e:
+        print(f"Database error while fetching member_id for transaction {transaction_id}: {e}")
+        return None
     finally:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
@@ -638,9 +685,15 @@ def get_transactions_with_member_details(name_filter: str = None, phone_filter: 
 
         query_params = []
         sql = """
-            SELECT t.*, m.client_name, m.phone, m.join_date
+            SELECT
+                t.transaction_id, t.member_id, t.transaction_type, t.plan_id,
+                t.payment_date, t.start_date, t.end_date,
+                t.amount_paid, t.payment_method, t.sessions,
+                m.client_name, m.phone, m.join_date,
+                p.plan_name
             FROM transactions t
             JOIN members m ON t.member_id = m.member_id
+            LEFT JOIN plans p ON t.plan_id = p.plan_id
         """
 
         conditions = []

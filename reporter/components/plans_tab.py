@@ -123,7 +123,7 @@ class PlansTab(ft.Row):  # Changed base class to ft.Row
 
     def display_all_plans(self, plans_list: Optional[list] = None):
         if plans_list is None:
-            plans_list = self.controller.get_all_plans() # Fetches all, active and inactive
+            plans_list = self.controller.get_all_plans_with_inactive() # Fetches all, active and inactive
 
         self.plans_table.rows.clear()
         if plans_list:
