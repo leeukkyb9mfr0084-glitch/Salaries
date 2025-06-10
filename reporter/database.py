@@ -17,7 +17,8 @@ def create_database(db_name: str):
             member_id INTEGER PRIMARY KEY AUTOINCREMENT,
             client_name TEXT NOT NULL,
             phone TEXT UNIQUE,
-            join_date TEXT
+    join_date TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1 -- << ADD THIS COLUMN
         );
         """)
 

@@ -333,18 +333,17 @@ class GuiController:
         """Fetches all activity records for a given member_id."""
         return database_manager.get_all_activity_for_member(member_id)
 
-    def delete_member_action(self, member_id: int) -> tuple[bool, str]:
-        """Calls database_manager.delete_member and returns status."""
+    def deactivate_member_action(self, member_id: int) -> tuple[bool, str]:
+        """Handles the action of deactivating a member."""
         try:
-            success = database_manager.delete_member(member_id)
+            success = database_manager.deactivate_member(member_id)
             if success:
-                return True, "Member and associated transactions deleted successfully."
+                return True, "Member deactivated successfully."
             else:
-                # This specific message might be redundant if delete_member already prints detailed errors
-                return False, "Failed to delete member. Check logs for details."
+                return False, "Failed to deactivate member. Check logs for details."
         except Exception as e:
-            # Log e for debugging if a logging mechanism is in place
-            return False, f"An error occurred while deleting the member: {str(e)}"
+            # Log the exception e
+            return False, f"An error occurred while deactivating the member: {str(e)}"
 
     def delete_transaction_action(self, transaction_id: int) -> tuple[bool, str]:
         """Calls database_manager.delete_transaction and returns status."""
@@ -907,7 +906,7 @@ class App(customtkinter.CTk):
         members_tree_scrollbar.grid(row=2, column=1, padx=(0,10), pady=(0,10), sticky="ns") # Place scrollbar next to tree
 
         # --- Delete Member Button ---
-        self.delete_member_button = CTkButton(display_frame, text="Delete Selected Member", command=self.on_delete_selected_member_click)
+        self.delete_member_button = CTkButton(display_frame, text="Deactivate Selected Member", command=self.on_delete_selected_member_click)
         self.delete_member_button.grid(row=3, column=0, columnspan=2, padx=10, pady=(5,10), sticky="ew")
 
         # --- Membership History Frame (Below All Members) ---
@@ -1405,7 +1404,7 @@ class App(customtkinter.CTk):
             return # Tree is empty
 
         for member_data in members_list:
-            self.members_tree.insert('', 'end', values=member_data)
+            self.members_tree.insert('', 'end', values=member_data[:4])
 
         # Attempt to re-select the previously selected member if they are still in the list
         # This is tricky because the tree items might change.
@@ -1684,11 +1683,11 @@ class App(customtkinter.CTk):
             self.member_status_label.configure(text="Error parsing member ID from selection.", text_color="red")
             return
 
-        confirm_delete = messagebox.askyesno("Confirm Delete",
-                                             f"Are you sure you want to delete member '{member_name}' (ID: {member_id}) "
-                                             "and all their associated transactions? This action cannot be undone.")
+        confirm_delete = messagebox.askyesno("Confirm Deactivate",
+                                             f"Are you sure you want to deactivate member '{member_name}' (ID: {member_id})? "
+                                             "This will mark the member as inactive.")
         if confirm_delete:
-            success, message = self.controller.delete_member_action(member_id)
+            success, message = self.controller.deactivate_member_action(member_id)
             if success:
                 self.member_status_label.configure(text=message, text_color="green")
                 # Refresh members list (clear filters to show all, or use current filters)
@@ -1710,7 +1709,7 @@ class App(customtkinter.CTk):
             else:
                 self.member_status_label.configure(text=message, text_color="red")
         else:
-            self.member_status_label.configure(text="Member deletion cancelled.", text_color="grey")
+            self.member_status_label.configure(text="Member deactivation cancelled.", text_color="grey")
 
     def on_delete_selected_plan_click(self):
         """Handles deleting the selected plan from the plans_tree."""

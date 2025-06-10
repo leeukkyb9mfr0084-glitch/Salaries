@@ -89,13 +89,13 @@ def _update_member_join_date_if_earlier(member_id: int, activity_start_date_str:
 
 def get_all_members(name_filter: str = None, phone_filter: str = None) -> list:
     """
-    Retrieves all members from the database, with optional filtering, ordered by client_name.
+    Retrieves all active members from the database, with optional filtering, ordered by client_name.
     Args:
         name_filter (str, optional): Filter for client_name (case-insensitive LIKE). Defaults to None.
         phone_filter (str, optional): Filter for phone number (case-insensitive LIKE). Defaults to None.
     Returns:
-        list: A list of tuples, where each tuple represents a member
-              (member_id, client_name, phone, join_date).
+        list: A list of tuples, where each tuple represents an active member
+              (member_id, client_name, phone, join_date, is_active).
               Returns an empty list if no members are found or an error occurs.
     """
     conn = None
@@ -103,9 +103,13 @@ def get_all_members(name_filter: str = None, phone_filter: str = None) -> list:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        base_query = "SELECT member_id, client_name, phone, join_date FROM members"
+        base_query = "SELECT member_id, client_name, phone, join_date, is_active FROM members"
         conditions = []
         params = []
+
+        # Add the is_active check FIRST to the WHERE clause conditions
+        conditions.append("is_active = 1")
+        # No parameters needed for "is_active = 1"
 
         if name_filter:
             conditions.append("client_name LIKE ?")
@@ -115,8 +119,10 @@ def get_all_members(name_filter: str = None, phone_filter: str = None) -> list:
             conditions.append("phone LIKE ?")
             params.append(f"%{phone_filter}%")
 
-        if conditions:
+        if conditions: # This will always be true because "is_active = 1" is always added
             base_query += " WHERE " + " AND ".join(conditions)
+        # else: # This case is no longer reachable
+            # query = base_query # Should not happen if is_active = 1 is always there
 
         base_query += " ORDER BY client_name ASC"
 
@@ -474,15 +480,15 @@ def get_finance_report(year: int, month: int) -> float | None:
             conn.close()
 
 def get_member_by_phone(phone: str) -> tuple | None:
-    """Retrieves a member's ID by their phone number."""
+    """Retrieves an active member's ID and name by their phone number."""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT member_id, client_name FROM members WHERE phone = ?", (phone,))
+        cursor.execute("SELECT member_id, client_name FROM members WHERE phone = ? AND is_active = 1", (phone,))
         return cursor.fetchone()
     except sqlite3.Error as e:
-        print(f"Database error while fetching member by phone '{phone}': {e}")
+        print(f"Database error while fetching active member by phone '{phone}': {e}")
         return None
     finally:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
@@ -865,30 +871,24 @@ def get_transactions_for_month(year: int, month: int) -> list:
 #         print(f"Could not retrieve finance report for {calendar.month_name[current_month]} {current_year}.")
 
 
-def delete_member(member_id: int) -> bool:
+def deactivate_member(member_id: int) -> bool:
     """
-    Deletes a member and all their associated transactions from the database.
+    Deactivates a member in the database by setting is_active to 0.
     Args:
-        member_id (int): The ID of the member to delete.
+        member_id (int): The ID of the member to deactivate.
     Returns:
-        bool: True if the member and their transactions were deleted successfully, False otherwise.
+        bool: True if the member was deactivated successfully, False otherwise.
     """
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        # Start a transaction
-        cursor.execute("BEGIN TRANSACTION")
-        # Delete all transactions associated with member_id
-        cursor.execute("DELETE FROM transactions WHERE member_id = ?", (member_id,))
-        # Delete the member
-        cursor.execute("DELETE FROM members WHERE member_id = ?", (member_id,))
+        # Set is_active to 0 for the member
+        cursor.execute("UPDATE members SET is_active = 0 WHERE member_id = ?", (member_id,))
         conn.commit()
-        return True
+        return cursor.rowcount > 0 # True if a row was updated
     except sqlite3.Error as e:
-        if conn:
-            conn.rollback() # Rollback on error
-        print(f"Database error while deleting member {member_id}: {e}", file=sys.stderr)
+        print(f"Database error while deactivating member {member_id}: {e}", file=sys.stderr)
         return False
     finally:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
