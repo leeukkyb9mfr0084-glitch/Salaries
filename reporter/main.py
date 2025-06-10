@@ -7,11 +7,13 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import importlib.util
-# import customtkinter # Moved down
-import sqlite3
-from reporter.database import create_database, seed_initial_plans
-from reporter.database_manager import DB_FILE
-# from reporter.gui import App  # Moved down
+import flet as ft # Added Flet import
+from reporter.database_manager import initialize_database, DB_FILE # Updated database import
+from reporter.gui import main as start_flet_gui # Import main from the new gui.py
+
+# Removed old imports:
+# import sqlite3 # No longer directly used here
+# from reporter.database import create_database, seed_initial_plans # Replaced by initialize_database
 
 def check_and_install_requirements():
     """
@@ -71,18 +73,16 @@ if __name__ == '__main__':
     print(f"Running with Python executable: {sys.executable}")
     print(f"Python version: {sys.version.splitlines()[0]}") # Print only the first line of the version
 
-    import customtkinter # Moved from global scope
-    from reporter.gui import App  # Moved from global scope
-
-    # --- Your original code starts here ---
+    # Ensure the data directory exists (DB_FILE imported from database_manager)
     data_dir = os.path.dirname(DB_FILE)
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
+        print(f"Created data directory: {data_dir}")
 
-    create_database(DB_FILE)
-    # conn = sqlite3.connect(DB_FILE)
-    # seed_initial_plans(conn)
-    # conn.close()
+    # Initialize the database using the consistent function
+    initialize_database()
+    print(f"Database initialized at: {DB_FILE}")
 
-    app = App()
-    app.mainloop()
+    # Start the Flet application
+    print("Starting Flet application...")
+    ft.app(target=start_flet_gui)
