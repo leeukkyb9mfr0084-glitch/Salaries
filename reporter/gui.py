@@ -416,15 +416,9 @@ class FletAppView(ft.Container):
         # UI declarations
         # self.member_actions_feedback_text: Optional[ft.Text] = None # Moved to MembershipTab
         self.history_actions_feedback_text: Optional[ft.Text] = None
-        self.book_status_display_label: Optional[ft.Text] = None
         # self.delete_member_button_flet: Optional[ft.ElevatedButton] = None # Moved to MembershipTab
         self.delete_plan_button_flet: Optional[ft.ElevatedButton] = None
         self.delete_transaction_button_flet: Optional[ft.ElevatedButton] = None
-        self.book_closing_year_input: Optional[ft.TextField] = None
-        self.book_closing_month_dropdown: Optional[ft.Dropdown] = None
-        self.close_books_button_flet: Optional[ft.ElevatedButton] = None
-        self.open_books_button_flet: Optional[ft.ElevatedButton] = None
-        self.check_book_status_button_flet: Optional[ft.ElevatedButton] = None
         # self.member_name_input: Optional[ft.TextField] = None # Moved to MembershipTab
         # self.member_phone_input: Optional[ft.TextField] = None # Moved to MembershipTab
         # self.add_member_button: Optional[ft.ElevatedButton] = None # Moved to MembershipTab
@@ -796,23 +790,10 @@ class FletAppView(ft.Container):
         # UI Element Initializations for controls remaining in FletAppView
         # self.member_actions_feedback_text = ft.Text("") # Moved
         self.history_actions_feedback_text = ft.Text("")
-        self.book_status_display_label = ft.Text("")
 
         # self.delete_member_button_flet = ft.ElevatedButton(...) # Moved
         self.delete_plan_button_flet = ft.ElevatedButton(text="Delete Selected Plan", on_click=self.on_delete_selected_plan_click_flet)
         self.delete_transaction_button_flet = ft.ElevatedButton(text="Delete Selected Transaction", on_click=self.on_delete_selected_transaction_click_flet)
-
-        current_year = datetime.now().year
-        current_month = datetime.now().month
-        self.book_closing_year_input = ft.TextField(label="Year", value=str(current_year))
-        self.book_closing_month_dropdown = ft.Dropdown(
-            label="Month",
-            options=[ft.dropdown.Option(str(i), calendar.month_name[i]) for i in range(1, 13)],
-            value=str(current_month)
-        )
-        self.close_books_button_flet = ft.ElevatedButton(text="Close Books", on_click=self._handle_close_books_action_flet)
-        self.open_books_button_flet = ft.ElevatedButton(text="Re-open Books", on_click=self._handle_open_books_action_flet)
-        self.check_book_status_button_flet = ft.ElevatedButton(text="Check Book Status", on_click=self._handle_check_book_status_flet)
 
         # Member form controls moved to MembershipTab
         # Plan form controls remain for Plan Management Tab
@@ -978,19 +959,7 @@ class FletAppView(ft.Container):
                 ),
                 ft.Tab(
                     text="Settings",
-                    content=ft.Column(
-                        controls=[
-                            ft.Text("Book Management", weight=ft.FontWeight.BOLD),
-                            self.book_closing_year_input,
-                            self.book_closing_month_dropdown,
-                            ft.Row(controls=[
-                                self.check_book_status_button_flet, self.close_books_button_flet, self.open_books_button_flet,
-                            ], alignment=ft.MainAxisAlignment.START),
-                            self.book_status_display_label,
-                            ft.Divider(),
-                            ft.Container(content=ft.Text("Other Settings Placeholder"), padding=10, alignment=ft.alignment.center)
-                        ], spacing=10, scroll=ft.ScrollMode.AUTO
-                    )
+                    content=self.settings_tab_ref
                 ),
             ]
         )
