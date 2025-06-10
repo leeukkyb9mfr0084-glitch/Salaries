@@ -15,8 +15,16 @@ from reporter.database_manager import (
     add_transaction  # Updated import
 )
 
-GC_CSV_PATH = 'Kranos MMA Members.xlsx - GC.csv'
-PT_CSV_PATH = 'Kranos MMA Members.xlsx - PT.csv'
+# Determine the directory of the current script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Construct absolute paths to the CSV files
+# Assuming CSVs are in 'reporter/data/csv/' and this script is in 'reporter/'
+csv_dir = os.path.join(script_dir, 'data', 'csv')
+
+# Use specific filenames as mentioned in the script, but now within csv_dir
+GC_CSV_PATH = os.path.join(csv_dir, 'Kranos MMA Members.xlsx - GC.csv')
+PT_CSV_PATH = os.path.join(csv_dir, 'Kranos MMA Members.xlsx - PT.csv')
 
 def parse_date(date_str):
     """Parses DD/MM/YY or DD/MM/YYYY and returns YYYY-MM-DD format."""
