@@ -401,7 +401,83 @@ class FletAppView(ft.UserControl):
         self.selected_member_id_flet: Optional[int] = None
         self.selected_transaction_id_flet: Optional[int] = None
         self.selected_plan_id_flet: Optional[int] = None
+        self.current_plan_id_to_update_flet: Optional[int] = None
+        self.selected_start_date_flet: Optional[date] = None
+        self.selected_payment_date_flet: Optional[date] = None
+        self.active_date_picker_target: Optional[str] = None
         # self.page is available via self.page once the control is added to a page.
+
+        # Date Picker
+        self.date_picker = ft.DatePicker(
+            on_change=self.on_date_picker_change,
+            on_dismiss=self.on_date_picker_dismiss,
+        )
+        # File Picker
+        self.file_picker = ft.FilePicker(on_result=self.on_file_picker_result_flet)
+
+        # Member form fields
+        self.member_name_input = ft.TextField(label="Name")
+        self.member_phone_input = ft.TextField(label="Phone")
+        self.add_member_button = ft.ElevatedButton(text="Add Member", on_click=self.on_add_member_click)
+        self.member_form_feedback_text = ft.Text("")
+
+        # Plan form fields
+        self.plan_name_input = ft.TextField(label="Plan Name")
+        self.plan_duration_input = ft.TextField(label="Duration (days)")
+        self.save_plan_button = ft.ElevatedButton(text="Save Plan", on_click=self.on_save_plan_click)
+        self.plan_form_feedback_text = ft.Text("Ready to add a new plan.", color=ft.colors.BLACK) # Initial message
+        self.edit_plan_button = ft.ElevatedButton(text="Edit Selected Plan", on_click=self.on_edit_selected_plan_click)
+        self.clear_plan_form_button = ft.ElevatedButton(text="Clear Form / New Plan", on_click=self.on_clear_plan_form_click)
+
+        # Membership form fields
+        self.membership_type_dropdown = ft.Dropdown(
+            label="Membership Type",
+            options=[ft.dropdown.Option("Group Class"), ft.dropdown.Option("Personal Training")],
+            on_change=self.on_membership_type_change_flet
+        )
+        self.membership_member_dropdown = ft.Dropdown(label="Select Member", options=[])
+        self.membership_plan_dropdown = ft.Dropdown(label="Select Plan", options=[]) # For Group Class
+        self.membership_sessions_input = ft.TextField(label="Number of Sessions") # For Personal Training
+        self.membership_start_date_picker_button = ft.ElevatedButton(
+            text="Pick Start Date",
+            on_click=lambda e: self.open_date_picker(e, "start_date")
+        )
+        self.membership_start_date_text = ft.Text("Start Date: Not Selected")
+        self.membership_payment_date_picker_button = ft.ElevatedButton(
+            text="Pick Payment Date",
+            on_click=lambda e: self.open_date_picker(e, "payment_date")
+        ) # For Group Class
+        self.membership_payment_date_text = ft.Text("Payment Date: Not Selected") # For Group Class
+        self.membership_amount_paid_input = ft.TextField(label="Amount Paid")
+        self.membership_payment_method_input = ft.TextField(label="Payment Method") # For Group Class
+        self.save_membership_button = ft.ElevatedButton(text="Save Membership", on_click=self.on_save_membership_click)
+        self.membership_form_feedback_text = ft.Text("")
+
+        # Reporting - Pending Renewals Form
+        self.renewal_report_year_input = ft.TextField(label="Year", value=str(datetime.now().year))
+        self.renewal_report_month_dropdown = ft.Dropdown(
+            label="Month",
+            options=[ft.dropdown.Option(str(i), str(i)) for i in range(1, 13)],
+            value=str(datetime.now().month)
+        )
+        self.generate_renewals_report_button = ft.ElevatedButton(
+            text="Generate Renewals Report",
+            on_click=self.on_generate_renewals_report_click
+        )
+        self.renewals_report_feedback_text = ft.Text("")
+
+        # Reporting - Finance Report Form
+        self.finance_report_year_input = ft.TextField(label="Year", value=str(datetime.now().year))
+        self.finance_report_month_dropdown = ft.Dropdown(
+            label="Month",
+            options=[ft.dropdown.Option(str(i), str(i)) for i in range(1, 13)],
+            value=str(datetime.now().month)
+        )
+        self.generate_finance_report_button = ft.ElevatedButton(
+            text="Generate Excel Finance Report",
+            on_click=self.on_generate_finance_report_click
+        )
+        self.finance_report_feedback_text = ft.Text("")
 
         self.members_table_flet = ft.DataTable(
             columns=[
@@ -808,11 +884,348 @@ class FletAppView(ft.UserControl):
             )
         self.update()
 
+    def on_add_member_click(self, e):
+        """Handles the click event of the 'Add Member' button."""
+        name = self.member_name_input.value
+        phone = self.member_phone_input.value
+
+        success, message = self.controller.save_member_action(name, phone)
+
+        self.member_form_feedback_text.value = message
+        if success:
+            self.member_form_feedback_text.color = ft.colors.GREEN
+            self.member_name_input.value = ""
+            self.member_phone_input.value = ""
+            self.display_all_members_flet()
+            self.populate_member_dropdowns_flet() # Now implemented
+        else:
+            self.member_form_feedback_text.color = ft.colors.RED
+
+        self.member_name_input.update() # Ensure input fields are visually cleared
+        self.member_phone_input.update()
+        self.member_form_feedback_text.update()
+        self.update() # General UI update
+
+    def populate_member_dropdowns_flet(self):
+        """Populates the membership_member_dropdown with active members."""
+        members = self.controller.get_filtered_members(None, None)  # Fetches (id, name, phone, join_date, is_active)
+        options = [ft.dropdown.Option(key=str(m[0]), text=f"{m[1]} (ID: {m[0]})") for m in members if m[4]] # Only active
+
+        current_value = self.membership_member_dropdown.value
+        self.membership_member_dropdown.options = options
+        if options:
+            # Try to keep current selection if it's still valid, else default to first
+            if current_value and any(opt.key == current_value for opt in options):
+                self.membership_member_dropdown.value = current_value
+            else:
+                self.membership_member_dropdown.value = options[0].key
+        else:
+            self.membership_member_dropdown.value = None
+
+        if hasattr(self, 'membership_member_dropdown') and self.membership_member_dropdown.page: # Check if page exists
+            self.membership_member_dropdown.update() # Update only if part of the page
+        # self.update() # Broader update might not be needed if only dropdown changes
+
+    def on_save_plan_click(self, e):
+        """Handles the click event of the 'Save Plan' button."""
+        plan_name = self.plan_name_input.value
+        duration_str = self.plan_duration_input.value
+        plan_id_to_update_str = str(self.current_plan_id_to_update_flet) if self.current_plan_id_to_update_flet else None
+
+        success, message, updated_plans = self.controller.save_plan_action(plan_name, duration_str, plan_id_to_update_str)
+
+        self.plan_form_feedback_text.value = message
+        if success:
+            self.plan_form_feedback_text.color = ft.colors.GREEN
+            self.on_clear_plan_form_click(None) # Clear form and reset state
+            if updated_plans is not None: # Check if updated_plans is not None before passing
+                self.display_all_plans_flet(updated_plans)
+            else: # Fallback if updated_plans is None for some reason (e.g. error during fetch)
+                self.display_all_plans_flet() # Refresh with all plans
+            self.populate_plan_dropdowns_flet() # Now implemented
+        else:
+            self.plan_form_feedback_text.color = ft.colors.RED
+
+        self.plan_form_feedback_text.update()
+        # self.plan_name_input.update() and self.plan_duration_input.update() are handled by on_clear_plan_form_click
+        self.update() # General UI update for table refresh
+
+    def on_edit_selected_plan_click(self, e):
+        """Populates the plan form with data from the selected plan in the table."""
+        if self.selected_plan_id_flet is not None:
+            selected_plan_details = None
+            for row in self.plans_table_flet.rows:
+                if int(row.cells[0].content.value) == self.selected_plan_id_flet:
+                    selected_plan_details = {
+                        "id": row.cells[0].content.value,
+                        "name": row.cells[1].content.value,
+                        "duration": row.cells[2].content.value,
+                        # Status (cell 3) is not directly editable in this form version
+                    }
+                    break
+
+            if selected_plan_details:
+                self.plan_name_input.value = selected_plan_details["name"]
+                self.plan_duration_input.value = selected_plan_details["duration"]
+                self.current_plan_id_to_update_flet = self.selected_plan_id_flet
+                self.plan_form_feedback_text.value = f"Editing Plan ID: {self.current_plan_id_to_update_flet}"
+                self.plan_form_feedback_text.color = ft.colors.BLUE
+            else:
+                self.plan_form_feedback_text.value = "Error: Could not find details for the selected plan."
+                self.plan_form_feedback_text.color = ft.colors.RED
+        else:
+            self.plan_form_feedback_text.value = "Please select a plan from the table to edit."
+            self.plan_form_feedback_text.color = ft.colors.ORANGE
+
+        self.plan_name_input.update()
+        self.plan_duration_input.update()
+        self.plan_form_feedback_text.update()
+        self.update()
+
+    def on_clear_plan_form_click(self, e):
+        """Clears the plan form fields and resets the editing state."""
+        self.plan_name_input.value = ""
+        self.plan_duration_input.value = ""
+        self.current_plan_id_to_update_flet = None
+        self.plan_form_feedback_text.value = "Ready to add a new plan."
+        self.plan_form_feedback_text.color = ft.colors.BLACK # Default text color
+
+        self.plan_name_input.update()
+        self.plan_duration_input.update()
+        self.plan_form_feedback_text.update()
+        self.update() # Potentially to update other related UI elements if any
+
+    def populate_plan_dropdowns_flet(self):
+        """Populates the membership_plan_dropdown with active plans."""
+        plans = self.controller.get_active_plans()  # Fetches (id, name, duration)
+        options = [ft.dropdown.Option(key=str(p[0]), text=f"{p[1]} ({p[2]} days)") for p in plans]
+
+        current_value = self.membership_plan_dropdown.value
+        self.membership_plan_dropdown.options = options
+        if options:
+             # Try to keep current selection if it's still valid, else default to first
+            if current_value and any(opt.key == current_value for opt in options):
+                self.membership_plan_dropdown.value = current_value
+            else:
+                self.membership_plan_dropdown.value = options[0].key
+        else:
+            self.membership_plan_dropdown.value = None
+
+        if hasattr(self, 'membership_plan_dropdown') and self.membership_plan_dropdown.page: # Check if page exists
+            self.membership_plan_dropdown.update()
+        # self.update()
+
+    def open_date_picker(self, e, date_type_to_set: str):
+        """Opens the date picker and sets the target for date selection."""
+        self.active_date_picker_target = date_type_to_set
+        # self.page.open(self.date_picker) # Old way
+        self.date_picker.pick_date()
+
+
+    def on_date_picker_change(self, e):
+        """Handles date selection from the DatePicker."""
+        selected_date = self.date_picker.value.date() if self.date_picker.value else None
+        if self.active_date_picker_target == "start_date":
+            self.selected_start_date_flet = selected_date
+            self.membership_start_date_text.value = f"Start Date: {selected_date.strftime('%Y-%m-%d') if selected_date else 'Not Selected'}"
+            if self.membership_start_date_text.page: self.membership_start_date_text.update()
+        elif self.active_date_picker_target == "payment_date":
+            self.selected_payment_date_flet = selected_date
+            self.membership_payment_date_text.value = f"Payment Date: {selected_date.strftime('%Y-%m-%d') if selected_date else 'Not Selected'}"
+            if self.membership_payment_date_text.page: self.membership_payment_date_text.update()
+
+        self.active_date_picker_target = None # Reset target
+        # self.update() # May not be needed if individual controls are updated
+
+    def on_date_picker_dismiss(self, e):
+        """Handles dismissal of the DatePicker."""
+        # User dismissed the picker, you might want to log this or do nothing.
+        self.active_date_picker_target = None # Reset target
+        # self.update() # Update UI if needed
+
+    def on_membership_type_change_flet(self, e):
+        """Shows/hides fields based on membership type selection."""
+        selection = self.membership_type_dropdown.value
+        is_group_class = selection == "Group Class"
+
+        self.membership_plan_dropdown.visible = is_group_class
+        self.membership_payment_date_picker_button.visible = is_group_class
+        self.membership_payment_date_text.visible = is_group_class
+        self.membership_payment_method_input.visible = is_group_class
+        self.membership_sessions_input.visible = not is_group_class
+
+        if self.page: # Ensure page exists before updating controls
+            self.membership_plan_dropdown.update()
+            self.membership_payment_date_picker_button.update()
+            self.membership_payment_date_text.update()
+            self.membership_payment_method_input.update()
+            self.membership_sessions_input.update()
+            self.update() # General update for layout changes
+
+    def on_save_membership_click(self, e):
+        """Handles the save membership action."""
+        membership_type = self.membership_type_dropdown.value
+        member_id_str = self.membership_member_dropdown.value
+        member_id = int(member_id_str) if member_id_str else None
+
+        start_date_str = self.selected_start_date_flet.strftime('%Y-%m-%d') if self.selected_start_date_flet else None
+        amount_paid_str = self.membership_amount_paid_input.value
+
+        plan_id = None
+        payment_date_str = None
+        payment_method = None
+        sessions_str = None
+
+        if membership_type == "Group Class":
+            plan_id_str = self.membership_plan_dropdown.value
+            plan_id = int(plan_id_str) if plan_id_str else None
+            payment_date_str = self.selected_payment_date_flet.strftime('%Y-%m-%d') if self.selected_payment_date_flet else None
+            payment_method = self.membership_payment_method_input.value
+        elif membership_type == "Personal Training":
+            sessions_str = self.membership_sessions_input.value
+            payment_date_str = start_date_str # PT payment date is the start date
+            payment_method = "N/A" # Default for PT
+
+        success, message = self.controller.save_membership_action(
+            membership_type, member_id, start_date_str, amount_paid_str,
+            plan_id, payment_date_str, payment_method, sessions_str
+        )
+
+        self.membership_form_feedback_text.value = message
+        if success:
+            self.membership_form_feedback_text.color = ft.colors.GREEN
+            # Clear form fields
+            self.membership_amount_paid_input.value = ""
+            self.membership_payment_method_input.value = "" # Specific to Group Class but clearing doesn't hurt
+            self.membership_sessions_input.value = ""    # Specific to PT
+
+            self.selected_start_date_flet = None
+            self.membership_start_date_text.value = "Start Date: Not Selected"
+            self.selected_payment_date_flet = None
+            self.membership_payment_date_text.value = "Payment Date: Not Selected"
+
+            # Optionally reset dropdowns - for now, let them keep their selection
+            # self.membership_type_dropdown.value = None # Or first option
+            # self.membership_member_dropdown.value = None # Or first option
+            # self.membership_plan_dropdown.value = None # Or first option
+
+            self.refresh_membership_history_display_flet() # Update full history
+            if member_id is not None and self.selected_member_id_flet == member_id:
+                self.display_membership_history_flet(member_id) # Update specific member view if shown
+
+        else:
+            self.membership_form_feedback_text.color = ft.colors.RED
+
+        # Update specific controls that changed
+        self.membership_form_feedback_text.update()
+        self.membership_amount_paid_input.update()
+        self.membership_payment_method_input.update()
+        self.membership_sessions_input.update()
+        self.membership_start_date_text.update()
+        self.membership_payment_date_text.update()
+        self.update() # General UI update
+
+    def on_generate_renewals_report_click(self, e):
+        """Handles the click event for generating the pending renewals report."""
+        year_str = self.renewal_report_year_input.value
+        month_str = self.renewal_report_month_dropdown.value
+
+        if not year_str or not month_str:
+            self.renewals_report_feedback_text.value = "Year and Month cannot be empty."
+            self.renewals_report_feedback_text.color = ft.colors.RED
+            self.renewals_report_feedback_text.update()
+            return
+
+        try:
+            year = int(year_str)
+            month = int(month_str)
+            if not (1 <= month <= 12):
+                raise ValueError("Month out of range.")
+        except ValueError:
+            self.renewals_report_feedback_text.value = "Invalid Year or Month format."
+            self.renewals_report_feedback_text.color = ft.colors.RED
+            self.renewals_report_feedback_text.update()
+            return
+
+        success, message, renewals_data = self.controller.generate_custom_pending_renewals_action(year, month)
+        self.renewals_report_feedback_text.value = message
+        self.renewals_report_feedback_text.color = ft.colors.GREEN if success else ft.colors.RED
+        self.renewals_report_feedback_text.update()
+
+        self.pending_renewals_table_flet.rows.clear()
+        if success and renewals_data:
+            for item in renewals_data:
+                # (member_id, client_name, phone, plan_name, end_date, days_overdue)
+                cells = [ft.DataCell(ft.Text(str(val))) for val in item]
+                self.pending_renewals_table_flet.rows.append(ft.DataRow(cells=cells))
+        elif success and not renewals_data: # Success but no data
+             self.pending_renewals_table_flet.rows.append(ft.DataRow(cells=[
+                ft.DataCell(ft.Text(message), colspan=len(self.pending_renewals_table_flet.columns))]))
+        else: # Not success or renewals_data is None
+            error_message = message if message else "Error generating report or no data."
+            self.pending_renewals_table_flet.rows.append(ft.DataRow(cells=[
+                ft.DataCell(ft.Text(error_message), colspan=len(self.pending_renewals_table_flet.columns))]))
+
+        self.pending_renewals_table_flet.update()
+        self.update()
+
+    def on_generate_finance_report_click(self, e):
+        """Handles the click event for generating the finance report."""
+        year_str = self.finance_report_year_input.value
+        month_str = self.finance_report_month_dropdown.value
+
+        if not year_str or not month_str:
+            self.finance_report_feedback_text.value = "Year and Month cannot be empty."
+            self.finance_report_feedback_text.color = ft.colors.RED
+            self.finance_report_feedback_text.update()
+            return
+        try:
+            int(year_str) # Validate year can be int
+            if not (1 <= int(month_str) <= 12):
+                 raise ValueError("Month out of range.")
+        except ValueError:
+            self.finance_report_feedback_text.value = "Invalid Year or Month format."
+            self.finance_report_feedback_text.color = ft.colors.RED
+            self.finance_report_feedback_text.update()
+            return
+
+        # Proceed to file picking
+        self.file_picker.save_file(
+            dialog_title="Save Finance Report",
+            file_name=f"finance_report_{year_str}_{month_str}.xlsx",
+            allowed_extensions=["xlsx"]
+        )
+
+    def on_file_picker_result_flet(self, e: ft.FilePickerResultEvent):
+        """Handles the result of the file picker dialog."""
+        if e.path:
+            save_path = e.path
+            year = int(self.finance_report_year_input.value) # Assumes valid from previous check
+            month = int(self.finance_report_month_dropdown.value) # Assumes valid
+
+            success, message = self.controller.generate_finance_report_excel_action(year, month, save_path)
+            self.finance_report_feedback_text.value = message
+            self.finance_report_feedback_text.color = ft.colors.GREEN if success else ft.colors.RED
+        else:
+            self.finance_report_feedback_text.value = "File save cancelled."
+            self.finance_report_feedback_text.color = ft.colors.ORANGE
+
+        self.finance_report_feedback_text.update()
+        self.update()
+
     def build(self):
         # Initial population of the members table
         # This needs to be called after members_table_flet is initialized but before the UI is built,
         # or right after the UI structure using it is defined.
         # Calling it here means it will populate when build() is first called.
+
+        # Ensure DatePicker is added to page overlays
+        # This check is to prevent adding it multiple times if build is called again,
+        # though typically build is called once per control instance.
+        # However, self.page might not be available yet in __init__.
+        # It's safer to do this here or in did_mount.
+        # For this structure, doing it in build() before returning tabs_control is fine.
+        # self.page.overlay.append(self.date_picker) # This will be done after self.page is set.
 
         # Renaming to table_area_container as per latest prompt for clarity
         table_area_container = ft.Container(
@@ -841,13 +1254,34 @@ class FletAppView(ft.UserControl):
                     content=ft.Row(
                         controls=[
                             ft.Container(
-                                content=ft.Text("Form Placeholder"), # Keep for now
+                                content=ft.Column(
+                                    controls=[
+                                        ft.Text("Add New Member", weight=ft.FontWeight.BOLD),
+                                        self.member_name_input,
+                                        self.member_phone_input,
+                                        self.add_member_button,
+                                        self.member_form_feedback_text,
+                                        ft.Divider(),
+                                        ft.Text("Add New Membership", weight=ft.FontWeight.BOLD),
+                                        self.membership_type_dropdown,
+                                        self.membership_member_dropdown,
+                                        self.membership_plan_dropdown, # Visibility toggled
+                                        self.membership_sessions_input, # Visibility toggled
+                                        ft.Row([self.membership_start_date_picker_button, self.membership_start_date_text]),
+                                        ft.Row([self.membership_payment_date_picker_button, self.membership_payment_date_text]), # Visibility toggled
+                                        self.membership_amount_paid_input,
+                                        self.membership_payment_method_input, # Visibility toggled
+                                        self.save_membership_button,
+                                        self.membership_form_feedback_text,
+                                    ],
+                                    scroll=ft.ScrollMode.AUTO # Make this column scrollable
+                                ),
                                 expand=1,
                                 bgcolor=ft.colors.BLUE_GREY_200,
                                 padding=10,
-                                alignment=ft.alignment.center,
+                                alignment=ft.alignment.top_center,
                             ),
-                            table_area_container, # Use the defined scrollable container with both tables
+                            table_area_container,
                         ]
                     )
                 ),
@@ -889,11 +1323,21 @@ class FletAppView(ft.UserControl):
                     content=ft.Row(
                         controls=[
                             ft.Container(
-                                content=ft.Text("Plan Form Placeholder"),
+                                content=ft.Column(
+                                    controls=[
+                                        ft.Text("Add/Edit Plan", weight=ft.FontWeight.BOLD),
+                                        self.plan_name_input,
+                                        self.plan_duration_input,
+                                        self.save_plan_button,
+                                        self.edit_plan_button, # Added button
+                                        self.clear_plan_form_button, # Added button
+                                        self.plan_form_feedback_text,
+                                    ]
+                                ),
                                 expand=1,
                                 bgcolor=ft.colors.AMBER_200,
                                 padding=10,
-                                alignment=ft.alignment.center,
+                                alignment=ft.alignment.top_center,
                             ),
                             # Container for the plans table
                             ft.Container(
@@ -917,26 +1361,40 @@ class FletAppView(ft.UserControl):
                     text="Reporting",
                     content=ft.Column(
                         controls=[
-                            ft.Container( # Container for Renewals Table
+                            ft.Container( # Container for Renewals Report Form and Table
                                 content=ft.Column(
                                     controls=[
-                                        ft.Text("Pending Renewals (Current Month)", weight=ft.FontWeight.BOLD),
+                                        ft.Text("Custom Pending Renewals Report", weight=ft.FontWeight.BOLD),
+                                        self.renewal_report_year_input,
+                                        self.renewal_report_month_dropdown,
+                                        self.generate_renewals_report_button,
+                                        self.renewals_report_feedback_text,
+                                        ft.Divider(),
+                                        ft.Text("Pending Renewals Results", weight=ft.FontWeight.BOLD),
                                         self.pending_renewals_table_flet
                                     ],
-                                    scroll=ft.ScrollMode.AUTO, # Scroll for the column containing table and title
-                                    expand=True
+                                    scroll=ft.ScrollMode.AUTO,
+                                    expand=True # Ensure this column can expand
                                 ),
-                                expand=1, # Adjust expand factor as needed
-                                bgcolor=ft.colors.TEAL_200, # Or your choice
+                                expand=1,
+                                bgcolor=ft.colors.TEAL_200,
                                 padding=10,
                                 alignment=ft.alignment.top_center
                             ),
-                            ft.Container( # Existing Finance Report Placeholder
-                                content=ft.Text("Finance Report Placeholder"),
+                            ft.Container( # Container for Finance Report Form
+                                content=ft.Column(
+                                    controls=[
+                                        ft.Text("Generate Monthly Finance Report (Excel)", weight=ft.FontWeight.BOLD),
+                                        self.finance_report_year_input,
+                                        self.finance_report_month_dropdown,
+                                        self.generate_finance_report_button,
+                                        self.finance_report_feedback_text,
+                                    ]
+                                ),
                                 expand=1,
                                 bgcolor=ft.colors.TEAL_300,
                                 padding=10,
-                                alignment=ft.alignment.center,
+                                alignment=ft.alignment.top_center, # Changed from center
                             ),
                         ]
                     )
@@ -965,8 +1423,30 @@ class FletAppView(ft.UserControl):
         self.refresh_membership_history_display_flet()
         # Populate plans table
         self.display_all_plans_flet()
-        # Populate pending renewals table
-        self.display_pending_renewals_flet()
+        # Populate pending renewals table - Now handled by on_generate_renewals_report_click called below
+        # self.display_pending_renewals_flet()
+
+        # Populate dropdowns
+        self.populate_member_dropdowns_flet()
+        self.populate_plan_dropdowns_flet()
+
+        # Set initial visibility for membership form based on default type
+        self.on_membership_type_change_flet(None)
+
+
+        # Add DatePicker to the page overlay once the page is available
+        # This is often done in did_mount or after the main control is added to the page.
+        # For now, let's assume self.page will be set by Flet when app_view is added.
+        # A common pattern is to check self.page and add overlay items.
+        if self.page:
+            if self.date_picker not in self.page.overlay:
+                self.page.overlay.append(self.date_picker)
+            if self.file_picker not in self.page.overlay: # Add FilePicker to overlay
+                self.page.overlay.append(self.file_picker)
+
+        # Initial population of the pending renewals table with default/current month's data
+        self.on_generate_renewals_report_click(None)
+
 
         return self.tabs_control
 
@@ -976,7 +1456,14 @@ def main(page: ft.Page):
 
     # Create and add the main app view
     app_view = FletAppView()
-    page.add(app_view)
+    page.add(app_view) # This implicitly calls app_view.build() and sets app_view.page
+
+    # Now that app_view.page is set, add overlay components
+    if app_view.date_picker not in page.overlay:
+        page.overlay.append(app_view.date_picker)
+    if app_view.file_picker not in page.overlay: # Ensure FilePicker is added
+        page.overlay.append(app_view.file_picker)
+
     page.update()
 
 if __name__ == "__main__":
