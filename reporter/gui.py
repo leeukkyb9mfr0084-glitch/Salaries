@@ -465,26 +465,9 @@ class FletAppView(ft.Container):
         # Date Picker and File Picker are declared here and initialized in build
         self.date_picker: Optional[ft.DatePicker] = None
         self.file_picker: Optional[ft.FilePicker] = None
-
-        # --- Start of UI Assembly moved from _initialize_ui_elements() ---
-        # This method now contains the logic previously in build()
-        # to construct and return the main UI content (tabs_control).
-        # Initial population of the members table
-        # This needs to be called after members_table_flet is initialized but before the UI is built,
-        # or right after the UI structure using it is defined.
-        # Calling it here means it will populate when __init__ is executed.
-
-        # Ensure DatePicker is added to page overlays - MOVED to did_mount
-        # This check is to prevent adding it multiple times if build is called again,
-        # though typically build is called once per control instance.
-        # However, self.page might not be available yet in __init__.
-        # It's safer to do this here or in did_mount.
-        # For this structure, doing it previously in build() before returning tabs_control was fine.
-        # Now, overlay logic is in did_mount.
-
-        # --- End of UI Assembly moved from _initialize_ui_elements() ---
         self.expand = True
 
+    # Event Handlers and Helper Methods
     def on_full_history_select_changed(self, e: ft.ControlEvent):
         """Handles row selection changes in the full_history_table_flet."""
         selected_index_str = e.data
