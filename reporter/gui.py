@@ -454,6 +454,14 @@ class FletAppView(ft.UserControl):
         self.plan_form_feedback_text = ft.Text("Ready to add a new plan.", color=ft.colors.BLACK) # Initial message
         self.edit_plan_button = ft.ElevatedButton(text="Edit Selected Plan", on_click=self.on_edit_selected_plan_click)
         self.clear_plan_form_button = ft.ElevatedButton(text="Clear Form / New Plan", on_click=self.on_clear_plan_form_click)
+        self.toggle_plan_status_button = ft.ElevatedButton(text="Toggle Active/Inactive", on_click=self.on_toggle_plan_status_click, disabled=True) # New button
+
+        # Membership History Filter fields
+        self.history_name_filter_input = ft.TextField(label="Filter by Name")
+        self.history_phone_filter_input = ft.TextField(label="Filter by Phone")
+        self.history_join_date_filter_input = ft.TextField(label="Filter by Join Date (YYYY-MM-DD)")
+        self.apply_history_filters_button = ft.ElevatedButton(text="Apply History Filters", on_click=self.apply_history_filters_flet)
+        self.clear_history_filters_button = ft.ElevatedButton(text="Clear History Filters", on_click=self.clear_history_filters_flet)
 
         # Membership form fields
         self.membership_type_dropdown = ft.Dropdown(
@@ -636,7 +644,16 @@ class FletAppView(ft.UserControl):
         else:  # Selection was cleared
             self.selected_plan_id_flet = None
             print("DEBUG: Plans table selection cleared.")
-        # self.update() # Not strictly necessary if only internal state is changed
+
+        # Enable/disable toggle button based on selection
+        if self.selected_plan_id_flet is not None:
+            self.toggle_plan_status_button.disabled = False
+        else:
+            self.toggle_plan_status_button.disabled = True
+
+        if hasattr(self, 'toggle_plan_status_button') and self.toggle_plan_status_button.page: # Ensure button is on page
+            self.toggle_plan_status_button.update()
+        # self.update() # Not strictly necessary if only internal state is changed, and covered by button update if needed
 
     def _get_membership_status_flet(self, end_date_str: Optional[str]) -> str:
         """Helper to determine membership status based on end date string."""
@@ -720,14 +737,49 @@ class FletAppView(ft.UserControl):
         self.update()
 
     def apply_history_filters_flet(self, e):
-        """Placeholder for applying transaction history filters."""
-        # To be implemented: get filter values, call controller, then refresh_membership_history_display_flet(filtered_data)
-        pass
+        """Applies transaction history filters."""
+        name_filter = self.history_name_filter_input.value or None
+        phone_filter = self.history_phone_filter_input.value or None
+        join_date_filter = self.history_join_date_filter_input.value or None
+
+        if join_date_filter:
+            try:
+                # Validate date format YYYY-MM-DD
+                datetime.strptime(join_date_filter, '%Y-%m-%d')
+            except ValueError:
+                self.history_actions_feedback_text.value = "Error: Invalid Join Date format. Use YYYY-MM-DD."
+                self.history_actions_feedback_text.color = ft.colors.RED
+                self.history_actions_feedback_text.update()
+                return
+
+        filtered_data = self.controller.get_filtered_transaction_history(name_filter, phone_filter, join_date_filter)
+        self.refresh_membership_history_display_flet(filtered_data)
+
+        if filtered_data:
+            self.history_actions_feedback_text.value = f"Filters applied. Found {len(filtered_data)} records."
+            self.history_actions_feedback_text.color = ft.colors.GREEN
+        else:
+            self.history_actions_feedback_text.value = "No results for current filters."
+            self.history_actions_feedback_text.color = ft.colors.ORANGE
+
+        self.history_actions_feedback_text.update()
+        self.update()
 
     def clear_history_filters_flet(self, e):
         """Clears transaction history filters and re-displays all history."""
-        # To be implemented: clear filter fields in UI
+        self.history_name_filter_input.value = ""
+        self.history_phone_filter_input.value = ""
+        self.history_join_date_filter_input.value = ""
+
+        self.history_name_filter_input.update()
+        self.history_phone_filter_input.update()
+        self.history_join_date_filter_input.update()
+
         self.refresh_membership_history_display_flet() # Fetches all data
+        self.history_actions_feedback_text.value = "Filters cleared. Displaying all history."
+        self.history_actions_feedback_text.color = ft.colors.BLUE
+        self.history_actions_feedback_text.update()
+        self.update()
 
     def display_membership_history_flet(self, member_id: Optional[int]):
         """Populates the member_specific_history_table_flet with activity for the given member_id."""
@@ -1317,15 +1369,29 @@ class FletAppView(ft.UserControl):
                     text="Membership History",
                     content=ft.Column(
                         controls=[
+                            # Container for History Filters
                             ft.Container(
-                                content=ft.Text("Filters Placeholder"),
-                                expand=1, # Adjusted expand for Column layout
-                                bgcolor=ft.colors.GREEN_200,
+                                content=ft.Column(
+                                    controls=[
+                                        ft.Text("Filter Transaction History", weight=ft.FontWeight.BOLD),
+                                        self.history_name_filter_input,
+                                        self.history_phone_filter_input,
+                                        self.history_join_date_filter_input,
+                                        ft.Row(
+                                            controls=[
+                                                self.apply_history_filters_button,
+                                                self.clear_history_filters_button,
+                                            ],
+                                            alignment=ft.MainAxisAlignment.START,
+                                        ),
+                                    ],
+                                    spacing=10 # Spacing within the filter column
+                                ),
+                                bgcolor=ft.colors.GREEN_200, # Example color
                                 padding=10,
-                                alignment=ft.alignment.center,
-                                # Adjust expand or height as needed for filter area
-                                # expand=1, # Original from prompt, might be too large if filters are few
-                                height=100, # Example fixed height, or remove expand to size to content
+                                border_radius=5,
+                                # Adjust height or remove expand to size to content
+                                # height=200, # Example fixed height, or let it size automatically
                             ),
                             # Container for the full history table
                             ft.Container(
@@ -1362,6 +1428,7 @@ class FletAppView(ft.UserControl):
                                         self.save_plan_button,
                                         self.edit_plan_button, # Added button
                                         self.clear_plan_form_button, # Added button
+                                        self.toggle_plan_status_button, # Added button
                                         self.delete_plan_button_flet, # Added
                                         self.plan_form_feedback_text, # Existing, will be used for feedback
                                     ]
@@ -1876,6 +1943,53 @@ if __name__ == "__main__":
         self.history_actions_feedback_text.update()
         if self.full_history_table_flet: self.full_history_table_flet.update()
         self.update()
+
+    def on_toggle_plan_status_click(self, e):
+        """Handles the click event of the 'Toggle Active/Inactive' button."""
+        if self.selected_plan_id_flet is None:
+            self.plan_form_feedback_text.value = "Error: No plan selected to toggle status."
+            self.plan_form_feedback_text.color = ft.colors.RED
+            self.plan_form_feedback_text.update()
+            return
+
+        current_status_str = ""
+        # Find the current status from the table
+        for row in self.plans_table_flet.rows:
+            if row.cells and len(row.cells) > 3 and isinstance(row.cells[0].content, ft.Text):
+                try:
+                    if int(row.cells[0].content.value) == self.selected_plan_id_flet:
+                        if isinstance(row.cells[3].content, ft.Text):
+                            current_status_str = row.cells[3].content.value # "Active" or "Inactive"
+                            break
+                except ValueError:
+                    continue # Should not happen if IDs are integers
+
+        if not current_status_str:
+            self.plan_form_feedback_text.value = "Error: Could not determine current status of the selected plan."
+            self.plan_form_feedback_text.color = ft.colors.RED
+            self.plan_form_feedback_text.update()
+            return
+
+        current_status_bool = True if current_status_str == "Active" else False
+
+        success, message, updated_plans = self.controller.toggle_plan_status_action(
+            self.selected_plan_id_flet, current_status_bool
+        )
+
+        self.plan_form_feedback_text.value = message
+        if success:
+            self.plan_form_feedback_text.color = ft.colors.GREEN
+            if updated_plans is not None:
+                self.display_all_plans_flet(updated_plans)
+            else: # Fallback if controller didn't return plans (should not happen on success)
+                self.display_all_plans_flet()
+            self.populate_plan_dropdowns_flet() # Refresh plan dropdowns
+        else:
+            self.plan_form_feedback_text.color = ft.colors.RED
+
+        self.plan_form_feedback_text.update()
+        self.update()
+
 
 # Final check on GuiController.save_membership_action:
 # It was returning `success` which was a tuple (bool, str) instead of just the boolean.
