@@ -5,7 +5,7 @@ A desktop application designed to manage gym operations, including memberships, 
 
 ## Technology Stack
 * **Language**: Python 3
-* **GUI**: CustomTkinter
+* **GUI**: Flet
 * **Database**: SQLite
 * **Testing**: pytest
 
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 ```
 /reporter/
 |-- main.py                 # Main application entry point
-|-- gui.py                  # Defines the CustomTkinter GUI
+|-- gui.py                  # Defines the Flet GUI
 |-- database.py             # Defines the database schema and setup
 |-- database_manager.py     # Handles all database CRUD operations
 |-- migrate_data.py         # Script to migrate data from CSV files
@@ -85,12 +85,15 @@ CREATE TABLE IF NOT EXISTS transactions (
 
 ## Setup and Run
 1.  Ensure you have Python 3 installed.
-2.  Place your data files (`Kranos MMA Members.xlsx - GC.csv` and `Kranos MMA Members.xlsx - PT.csv`) in the root directory of the project if you wish to use the data migration script.
-3.  Run the application by executing the `main.py` script:
+2.  Install the required dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+3.  Place your data files (`Kranos MMA Members.xlsx - GC.csv` and `Kranos MMA Members.xlsx - PT.csv`) in the root directory of the project if you wish to use the data migration script.
+4.  Run the application by executing the `main.py` script:
     ```bash
     python reporter/main.py
     ```
-4.  The application will automatically check for and install the required `customtkinter` dependency on the first run.
 
 ## Data Migration
 The `migrate_data.py` script is provided to import existing member data from CSV files into the database.
