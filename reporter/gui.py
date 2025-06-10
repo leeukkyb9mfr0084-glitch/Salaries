@@ -388,11 +388,11 @@ class GuiController:
     def delete_transaction_action(self, transaction_id: int) -> tuple[bool, str]:
         """Calls database_manager.delete_transaction and returns status."""
         try:
-            success = database_manager.delete_transaction(transaction_id)
+            success, message = database_manager.delete_transaction(transaction_id) # <-- Changed this line
             if success:
                 return True, "Transaction deleted successfully."
             else:
-                return False, "Failed to delete transaction. It might have already been deleted or does not exist."
+                return False, message # <-- Changed this line
         except Exception as e:
             return False, f"An error occurred while deleting the transaction: {str(e)}"
 

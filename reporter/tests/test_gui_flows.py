@@ -12,7 +12,7 @@ sys.modules['tkinter.messagebox'] = MagicMock()
 sys.modules['customtkinter'] = MagicMock()
 sys.modules['customtkinter.filedialog'] = MagicMock()
 sys.modules['tkcalendar'] = MagicMock() # Mock tkcalendar
-sys.modules['pandas'] = MagicMock() # Mock pandas
+# sys.modules['pandas'] = MagicMock() # Mock pandas <-- REMOVE THIS MOCK
 
 # Now that the modules are mocked, we can "import" them
 import tkinter.messagebox as messagebox # For mocking
