@@ -435,16 +435,24 @@ def get_all_activity_for_member(member_id: int) -> list:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
-def get_pending_renewals() -> list: # Removed year and month parameters
+def get_pending_renewals(year: int, month: int) -> list:
     """
-    Retrieves 'Group Class' transactions with end_date within the next 30 days.
+    Retrieves 'Group Class' transactions ending in the specified year and month for active members.
+    Args:
+        year (int): The target year.
+        month (int): The target month (1-12).
     Returns:
         list: A list of tuples, where each tuple contains:
               (client_name, phone, plan_name, end_date)
-              Ordered by end_date. Returns empty list on error or if none found.
+              Ordered by end_date, then client_name. Returns empty list on error or if none found.
     """
     conn = None
     try:
+        if not (1 <= month <= 12):
+            print("Error: Month must be between 1 and 12.", file=sys.stderr)
+            return [] # Return empty list for invalid month
+
+        year_month_str = f"{year:04d}-{month:02d}"
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -453,19 +461,22 @@ def get_pending_renewals() -> list: # Removed year and month parameters
             FROM transactions t
             JOIN members m ON t.member_id = m.member_id
             JOIN plans p ON t.plan_id = p.plan_id
-            WHERE
-                t.end_date >= CURRENT_DATE AND
-                t.end_date <= DATE('now', '+30 days')
-            ORDER BY t.end_date ASC
+            WHERE strftime('%Y-%m', t.end_date) = ?
+              AND m.is_active = 1
+              AND t.transaction_type = 'Group Class'
+            ORDER BY t.end_date ASC, m.client_name ASC;
         """
-        cursor.execute(query) # No parameters needed for this query
+        cursor.execute(query, (year_month_str,))
         renewals = cursor.fetchall()
         return renewals
-    except sqlite3.Error as e: # Catch specific sqlite errors
-        print(f"Database error while fetching pending renewals: {e}", file=sys.stderr)
+    except sqlite3.Error as e:
+        print(f"Database error while fetching pending renewals for {year}-{month}: {e}", file=sys.stderr)
+        return []
+    except ValueError as ve: # Catch potential errors from strptime if used, though not directly here now
+        print(f"Date processing error for {year}-{month}: {ve}", file=sys.stderr)
         return []
     except Exception as e: # Catch any other unexpected errors
-        print(f"An unexpected error occurred in get_pending_renewals: {e}", file=sys.stderr)
+        print(f"An unexpected error occurred in get_pending_renewals for {year}-{month}: {e}", file=sys.stderr)
         return []
     finally:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:

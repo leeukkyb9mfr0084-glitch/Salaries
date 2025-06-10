@@ -12,45 +12,14 @@ from reporter import database_manager
 from reporter.database import create_database, seed_initial_plans
 
 # --- Simulation Database Setup ---
-SIMULATION_DB_DIR = os.path.join(project_root, "reporter", "simulations", "sim_data")
-SIMULATION_DB_FILE = os.path.join(SIMULATION_DB_DIR, "simulation_kranos_data.db")
+# Standard sim data directory
+SIM_DB_DIR = os.path.join(project_root, "reporter", "simulations", "sim_data")
+# Using a specific DB file for this simulation to avoid conflicts if run in parallel or if one fails.
+SIM_DB_FILE = os.path.join(SIM_DB_DIR, "simulation_kranos_data_delete_plan.db")
 
-original_db_file = database_manager.DB_FILE
+# original_db_file is captured in __main__ block
 
-def setup_simulation_environment():
-    print(f"--- Setting up Simulation Environment ---")
-    print(f"Using simulation database: {SIMULATION_DB_FILE}")
-    os.makedirs(SIMULATION_DB_DIR, exist_ok=True)
-    database_manager.DB_FILE = SIMULATION_DB_FILE
-    conn = create_database(db_name=SIMULATION_DB_FILE)
-    if conn:
-        try:
-            # Clear existing plans to avoid conflicts if re-running, except for seeded ones
-            # This is tricky; seed_initial_plans might add duplicates if not careful.
-            # For simulation, let's assume a relatively clean start or that add_plan handles names.
-            # We will rely on unique names for simulation-added plans.
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM plans WHERE plan_name LIKE 'SimDelPlan_%'") # Clear previous sim plans
-            conn.commit()
-            print("Cleared previous simulation-specific plans.")
-
-            seed_initial_plans(conn) # Ensure default plans are there
-            conn.commit()
-            print("Simulation database created/ensured and initial plans seeded.")
-        except Exception as e:
-            print(f"Error during DB setup: {e}")
-        finally:
-            conn.close()
-    else:
-        print("Simulation database ensured (may have existed).")
-    print("--- Simulation Environment Setup Complete ---")
-
-def cleanup_simulation_environment():
-    database_manager.DB_FILE = original_db_file
-    print(f"--- Simulation Environment Cleaned Up (DB_FILE restored to {original_db_file}) ---")
-
-def main():
-    setup_simulation_environment()
+def main_simulation_logic(): # Renamed main to main_simulation_logic
     controller = GuiController()
     print("\n--- Starting Simulation: Delete Plan Flow ---")
 
@@ -140,7 +109,48 @@ def main():
 
 
     print("\n--- Simulation: Delete Plan Flow Complete ---")
-    cleanup_simulation_environment()
+    # Cleanup is handled in the __main__ block's finally clause
 
 if __name__ == "__main__":
-    main()
+    original_db_manager_db_file = database_manager.DB_FILE # Store original
+
+    try:
+        print(f"--- Main: Setting up simulation DB: {SIM_DB_FILE} ---")
+        os.makedirs(SIM_DB_DIR, exist_ok=True)
+        if os.path.exists(SIM_DB_FILE):
+            os.remove(SIM_DB_FILE)
+            print(f"Deleted existing simulation DB: {SIM_DB_FILE}")
+
+        database_manager.DB_FILE = SIM_DB_FILE # Monkeypatch
+
+        # Create and seed the fresh database
+        # create_database handles its own connection opening/closing for file DBs
+        create_database(db_name=SIM_DB_FILE)
+
+        # Reopen to seed plans
+        import sqlite3 # Ensure sqlite3 is imported for direct connection
+        seed_conn = None
+        try:
+            seed_conn = sqlite3.connect(SIM_DB_FILE)
+            seed_initial_plans(seed_conn)
+            seed_conn.commit()
+            print(f"Recreated and seeded simulation DB: {SIM_DB_FILE}")
+        except Exception as e_seed:
+            print(f"Error seeding simulation DB {SIM_DB_FILE}: {e_seed}", file=sys.stderr)
+            raise # Re-raise if seeding fails, as it's critical for this sim
+        finally:
+            if seed_conn:
+                seed_conn.close()
+
+        # Run the actual simulation logic
+        main_simulation_logic()
+
+    except Exception as e_outer:
+        print(f"--- SIMULATION SCRIPT ERROR: {e_outer} ---", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1) # Indicate script error
+    finally:
+        # Restore the original DB_FILE in database_manager
+        database_manager.DB_FILE = original_db_manager_db_file
+        print(f"--- Main: Restored database_manager.DB_FILE to: {original_db_manager_db_file} ---")

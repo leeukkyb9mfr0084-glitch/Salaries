@@ -9,9 +9,15 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 try:
     from reporter import database_manager
     from reporter.gui import GuiController # Import GuiController
+    from reporter.database import create_database, seed_initial_plans # For DB setup
+    import sqlite3 # For seeding
 except ModuleNotFoundError as e:
     print(f"CRITICAL ERROR: Could not import necessary modules: {e}")
     sys.exit(1)
+
+# --- Simulation Config ---
+SIM_DB_DIR = os.path.join(os.path.dirname(__file__), "sim_data")
+SIM_DB_FILE = os.path.join(SIM_DB_DIR, "simulation_kranos_data_add_gm.db") # Specific DB for this sim
 
 # --- Helper to find member by name or add ---
 def get_member_by_name_or_add(controller: GuiController, name_to_find: str, new_phone_if_adding: str) -> int | None:
@@ -68,9 +74,7 @@ def get_plan_by_name_or_add(controller: GuiController, name_to_find: str, durati
     return None
 
 
-def main():
-    controller = GuiController() # Instantiate controller
-
+def main_simulation_logic(controller: GuiController): # controller is now passed in
     print("--- Setting up Prerequisites ---")
     gm_test_member_phone = f"112233{int(time.time()) % 10000:04d}"
     member_id_for_test = get_member_by_name_or_add(controller, "UI Test User Valid GM", gm_test_member_phone)
@@ -168,4 +172,46 @@ def main():
         print(f"ERROR (Part 2): An exception occurred: {e}")
 
 if __name__ == '__main__':
-    main()
+    original_db_file_path = database_manager.DB_FILE # Save original DB path
+
+    try:
+        print(f"--- Main: Setting up simulation DB: {SIM_DB_FILE} ---")
+        os.makedirs(SIM_DB_DIR, exist_ok=True)
+        if os.path.exists(SIM_DB_FILE):
+            os.remove(SIM_DB_FILE)
+            print(f"Deleted existing simulation DB: {SIM_DB_FILE}")
+
+        # Patch DB_FILE for the duration of the simulation
+        database_manager.DB_FILE = SIM_DB_FILE
+
+        # Create the database tables
+        create_database(db_name=SIM_DB_FILE)
+
+        # Reopen to seed plans
+        seed_conn = None
+        try:
+            seed_conn = sqlite3.connect(SIM_DB_FILE)
+            seed_initial_plans(seed_conn)
+            seed_conn.commit()
+            print(f"Recreated and seeded simulation DB: {SIM_DB_FILE}")
+        except Exception as e_seed:
+            print(f"Error seeding simulation DB {SIM_DB_FILE}: {e_seed}", file=sys.stderr)
+            raise # Re-raise if seeding fails, as it's critical for this sim
+        finally:
+            if seed_conn:
+                seed_conn.close()
+
+        # Instantiate controller after DB is patched and set up
+        controller = GuiController()
+        # Run the actual simulation logic
+        main_simulation_logic(controller)
+
+    except Exception as e_outer:
+        print(f"--- SIMULATION SCRIPT ERROR: {e_outer} ---", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1) # Indicate script error
+    finally:
+        # Restore DB_FILE path
+        database_manager.DB_FILE = original_db_file_path
+        print(f"--- Main: Restored DB_FILE to: {database_manager.DB_FILE} ---")

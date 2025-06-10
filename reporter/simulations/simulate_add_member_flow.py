@@ -8,13 +8,17 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 try:
     from reporter import database_manager
     from reporter.gui import GuiController # Import GuiController
+    from reporter.database import create_database, seed_initial_plans
+    import sqlite3 # Import for seeding
 except ModuleNotFoundError as e:
     print(f"CRITICAL ERROR: Could not import necessary modules: {e}")
     print("Ensure that the script is run from a context where 'reporter' is discoverable.")
     print("Make sure PYTHONPATH is set up correctly if running from outside the project root.")
     sys.exit(1)
 
-def main():
+def main_simulation_logic():
+    # This function will contain the actual simulation steps
+    # and will be called after DB setup.
     controller = GuiController() # Instantiate the controller
 
     print("--- Part 1: Valid Data Simulation ---")
@@ -82,6 +86,45 @@ def main():
         print(f"ERROR (Part 2): An exception occurred during invalid data simulation: {e}")
 
 if __name__ == '__main__':
-    # The sys.path.insert at the top of the script should handle module discovery.
-    # The old PYTHONPATH manipulation here is removed as it might be incorrect after file move.
-    main()
+    SIM_DB_DIR = os.path.join(os.path.dirname(__file__), "sim_data")
+    SIM_DB_FILE = os.path.join(SIM_DB_DIR, "simulation_kranos_data.db")
+    original_db_file_path = database_manager.DB_FILE # Save original DB path
+
+    try:
+        print(f"--- Main: Setting up simulation DB: {SIM_DB_FILE} ---")
+        os.makedirs(SIM_DB_DIR, exist_ok=True)
+        if os.path.exists(SIM_DB_FILE):
+            os.remove(SIM_DB_FILE)
+            print(f"Deleted existing simulation DB: {SIM_DB_FILE}")
+
+        # Patch DB_FILE for the duration of the simulation
+        database_manager.DB_FILE = SIM_DB_FILE
+
+        # Create the database tables
+        create_database(db_name=SIM_DB_FILE) # This creates and closes for file DBs
+
+        # Reopen to seed plans
+        seed_conn = None
+        try:
+            seed_conn = sqlite3.connect(SIM_DB_FILE)
+            seed_initial_plans(seed_conn)
+            seed_conn.commit()
+            print(f"Recreated and seeded simulation DB: {SIM_DB_FILE}")
+        except Exception as e_seed:
+            print(f"Error seeding simulation DB {SIM_DB_FILE}: {e_seed}", file=sys.stderr)
+        finally:
+            if seed_conn:
+                seed_conn.close()
+
+        # Run the actual simulation logic
+        main_simulation_logic()
+
+    except Exception as e_outer:
+        print(f"--- SIMULATION SCRIPT ERROR: {e_outer} ---", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(2) # Indicate script error
+    finally:
+        # Restore DB_FILE path
+        database_manager.DB_FILE = original_db_file_path
+        print(f"--- Main: Restored DB_FILE to: {database_manager.DB_FILE} ---")

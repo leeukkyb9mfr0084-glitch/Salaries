@@ -13,54 +13,18 @@ from reporter.database import create_database, seed_initial_plans
 
 # --- Simulation Database Setup ---
 SIMULATION_DB_DIR = os.path.join(project_root, "reporter", "simulations", "sim_data")
-SIMULATION_DB_FILE = os.path.join(SIMULATION_DB_DIR, "simulation_kranos_data.db")
+# Using a specific DB file for this simulation
+SIMULATION_DB_FILE = os.path.join(SIMULATION_DB_DIR, "simulation_kranos_data_finance.db")
 SIMULATION_OUTPUT_DIR = os.path.join(project_root, "reporter", "simulations", "output")
 
+# original_db_file is captured in __main__ block
 
-original_db_file = database_manager.DB_FILE
+# Define SIM_DB_DIR and SIM_DB_FILE at global scope
+SIM_DB_DIR = os.path.join(project_root, "reporter", "simulations", "sim_data")
+SIM_DB_FILE = os.path.join(SIM_DB_DIR, "simulation_kranos_data_finance.db")
+# SIMULATION_OUTPUT_DIR is already global
 
-def setup_simulation_environment():
-    print(f"--- Setting up Simulation Environment ---")
-    print(f"Using simulation database: {SIMULATION_DB_FILE}")
-    os.makedirs(SIMULATION_DB_DIR, exist_ok=True)
-    os.makedirs(SIMULATION_OUTPUT_DIR, exist_ok=True) # Ensure output directory exists
-    print(f"Simulation output directory: {SIMULATION_OUTPUT_DIR}")
-
-    database_manager.DB_FILE = SIMULATION_DB_FILE
-    conn = create_database(db_name=SIMULATION_DB_FILE)
-    if conn:
-        try:
-            # Clear relevant data for this simulation if needed
-            cursor = conn.cursor()
-            # Example: Clear transactions that might interfere if script is re-run
-            # For finance report, it's usually fine as it aggregates, but good practice:
-            # cursor.execute("DELETE FROM transactions WHERE payment_method LIKE 'SimFinance_%'")
-            # conn.commit()
-
-            seed_initial_plans(conn)
-            conn.commit()
-            print("Simulation database created/ensured and initial plans seeded.")
-        except Exception as e:
-            print(f"Error during DB setup: {e}")
-        finally:
-            conn.close()
-    else:
-        print("Simulation database ensured (may have existed).")
-    print("--- Simulation Environment Setup Complete ---")
-
-def cleanup_simulation_environment():
-    database_manager.DB_FILE = original_db_file
-    print(f"--- Simulation Environment Cleaned Up (DB_FILE restored to {original_db_file}) ---")
-    # Optionally, clean up created Excel file - for now, we'll leave it for inspection.
-    # excel_file_path = os.path.join(SIMULATION_OUTPUT_DIR, "sim_finance_report.xlsx")
-    # if os.path.exists(excel_file_path):
-    #     os.remove(excel_file_path)
-    #     print(f"Cleaned up: {excel_file_path}")
-
-
-def main():
-    setup_simulation_environment()
-    controller = GuiController()
+def main_simulation_logic(controller: GuiController): # Renamed and controller passed
     print("\n--- Starting Simulation: Finance Report Excel Flow ---")
 
     # 1. Add transaction data for a specific month/year
@@ -105,11 +69,35 @@ def main():
     plan_id = plans[0][0]
 
     # Transaction 1 (in target month)
-    database_manager.add_transaction('Group Class', m1_id, plan_id, target_payment_date, target_payment_date, 150.75, "SimFinance_Card")
+    database_manager.add_transaction(
+        transaction_type='Group Class',
+        member_id=m1_id,
+        plan_id=plan_id,
+        start_date=target_payment_date,
+        payment_date=target_payment_date,
+        amount_paid=150.75,
+        payment_method="SimFinance_Card"
+    )
     # Transaction 2 (in target month - PT)
-    database_manager.add_transaction('Personal Training', m2_id, None, target_payment_date, target_payment_date, 200.50, "SimFinance_CashPT", sessions=5)
+    database_manager.add_transaction(
+        transaction_type='Personal Training',
+        member_id=m2_id,
+        start_date=target_payment_date,
+        payment_date=target_payment_date,
+        amount_paid=200.50,
+        sessions=5,
+        payment_method="SimFinance_CashPT"
+    )
     # Transaction 3 (different month - should not be in this report)
-    database_manager.add_transaction('Group Class', m1_id, plan_id, other_payment_date, other_payment_date, 99.00, "SimFinance_OtherMonth")
+    database_manager.add_transaction(
+        transaction_type='Group Class',
+        member_id=m1_id,
+        plan_id=plan_id,
+        start_date=other_payment_date,
+        payment_date=other_payment_date,
+        amount_paid=99.00,
+        payment_method="SimFinance_OtherMonth"
+    )
 
     print("Transaction data added.")
     expected_total_revenue = 150.75 + 200.50
@@ -161,7 +149,53 @@ def main():
 
 
     print("\n--- Simulation: Finance Report Excel Flow Complete ---")
-    cleanup_simulation_environment() # Leaves the generated file in output/ for inspection
+    # Cleanup is handled in the __main__ block's finally clause, Excel file left for inspection.
 
 if __name__ == "__main__":
-    main()
+    original_db_manager_db_file = database_manager.DB_FILE # Store original
+
+    try:
+        print(f"--- Main: Setting up simulation DB: {SIM_DB_FILE} ---")
+        os.makedirs(SIMULATION_DB_DIR, exist_ok=True)
+        os.makedirs(SIMULATION_OUTPUT_DIR, exist_ok=True) # Ensure output dir exists
+        print(f"Simulation output directory: {SIMULATION_OUTPUT_DIR}")
+
+        if os.path.exists(SIM_DB_FILE):
+            os.remove(SIM_DB_FILE)
+            print(f"Deleted existing simulation DB: {SIM_DB_FILE}")
+
+        database_manager.DB_FILE = SIM_DB_FILE # Monkeypatch
+
+        create_database(db_name=SIM_DB_FILE)
+
+        import sqlite3 # Ensure sqlite3 is imported
+        seed_conn = None
+        try:
+            seed_conn = sqlite3.connect(SIM_DB_FILE)
+            # Clear any previous sim-specific data if necessary, then seed
+            cursor = seed_conn.cursor()
+            cursor.execute("DELETE FROM transactions WHERE payment_method LIKE 'SimFinance_%'")
+            seed_conn.commit()
+            print("Cleared previous SimFinance transactions.")
+
+            seed_initial_plans(seed_conn)
+            seed_conn.commit()
+            print(f"Recreated and seeded simulation DB: {SIM_DB_FILE}")
+        except Exception as e_seed:
+            print(f"Error during DB setup/seed for {SIM_DB_FILE}: {e_seed}", file=sys.stderr)
+            raise
+        finally:
+            if seed_conn:
+                seed_conn.close()
+
+        controller = GuiController()
+        main_simulation_logic(controller)
+
+    except Exception as e_outer:
+        print(f"--- SIMULATION SCRIPT ERROR: {e_outer} ---", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    finally:
+        database_manager.DB_FILE = original_db_manager_db_file
+        print(f"--- Main: Restored database_manager.DB_FILE to: {original_db_manager_db_file} ---")

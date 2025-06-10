@@ -13,7 +13,7 @@ from reporter.database_manager import (
     get_all_activity_for_member,
     get_pending_renewals, get_finance_report, # add_pt_booking, # Removed
     add_transaction, # Added
-    delete_member, delete_transaction, delete_plan, # Added for delete tests
+    deactivate_member, delete_transaction, delete_plan, # Added for delete tests
     get_book_status, set_book_status # Added for book closing tests
 )
 # Module needed for setting up test DB
@@ -444,7 +444,7 @@ def test_add_transaction_group_class(db_conn):
         amount_paid=amount_paid,
         payment_method=payment_method
     )
-    assert success is True, "add_transaction for Group Class should return True on success."
+    assert success[0] is True, "add_transaction for Group Class should return True on success."
 
     # 5. Verify directly in the database (transactions table)
     # Note: Fields will differ from the old group_memberships table
@@ -569,7 +569,7 @@ def test_add_transaction_group_class_invalid_plan_id(db_conn):
         payment_method=payment_method
     )
     # The function add_transaction is expected to print an error and return False
-    assert success is False, "add_transaction should return False for an invalid plan_id."
+    assert success[0] is False, "add_transaction should return False for an invalid plan_id."
 
     # Verify no transaction was actually added
     cursor.execute("SELECT COUNT(*) FROM transactions WHERE member_id = ?", (member_id,))
@@ -605,7 +605,7 @@ def test_add_transaction_personal_training(db_conn):
         amount_paid=amount_paid,
         sessions=sessions
     )
-    assert success is True, "add_transaction for PT should return True on success."
+    assert success[0] is True, "add_transaction for PT should return True on success."
 
     # 4. Verify directly in the database (transactions table)
     cursor.execute(
@@ -739,59 +739,74 @@ def test_get_pending_renewals(db_conn):
     plan_id = test_plan[0]
     plan_name = test_plan[1]
 
-    # 2. Define today and transaction end dates
-    today_obj = datetime.today().date() # Use .date() for date arithmetic
+    # 2. Define a target year and month for the test
+    target_year = 2025
+    target_month = 7 # July
+    target_month_str = f"{target_year:04d}-{target_month:02d}"
 
-    transactions_to_add = [
-        # Member, Days from today for end_date, Expected to be in results?
-        (member_data["User A"], 0, True),   # Ends today
-        (member_data["User A"], 1, True),   # Ends in 1 day
-        (member_data["User B"], 15, True),  # Ends in 15 days
-        (member_data["User C"], 30, True),  # Ends in 30 days
-        (member_data["User D"], 31, False), # Ends in 31 days
-        (member_data["User E"], -5, False), # Ended 5 days ago
-        (member_data["User A"], 45, False)  # Ends in 45 days (another for User A)
+    # Transactions to add
+    # Member, end_date (YYYY-MM-DD), should_be_included_in_target_month_renewals?
+    transactions_data = [
+        (member_data["User A"], f"{target_year:04d}-{target_month:02d}-05", True),
+        (member_data["User B"], f"{target_year:04d}-{target_month:02d}-15", True),
+        (member_data["User C"], f"{target_year:04d}-{target_month:02d}-28", True),
+        (member_data["User D"], f"{target_year:04d}-{target_month-1:02d}-25", False), # Previous month
+        (member_data["User E"], f"{target_year:04d}-{target_month+1:02d}-02", False), # Next month
+        (member_data["User A"], f"{target_year+1:04d}-{target_month:02d}-05", False), # Next year, same month
     ]
 
     expected_renewals_details = []
+    common_start_date = f"{target_year:04d}-{target_month:02d}-01" # Arbitrary valid start date for transactions
 
-    for member_info, days_offset, should_be_included in transactions_to_add:
-        end_date = (today_obj + timedelta(days=days_offset)).strftime('%Y-%m-%d')
-        # Start date and payment date can be arbitrary for this test, as long as valid
-        start_date = today_obj.strftime('%Y-%m-%d')
-        payment_date = start_date
+    for member_info, end_date_str, should_be_included in transactions_data:
+        # Ensure member is active by adding a transaction (any transaction makes them active for this test if they have one)
+        # The get_pending_renewals function filters for m.is_active = 1.
+        # add_member_to_db does not set is_active, it's set by the first transaction implicitly or by direct update.
+        # For simplicity, we assume add_transaction handles join_date and thus implicitly activation path.
+        # Or, we could explicitly update members to be active if needed, but let's assume transactions are enough.
+        # The add_transaction will also set their join_date.
 
-        assert add_transaction(
-            transaction_type='Group Class',
+        # To ensure is_active is 1, we can add a dummy transaction if none exist, or set it.
+        # However, the members are already added. The function get_pending_renewals filters for m.is_active=1.
+        # The add_member_to_db does not set is_active. The first transaction does.
+        # Here, we are adding the transaction that might be a renewal.
+        # Let's ensure `is_active` is 1 for members we expect to see.
+        if should_be_included:
+             cursor.execute("UPDATE members SET is_active = 1 WHERE member_id = ?", (member_info["id"],))
+    db_conn.commit() # Commit all member updates first
+
+    for member_info, end_date_str, should_be_included in transactions_data:
+        # Add the transaction that might be a renewal
+        add_transaction_success, msg = add_transaction(
+            transaction_type='Group Class', # get_pending_renewals filters for this type
             member_id=member_info["id"],
             plan_id=plan_id,
-            payment_date=payment_date,
-            start_date=start_date,
-            end_date=end_date, # Explicitly setting end_date
+            payment_date=common_start_date, # Payment date can be same as start for simplicity here
+            start_date=common_start_date,
+            end_date=end_date_str,
             amount_paid=50,
             payment_method="CashTest"
         )
+        assert add_transaction_success, f"Failed to add transaction for {member_info['name']} ending {end_date_str}. Error: {msg}"
 
         if should_be_included:
             expected_renewals_details.append({
                 "client_name": member_info["name"],
                 "phone": member_info["phone"],
                 "plan_name": plan_name,
-                "end_date": end_date
+                "end_date": end_date_str
             })
 
     # Sort expected renewals by end_date, then by client_name (as per query's ORDER BY)
     expected_renewals_details.sort(key=lambda x: (x["end_date"], x["client_name"]))
 
-    # 3. Call get_pending_renewals
-    actual_renewals = get_pending_renewals() # Function no longer takes year/month
+    # 3. Call get_pending_renewals for the target month
+    actual_renewals = get_pending_renewals(target_year, target_month)
 
     # 4. Assertions
     assert len(actual_renewals) == len(expected_renewals_details), \
-        f"Expected {len(expected_renewals_details)} renewals, but got {len(actual_renewals)}."
+        f"Expected {len(expected_renewals_details)} renewals for {target_month_str}, but got {len(actual_renewals)}. Actual: {actual_renewals}"
 
-    # Verify details
-    # Actual renewal record: (client_name, phone, plan_name, end_date)
     for i, expected in enumerate(expected_renewals_details):
         actual_record = actual_renewals[i]
         assert actual_record[0] == expected["client_name"], f"Mismatch in client_name at index {i}"
@@ -824,7 +839,8 @@ def test_get_pending_renewals_none_when_no_relevant_data(db_conn):
     end_date_past = (today_obj - timedelta(days=100)).strftime('%Y-%m-%d')
     assert add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id, payment_date=today_obj.strftime('%Y-%m-%d'), start_date=today_obj.strftime('%Y-%m-%d'), end_date=end_date_past, amount_paid=50)
 
-    renewals = get_pending_renewals()
+    # Call with a year and month guaranteed to have no data from the setup
+    renewals = get_pending_renewals(year=1900, month=1)
     assert len(renewals) == 0, "Expected no renewals when all end_dates are outside the 30-day window."
 
 
@@ -1055,22 +1071,23 @@ def test_join_date_standardization_existing_member_later_activity(db_conn):
 
 # --- Tests for delete operations ---
 
-def test_delete_member(db_conn):
-    """Tests deleting a member and ensures their transactions are also deleted."""
+def test_deactivate_member(db_conn):
+    """Tests deactivating a member and ensures their transactions are NOT deleted, and member is marked inactive."""
     # 1. Add a member
-    member_name = "Member to Delete"
-    member_phone = "DEL001"
+    member_name = "Member to Deactivate"
+    member_phone = "DEACT001"
     assert add_member_to_db(member_name, member_phone) is True
     cursor = db_conn.cursor()
     cursor.execute("SELECT member_id FROM members WHERE phone = ?", (member_phone,))
     member_id_row = cursor.fetchone()
-    assert member_id_row is not None, "Failed to add member for deletion test."
+    assert member_id_row is not None, "Failed to add member for deactivation test."
     member_id = member_id_row[0]
 
     # 2. Add transactions for the member
     plans = get_all_plans()
     assert len(plans) > 0, "No plans available to create transactions."
     plan_id = plans[0][0]
+    initial_number_of_transactions_added = 2
 
     add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id,
                     payment_date="2024-01-01", start_date="2024-01-01", amount_paid=50, payment_method="Cash")
@@ -1079,18 +1096,27 @@ def test_delete_member(db_conn):
 
     # Verify transactions were added
     cursor.execute("SELECT COUNT(*) FROM transactions WHERE member_id = ?", (member_id,))
-    assert cursor.fetchone()[0] == 2, "Failed to add transactions for the member."
+    assert cursor.fetchone()[0] == initial_number_of_transactions_added, "Failed to add initial transactions for the member."
 
-    # 3. Call delete_member
-    delete_member(member_id)
+    # 3. Call deactivate_member
+    # Assuming deactivate_member is imported or available in the scope
+    from reporter.database_manager import deactivate_member # Ensure it's imported
+    success_deactivate = deactivate_member(member_id)
+    assert success_deactivate is True, "deactivate_member should return True on success."
 
-    # 4. Assert member is deleted
-    cursor.execute("SELECT * FROM members WHERE member_id = ?", (member_id,))
-    assert cursor.fetchone() is None, "Member was not deleted from the members table."
+    # 4. Verify member is marked as inactive in DB but still exists
+    cursor.execute("SELECT client_name, phone, is_active FROM members WHERE member_id = ?", (member_id,))
+    deactivated_member_record = cursor.fetchone()
+    assert deactivated_member_record is not None, "Member should still exist in the database after deactivation."
+    assert deactivated_member_record[0] == member_name # client_name
+    assert deactivated_member_record[1] == member_phone # phone
+    assert deactivated_member_record[2] == 0, f"Member's is_active flag should be 0, but was {deactivated_member_record[2]}."
 
-    # 5. Assert transactions for the member are deleted
-    cursor.execute("SELECT * FROM transactions WHERE member_id = ?", (member_id,))
-    assert cursor.fetchone() is None, "Transactions for the deleted member were not removed."
+    # 5. Verify transactions for the member still exist
+    cursor.execute("SELECT COUNT(*) FROM transactions WHERE member_id = ?", (member_id,))
+    transaction_count = cursor.fetchone()[0]
+    assert transaction_count == initial_number_of_transactions_added, \
+        "Transactions for the deactivated member should not have been deleted."
 
 
 def test_delete_transaction(db_conn):

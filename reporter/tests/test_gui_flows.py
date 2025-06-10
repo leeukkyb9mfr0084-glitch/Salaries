@@ -202,27 +202,74 @@ def test_add_membership_flow(controller_instance): # Changed app_instance to con
 # --- Tests for Delete Action Flows ---
 
 @patch('tkinter.messagebox.askyesno', return_value=True) # Mock to always confirm deletion
-def test_delete_member_action_flow(mock_askyesno, controller_instance):
+def test_deactivate_member_action_flow(mock_askyesno, controller_instance): # Renamed
     controller = controller_instance
-    # 1. Add a member directly via database_manager
-    member_name = "MemberToDelete"
-    member_phone = "DEL999"
+    # --- Setup: Add a member and a transaction for them ---
+    member_name = "MemberToDeactivateGUI"
+    member_phone = "DEAC999"
+    # Add member directly using database_manager for setup simplicity
     database_manager.add_member_to_db(member_name, member_phone)
-    members = database_manager.get_all_members(phone_filter=member_phone)
-    assert len(members) == 1, "Test setup: Member not added."
-    member_id_to_delete = members[0][0]
+    members_before_deactivation = database_manager.get_all_members(phone_filter=member_phone)
+    assert len(members_before_deactivation) == 1, "Test setup: Member not added or not active."
+    member_id_to_deactivate = members_before_deactivation[0][0]
 
-    # 2. Call controller's delete_member_action
-    success, message = controller.delete_member_action(member_id_to_delete)
+    # Add a transaction for this member (example)
+    plans = database_manager.get_all_plans()
+    if not plans: # Ensure there's a plan for the transaction, add one if DB is empty
+        plan_id_for_tx = database_manager.add_plan("Default Test Plan GUI", 30)
+        assert plan_id_for_tx is not None, "Test setup: Failed to add a default plan."
+    else:
+        plan_id_for_tx = plans[0][0]
 
-    # 3. Assert action's return
+    database_manager.add_transaction(
+        transaction_type='Group Class',
+        member_id=member_id_to_deactivate,
+        plan_id=plan_id_for_tx,
+        payment_date="2024-01-01",
+        start_date="2024-01-01",
+        amount_paid=50.00,
+        payment_method="Cash"
+    )
+    transactions_before_deactivation = database_manager.get_all_activity_for_member(member_id_to_deactivate)
+    assert len(transactions_before_deactivation) == 1, "Test setup: Transaction not added."
+    initial_transaction_count = len(transactions_before_deactivation)
+
+    # Call the updated controller action
+    success, message = controller.deactivate_member_action(member_id_to_deactivate)
+
+    # Assert the correct message and success
     assert success is True
-    assert message == "Member and associated transactions deleted successfully." # Corrected message
-    # mock_askyesno.assert_called_once() # Controller likely doesn't call askyesno here
+    assert message == "Member deactivated successfully."
+    # mock_askyesno might still be relevant if deactivate_member_action in GuiController calls it.
+    # Based on gui.py, deactivate_member_action itself does not call askyesno, but the App method on_delete_selected_member_click does.
+    # Since we are testing the controller action directly, mock_askyesno might not be strictly needed here unless controller calls it.
+    # For now, it's kept as it's harmless.
 
-    # 4. Verify member is deleted from DB
-    members_after_delete = database_manager.get_all_members(phone_filter=member_phone)
-    assert len(members_after_delete) == 0, "Member was not deleted from the database."
+    # Verify the member is no longer in the *active* list from get_all_members
+    active_members_after_deactivation = database_manager.get_all_members(phone_filter=member_phone)
+    assert len(active_members_after_deactivation) == 0, "Deactivated member should not appear in active members list."
+
+    # Verify the member is marked as inactive in the database but still exists
+    conn = None
+    try:
+        conn = database_manager.get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT client_name, phone, is_active FROM members WHERE member_id = ?", (member_id_to_deactivate,))
+        deactivated_member_record = cursor.fetchone()
+    finally:
+        if conn:
+            conn.close() # Ensure connection is closed
+
+    assert deactivated_member_record is not None, "Member record should still exist in the database."
+    assert deactivated_member_record[0] == member_name # Check name for sanity
+    assert deactivated_member_record[1] == member_phone # Check phone for sanity
+    assert deactivated_member_record[2] == 0, f"Member's is_active flag should be 0, but was {deactivated_member_record[2]}."
+
+    # Verify the member's transactions STILL exist
+    transactions_after_deactivation = database_manager.get_all_activity_for_member(member_id_to_deactivate)
+    assert len(transactions_after_deactivation) == initial_transaction_count, \
+        "Transactions for the deactivated member should still exist and match initial count."
+    assert len(transactions_after_deactivation) > 0, "No transactions found for deactivated member, but they should exist."
 
 @patch('tkinter.messagebox.askyesno', return_value=True)
 def test_delete_transaction_action_flow(mock_askyesno, controller_instance):
