@@ -407,179 +407,64 @@ class FletAppView(ft.Container):
         self.active_date_picker_target: Optional[str] = None
         # self.page is available via self.page once the control is added to a page.
 
-        # UI construction will be moved here directly.
+        # UI declarations
+        self.member_actions_feedback_text: Optional[ft.Text] = None
+        self.history_actions_feedback_text: Optional[ft.Text] = None
+        self.book_status_display_label: Optional[ft.Text] = None
+        self.delete_member_button_flet: Optional[ft.ElevatedButton] = None
+        self.delete_plan_button_flet: Optional[ft.ElevatedButton] = None
+        self.delete_transaction_button_flet: Optional[ft.ElevatedButton] = None
+        self.book_closing_year_input: Optional[ft.TextField] = None
+        self.book_closing_month_dropdown: Optional[ft.Dropdown] = None
+        self.close_books_button_flet: Optional[ft.ElevatedButton] = None
+        self.open_books_button_flet: Optional[ft.ElevatedButton] = None
+        self.check_book_status_button_flet: Optional[ft.ElevatedButton] = None
+        self.member_name_input: Optional[ft.TextField] = None
+        self.member_phone_input: Optional[ft.TextField] = None
+        self.add_member_button: Optional[ft.ElevatedButton] = None
+        self.member_form_feedback_text: Optional[ft.Text] = None
+        self.plan_name_input: Optional[ft.TextField] = None
+        self.plan_duration_input: Optional[ft.TextField] = None
+        self.save_plan_button: Optional[ft.ElevatedButton] = None
+        self.plan_form_feedback_text: Optional[ft.Text] = None
+        self.edit_plan_button: Optional[ft.ElevatedButton] = None
+        self.clear_plan_form_button: Optional[ft.ElevatedButton] = None
+        self.toggle_plan_status_button: Optional[ft.ElevatedButton] = None
+        self.history_name_filter_input: Optional[ft.TextField] = None
+        self.history_phone_filter_input: Optional[ft.TextField] = None
+        self.history_join_date_filter_input: Optional[ft.TextField] = None
+        self.apply_history_filters_button: Optional[ft.ElevatedButton] = None
+        self.clear_history_filters_button: Optional[ft.ElevatedButton] = None
+        self.membership_type_dropdown: Optional[ft.Dropdown] = None
+        self.membership_member_dropdown: Optional[ft.Dropdown] = None
+        self.membership_plan_dropdown: Optional[ft.Dropdown] = None
+        self.membership_sessions_input: Optional[ft.TextField] = None
+        self.membership_start_date_picker_button: Optional[ft.ElevatedButton] = None
+        self.membership_start_date_text: Optional[ft.Text] = None
+        self.membership_payment_date_picker_button: Optional[ft.ElevatedButton] = None
+        self.membership_payment_date_text: Optional[ft.Text] = None
+        self.membership_amount_paid_input: Optional[ft.TextField] = None
+        self.membership_payment_method_input: Optional[ft.TextField] = None
+        self.save_membership_button: Optional[ft.ElevatedButton] = None
+        self.membership_form_feedback_text: Optional[ft.Text] = None
+        self.renewal_report_year_input: Optional[ft.TextField] = None
+        self.renewal_report_month_dropdown: Optional[ft.Dropdown] = None
+        self.generate_renewals_report_button: Optional[ft.ElevatedButton] = None
+        self.renewals_report_feedback_text: Optional[ft.Text] = None
+        self.finance_report_year_input: Optional[ft.TextField] = None
+        self.finance_report_month_dropdown: Optional[ft.Dropdown] = None
+        self.generate_finance_report_button: Optional[ft.ElevatedButton] = None
+        self.finance_report_feedback_text: Optional[ft.Text] = None
+        self.members_table_flet: Optional[ft.DataTable] = None
+        self.member_specific_history_table_flet: Optional[ft.DataTable] = None
+        self.full_history_table_flet: Optional[ft.DataTable] = None
+        self.plans_table_flet: Optional[ft.DataTable] = None
+        self.pending_renewals_table_flet: Optional[ft.DataTable] = None
+        self.tabs_control: Optional[ft.Tabs] = None
 
-        # New feedback Text controls
-        self.member_actions_feedback_text = ft.Text("")
-        self.history_actions_feedback_text = ft.Text("")
-        # plan_form_feedback_text already exists
-        self.book_status_display_label = ft.Text("") # For book closing feedback
-
-        # New Button controls
-        self.delete_member_button_flet = ft.ElevatedButton(text="Deactivate Selected Member", on_click=self.on_delete_selected_member_click_flet)
-        self.delete_plan_button_flet = ft.ElevatedButton(text="Delete Selected Plan", on_click=self.on_delete_selected_plan_click_flet)
-        self.delete_transaction_button_flet = ft.ElevatedButton(text="Delete Selected Transaction", on_click=self.on_delete_selected_transaction_click_flet)
-
-        # Book Closing/Opening related UI elements
-        current_year = datetime.now().year
-        current_month = datetime.now().month
-        self.book_closing_year_input = ft.TextField(label="Year", value=str(current_year))
-        self.book_closing_month_dropdown = ft.Dropdown(
-            label="Month",
-            # Using calendar.month_name for display text
-            options=[ft.dropdown.Option(str(i), calendar.month_name[i]) for i in range(1, 13)],
-            value=str(current_month)
-        )
-        self.close_books_button_flet = ft.ElevatedButton(text="Close Books", on_click=self._handle_close_books_action_flet)
-        self.open_books_button_flet = ft.ElevatedButton(text="Re-open Books", on_click=self._handle_open_books_action_flet)
-        self.check_book_status_button_flet = ft.ElevatedButton(text="Check Book Status", on_click=self._handle_check_book_status_flet)
-        # self.book_status_display_label was initialized above
-
-        # Date Picker
-        self.date_picker = ft.DatePicker(
-            on_change=self.on_date_picker_change,
-            on_dismiss=self.on_date_picker_dismiss,
-        )
-        # File Picker
-        self.file_picker = ft.FilePicker(on_result=self.on_file_picker_result_flet)
-
-        # Member form fields
-        self.member_name_input = ft.TextField(label="Name")
-        self.member_phone_input = ft.TextField(label="Phone")
-        self.add_member_button = ft.ElevatedButton(text="Add Member", on_click=self.on_add_member_click)
-        self.member_form_feedback_text = ft.Text("")
-
-        # Plan form fields
-        self.plan_name_input = ft.TextField(label="Plan Name")
-        self.plan_duration_input = ft.TextField(label="Duration (days)")
-        self.save_plan_button = ft.ElevatedButton(text="Save Plan", on_click=self.on_save_plan_click)
-        self.plan_form_feedback_text = ft.Text("Ready to add a new plan.", color=ft.colors.BLACK) # Initial message
-        self.edit_plan_button = ft.ElevatedButton(text="Edit Selected Plan", on_click=self.on_edit_selected_plan_click)
-        self.clear_plan_form_button = ft.ElevatedButton(text="Clear Form / New Plan", on_click=self.on_clear_plan_form_click)
-        self.toggle_plan_status_button = ft.ElevatedButton(text="Toggle Active/Inactive", on_click=self.on_toggle_plan_status_click, disabled=True) # New button
-
-        # Membership History Filter fields
-        self.history_name_filter_input = ft.TextField(label="Filter by Name")
-        self.history_phone_filter_input = ft.TextField(label="Filter by Phone")
-        self.history_join_date_filter_input = ft.TextField(label="Filter by Join Date (YYYY-MM-DD)")
-        self.apply_history_filters_button = ft.ElevatedButton(text="Apply History Filters", on_click=self.apply_history_filters_flet)
-        self.clear_history_filters_button = ft.ElevatedButton(text="Clear History Filters", on_click=self.clear_history_filters_flet)
-
-        # Membership form fields
-        self.membership_type_dropdown = ft.Dropdown(
-            label="Membership Type",
-            options=[ft.dropdown.Option("Group Class"), ft.dropdown.Option("Personal Training")],
-            on_change=self.on_membership_type_change_flet
-        )
-        self.membership_member_dropdown = ft.Dropdown(label="Select Member", options=[])
-        self.membership_plan_dropdown = ft.Dropdown(label="Select Plan", options=[]) # For Group Class
-        self.membership_sessions_input = ft.TextField(label="Number of Sessions") # For Personal Training
-        self.membership_start_date_picker_button = ft.ElevatedButton(
-            text="Pick Start Date",
-            on_click=lambda e: self.open_date_picker(e, "start_date")
-        )
-        self.membership_start_date_text = ft.Text("Start Date: Not Selected")
-        self.membership_payment_date_picker_button = ft.ElevatedButton(
-            text="Pick Payment Date",
-            on_click=lambda e: self.open_date_picker(e, "payment_date")
-        ) # For Group Class
-        self.membership_payment_date_text = ft.Text("Payment Date: Not Selected") # For Group Class
-        self.membership_amount_paid_input = ft.TextField(label="Amount Paid")
-        self.membership_payment_method_input = ft.TextField(label="Payment Method") # For Group Class
-        self.save_membership_button = ft.ElevatedButton(text="Save Membership", on_click=self.on_save_membership_click)
-        self.membership_form_feedback_text = ft.Text("")
-
-        # Reporting - Pending Renewals Form
-        self.renewal_report_year_input = ft.TextField(label="Year", value=str(datetime.now().year))
-        self.renewal_report_month_dropdown = ft.Dropdown(
-            label="Month",
-            options=[ft.dropdown.Option(str(i), str(i)) for i in range(1, 13)],
-            value=str(datetime.now().month)
-        )
-        self.generate_renewals_report_button = ft.ElevatedButton(
-            text="Generate Renewals Report",
-            on_click=self.on_generate_renewals_report_click
-        )
-        self.renewals_report_feedback_text = ft.Text("")
-
-        # Reporting - Finance Report Form
-        self.finance_report_year_input = ft.TextField(label="Year", value=str(datetime.now().year))
-        self.finance_report_month_dropdown = ft.Dropdown(
-            label="Month",
-            options=[ft.dropdown.Option(str(i), str(i)) for i in range(1, 13)],
-            value=str(datetime.now().month)
-        )
-        self.generate_finance_report_button = ft.ElevatedButton(
-            text="Generate Excel Finance Report",
-            on_click=self.on_generate_finance_report_click
-        )
-        self.finance_report_feedback_text = ft.Text("")
-
-        self.members_table_flet = ft.DataTable(
-            columns=[
-                ft.DataColumn(ft.Text("ID")),
-                ft.DataColumn(ft.Text("Name")),
-                ft.DataColumn(ft.Text("Phone")),
-                ft.DataColumn(ft.Text("Join Date")),
-            ],
-            rows=[],  # Initially empty
-            on_select_changed=self.on_member_select_changed # Attach the handler
-        )
-
-        self.member_specific_history_table_flet = ft.DataTable(
-            columns=[
-                ft.DataColumn(ft.Text("Type")),
-                ft.DataColumn(ft.Text("Plan/Details")),
-                ft.DataColumn(ft.Text("Paid Date")),
-                ft.DataColumn(ft.Text("Start Date")),
-                ft.DataColumn(ft.Text("End Date")),
-                ft.DataColumn(ft.Text("Amount ($)")),
-                ft.DataColumn(ft.Text("Method/Sessions")),
-            ],
-            rows=[] # Initially empty
-        )
-
-        self.full_history_table_flet = ft.DataTable(
-            columns=[
-                ft.DataColumn(ft.Text("TXN ID")),
-                ft.DataColumn(ft.Text("Name")),
-                ft.DataColumn(ft.Text("Phone")),
-                ft.DataColumn(ft.Text("Joined")),
-                ft.DataColumn(ft.Text("Type")),
-                ft.DataColumn(ft.Text("Amount ($)")),
-                ft.DataColumn(ft.Text("Paid Date")),
-                ft.DataColumn(ft.Text("Start Date")),
-                ft.DataColumn(ft.Text("End Date")),
-                ft.DataColumn(ft.Text("Status")),
-                ft.DataColumn(ft.Text("Plan/Sessions")),
-                ft.DataColumn(ft.Text("Pay Method")),
-            ],
-            rows=[], # Initially empty
-            on_select_changed=self.on_full_history_select_changed # Attach the handler
-        )
-
-        self.plans_table_flet = ft.DataTable(
-            columns=[
-                ft.DataColumn(ft.Text("ID")),
-                ft.DataColumn(ft.Text("Name")),
-                ft.DataColumn(ft.Text("Duration (Days)")),
-                ft.DataColumn(ft.Text("Status")),
-            ],
-            rows=[], # Initially empty
-            on_select_changed=self.on_plan_select_changed # Attach the handler
-        )
-        self.pending_renewals_table_flet = ft.DataTable(
-            columns=[
-                ft.DataColumn(ft.Text("Member ID")),
-                ft.DataColumn(ft.Text("Name")),
-                ft.DataColumn(ft.Text("Phone")),
-                ft.DataColumn(ft.Text("Plan Name")),
-                ft.DataColumn(ft.Text("End Date")),
-                ft.DataColumn(ft.Text("Days Overdue")),
-            ],
-            rows=[]  # Initially empty
-        )
-        # Initialize other table references here if needed for future phases
+        # Date Picker and File Picker are declared here and initialized in build
+        self.date_picker: Optional[ft.DatePicker] = None
+        self.file_picker: Optional[ft.FilePicker] = None
 
         # --- Start of UI Assembly moved from _initialize_ui_elements() ---
         # This method now contains the logic previously in build()
@@ -597,259 +482,7 @@ class FletAppView(ft.Container):
         # For this structure, doing it previously in build() before returning tabs_control was fine.
         # Now, overlay logic is in did_mount.
 
-        # Renaming to table_area_container as per latest prompt for clarity
-        table_area_container = ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.Text("All Members", weight=ft.FontWeight.BOLD),
-                    self.members_table_flet,
-                    ft.Divider(), # Visual separator
-                    ft.Text("Selected Member Activity", weight=ft.FontWeight.BOLD),
-                    self.member_specific_history_table_flet,
-                    self.delete_member_button_flet, # Added
-                    self.member_actions_feedback_text, # Added
-                ],
-                scroll=ft.ScrollMode.AUTO,
-                expand=True,
-                spacing=10 # Added spacing
-            ),
-            expand=2,
-            bgcolor=ft.colors.BLUE_GREY_300, # Or your preferred background
-            padding=10,
-            alignment=ft.alignment.top_center
-        )
-
-        self.tabs_control = ft.Tabs(
-            tabs=[
-                ft.Tab(
-                    text="Membership Management",
-                    content=ft.Row(
-                        controls=[
-                            ft.Container(
-                                content=ft.Column(
-                                    controls=[
-                                        ft.Text("Add New Member", weight=ft.FontWeight.BOLD),
-                                        self.member_name_input,
-                                        self.member_phone_input,
-                                        self.add_member_button,
-                                        self.member_form_feedback_text,
-                                        ft.Divider(),
-                                        ft.Text("Add New Membership", weight=ft.FontWeight.BOLD),
-                                        self.membership_type_dropdown,
-                                        self.membership_member_dropdown,
-                                        self.membership_plan_dropdown, # Visibility toggled
-                                        self.membership_sessions_input, # Visibility toggled
-                                        ft.Row([self.membership_start_date_picker_button, self.membership_start_date_text]),
-                                        ft.Row([self.membership_payment_date_picker_button, self.membership_payment_date_text]), # Visibility toggled
-                                        self.membership_amount_paid_input,
-                                        self.membership_payment_method_input, # Visibility toggled
-                                        self.save_membership_button,
-                                        self.membership_form_feedback_text,
-                                    ],
-                                    scroll=ft.ScrollMode.AUTO # Make this column scrollable
-                                ),
-                                expand=1,
-                                bgcolor=ft.colors.BLUE_GREY_200,
-                                padding=10,
-                                alignment=ft.alignment.top_center,
-                            ),
-                            table_area_container,
-                        ]
-                    )
-                ),
-                ft.Tab(
-                    text="Membership History",
-                    content=ft.Column(
-                        controls=[
-                            # Container for History Filters
-                            ft.Container(
-                                content=ft.Column(
-                                    controls=[
-                                        ft.Text("Filter Transaction History", weight=ft.FontWeight.BOLD),
-                                        self.history_name_filter_input,
-                                        self.history_phone_filter_input,
-                                        self.history_join_date_filter_input,
-                                        ft.Row(
-                                            controls=[
-                                                self.apply_history_filters_button,
-                                                self.clear_history_filters_button,
-                                            ],
-                                            alignment=ft.MainAxisAlignment.START,
-                                        ),
-                                    ],
-                                    spacing=10 # Spacing within the filter column
-                                ),
-                                bgcolor=ft.colors.GREEN_200, # Example color
-                                padding=10,
-                                border_radius=5,
-                                # Adjust height or remove expand to size to content
-                                # height=200, # Example fixed height, or let it size automatically
-                            ),
-                            # Container for the full history table
-                            ft.Container(
-                                content=ft.Column(
-                                    controls=[self.full_history_table_flet],
-                                    scroll=ft.ScrollMode.AUTO,
-                                    expand=True
-                                ),
-                                expand=4, # Retain original expand factor for the table area
-                                bgcolor=ft.colors.GREEN_300,
-                                padding=10,
-                                alignment=ft.alignment.top_center
-                            ),
-                            # Adding delete transaction button and feedback to history tab
-                            self.delete_transaction_button_flet, # Added
-                            self.history_actions_feedback_text, # Added
-                        ],
-                        # Optional: Adjust spacing for the main Column of the tab
-                        spacing=10,
-                        # Optional: Stretch filter container width if needed
-                        # horizontal_alignment=ft.CrossAxisAlignment.STRETCH
-                    )
-                ),
-                ft.Tab(
-                    text="Plan Management",
-                    content=ft.Row(
-                        controls=[
-                            ft.Container(
-                                content=ft.Column(
-                                    controls=[
-                                        ft.Text("Add/Edit Plan", weight=ft.FontWeight.BOLD),
-                                        self.plan_name_input,
-                                        self.plan_duration_input,
-                                        self.save_plan_button,
-                                        self.edit_plan_button, # Added button
-                                        self.clear_plan_form_button, # Added button
-                                        self.toggle_plan_status_button, # Added button
-                                        self.delete_plan_button_flet, # Added
-                                        self.plan_form_feedback_text, # Existing, will be used for feedback
-                                    ]
-                                ),
-                                expand=1,
-                                bgcolor=ft.colors.AMBER_200,
-                                padding=10,
-                                alignment=ft.alignment.top_center,
-                            ),
-                            # Container for the plans table
-                            ft.Container(
-                                content=ft.Column(
-                                    controls=[self.plans_table_flet],
-                                    scroll=ft.ScrollMode.AUTO,
-                                    expand=True
-                                ),
-                                expand=2,
-                                bgcolor=ft.colors.AMBER_300,
-                                padding=10,
-                                alignment=ft.alignment.top_center
-                            ),
-                        ],
-                        # Optional: Adjust spacing for the main Row of the tab
-                        # spacing=10,
-                        # vertical_alignment=ft.CrossAxisAlignment.START
-                    )
-                ),
-                ft.Tab(
-                    text="Reporting",
-                    content=ft.Column(
-                        controls=[
-                            ft.Container( # Container for Renewals Report Form and Table
-                                content=ft.Column(
-                                    controls=[
-                                        ft.Text("Custom Pending Renewals Report", weight=ft.FontWeight.BOLD),
-                                        self.renewal_report_year_input,
-                                        self.renewal_report_month_dropdown,
-                                        self.generate_renewals_report_button,
-                                        self.renewals_report_feedback_text,
-                                        ft.Divider(),
-                                        ft.Text("Pending Renewals Results", weight=ft.FontWeight.BOLD),
-                                        self.pending_renewals_table_flet
-                                    ],
-                                    scroll=ft.ScrollMode.AUTO,
-                                    expand=True # Ensure this column can expand
-                                ),
-                                expand=1,
-                                bgcolor=ft.colors.TEAL_200,
-                                padding=10,
-                                alignment=ft.alignment.top_center
-                            ),
-                            ft.Container( # Container for Finance Report Form
-                                content=ft.Column(
-                                    controls=[
-                                        ft.Text("Generate Monthly Finance Report (Excel)", weight=ft.FontWeight.BOLD),
-                                        self.finance_report_year_input,
-                                        self.finance_report_month_dropdown,
-                                        self.generate_finance_report_button,
-                                        self.finance_report_feedback_text,
-                                    ]
-                                ),
-                                expand=1,
-                                bgcolor=ft.colors.TEAL_300,
-                                padding=10,
-                                alignment=ft.alignment.top_center, # Changed from center
-                            ),
-                        ]
-                    )
-                ),
-                ft.Tab(
-                    text="Settings", # Updated "Settings" tab to include book management
-                    content=ft.Column(
-                        controls=[
-                            ft.Text("Book Management", weight=ft.FontWeight.BOLD),
-                            self.book_closing_year_input,
-                            self.book_closing_month_dropdown,
-                            ft.Row(controls=[
-                                self.check_book_status_button_flet,
-                                self.close_books_button_flet,
-                                self.open_books_button_flet,
-                            ], alignment=ft.MainAxisAlignment.START), # Buttons in a row
-                            self.book_status_display_label, # Feedback label for book operations
-                            ft.Divider(),
-                            # Placeholder for other settings
-                            ft.Container( # This container can hold other settings content
-                                content=ft.Text("Other Settings Placeholder"),
-                                # expand=True, # Allow this container to fill the column if needed
-                                # bgcolor=ft.colors.ORANGE_200, # Example color
-                                padding=10,
-                                alignment=ft.alignment.center,
-                            )
-                        ],
-                        spacing=10, # Spacing for the main column in Settings tab
-                        scroll=ft.ScrollMode.AUTO # Make settings tab scrollable if content exceeds view
-                    )
-                ),
-            ]
-        )
-
-        # Populate members table after tabs_control is defined and uses members_table_flet
-        self.display_all_members_flet()
-        # Populate full history table as well
-        self.refresh_membership_history_display_flet()
-        # Populate plans table
-        self.display_all_plans_flet()
-        # Populate pending renewals table - Now handled by on_generate_renewals_report_click called below
-        # self.display_pending_renewals_flet()
-
-        # Populate dropdowns
-        self.populate_member_dropdowns_flet()
-        self.populate_plan_dropdowns_flet()
-
-        # Set initial visibility for membership form based on default type
-        self.on_membership_type_change_flet(None)
-
-
-        # Add DatePicker to the page overlay once the page is available
-        # This is often done in did_mount or after the main control is added to the page.
-        # For now, let's assume self.page will be set by Flet when app_view is added.
-        # A common pattern is to check self.page and add overlay items.
-        # This logic will be moved to did_mount.
-
-        # Initial population of the pending renewals table with default/current month's data
-        self.on_generate_renewals_report_click(None)
         # --- End of UI Assembly moved from _initialize_ui_elements() ---
-
-        # Assign the fully constructed tabs_control to self.content
-        self.content = self.tabs_control
-        # Set the container to expand
         self.expand = True
 
     def on_full_history_select_changed(self, e: ft.ControlEvent):
@@ -1565,37 +1198,182 @@ class FletAppView(ft.Container):
         self.update()
 
     def build(self):
-        # Initial population of the members table
-        # This needs to be called after members_table_flet is initialized but before the UI is built,
-        # or right after the UI structure using it is defined.
-        # Calling it here means it will populate when build() is first called.
+        # UI Element Initializations
+        self.date_picker = ft.DatePicker(
+            on_change=self.on_date_picker_change,
+            on_dismiss=self.on_date_picker_dismiss,
+        )
+        self.file_picker = ft.FilePicker(on_result=self.on_file_picker_result_flet)
 
-        # Ensure DatePicker is added to page overlays
-        # This check is to prevent adding it multiple times if build is called again,
-        # though typically build is called once per control instance.
-        # However, self.page might not be available yet in __init__.
-        # It's safer to do this here or in did_mount.
-        # For this structure, doing it in build() before returning tabs_control is fine.
-        # self.page.overlay.append(self.date_picker) # This logic will be moved to did_mount
+        self.member_actions_feedback_text = ft.Text("")
+        self.history_actions_feedback_text = ft.Text("")
+        self.book_status_display_label = ft.Text("") # For book closing feedback
 
-        # Renaming to table_area_container as per latest prompt for clarity
+        self.delete_member_button_flet = ft.ElevatedButton(text="Deactivate Selected Member", on_click=self.on_delete_selected_member_click_flet)
+        self.delete_plan_button_flet = ft.ElevatedButton(text="Delete Selected Plan", on_click=self.on_delete_selected_plan_click_flet)
+        self.delete_transaction_button_flet = ft.ElevatedButton(text="Delete Selected Transaction", on_click=self.on_delete_selected_transaction_click_flet)
+
+        current_year = datetime.now().year
+        current_month = datetime.now().month
+        self.book_closing_year_input = ft.TextField(label="Year", value=str(current_year))
+        self.book_closing_month_dropdown = ft.Dropdown(
+            label="Month",
+            options=[ft.dropdown.Option(str(i), calendar.month_name[i]) for i in range(1, 13)],
+            value=str(current_month)
+        )
+        self.close_books_button_flet = ft.ElevatedButton(text="Close Books", on_click=self._handle_close_books_action_flet)
+        self.open_books_button_flet = ft.ElevatedButton(text="Re-open Books", on_click=self._handle_open_books_action_flet)
+        self.check_book_status_button_flet = ft.ElevatedButton(text="Check Book Status", on_click=self._handle_check_book_status_flet)
+
+        self.member_name_input = ft.TextField(label="Name")
+        self.member_phone_input = ft.TextField(label="Phone")
+        self.add_member_button = ft.ElevatedButton(text="Add Member", on_click=self.on_add_member_click)
+        self.member_form_feedback_text = ft.Text("")
+
+        self.plan_name_input = ft.TextField(label="Plan Name")
+        self.plan_duration_input = ft.TextField(label="Duration (days)")
+        self.save_plan_button = ft.ElevatedButton(text="Save Plan", on_click=self.on_save_plan_click)
+        self.plan_form_feedback_text = ft.Text("Ready to add a new plan.", color=ft.colors.BLACK)
+        self.edit_plan_button = ft.ElevatedButton(text="Edit Selected Plan", on_click=self.on_edit_selected_plan_click)
+        self.clear_plan_form_button = ft.ElevatedButton(text="Clear Form / New Plan", on_click=self.on_clear_plan_form_click)
+        self.toggle_plan_status_button = ft.ElevatedButton(text="Toggle Active/Inactive", on_click=self.on_toggle_plan_status_click, disabled=True)
+
+        self.history_name_filter_input = ft.TextField(label="Filter by Name")
+        self.history_phone_filter_input = ft.TextField(label="Filter by Phone")
+        self.history_join_date_filter_input = ft.TextField(label="Filter by Join Date (YYYY-MM-DD)")
+        self.apply_history_filters_button = ft.ElevatedButton(text="Apply History Filters", on_click=self.apply_history_filters_flet)
+        self.clear_history_filters_button = ft.ElevatedButton(text="Clear History Filters", on_click=self.clear_history_filters_flet)
+
+        self.membership_type_dropdown = ft.Dropdown(
+            label="Membership Type",
+            options=[ft.dropdown.Option("Group Class"), ft.dropdown.Option("Personal Training")],
+            on_change=self.on_membership_type_change_flet
+        )
+        self.membership_member_dropdown = ft.Dropdown(label="Select Member", options=[])
+        self.membership_plan_dropdown = ft.Dropdown(label="Select Plan", options=[])
+        self.membership_sessions_input = ft.TextField(label="Number of Sessions")
+        self.membership_start_date_picker_button = ft.ElevatedButton(
+            text="Pick Start Date",
+            on_click=lambda e: self.open_date_picker(e, "start_date")
+        )
+        self.membership_start_date_text = ft.Text("Start Date: Not Selected")
+        self.membership_payment_date_picker_button = ft.ElevatedButton(
+            text="Pick Payment Date",
+            on_click=lambda e: self.open_date_picker(e, "payment_date")
+        )
+        self.membership_payment_date_text = ft.Text("Payment Date: Not Selected")
+        self.membership_amount_paid_input = ft.TextField(label="Amount Paid")
+        self.membership_payment_method_input = ft.TextField(label="Payment Method")
+        self.save_membership_button = ft.ElevatedButton(text="Save Membership", on_click=self.on_save_membership_click)
+        self.membership_form_feedback_text = ft.Text("")
+
+        self.renewal_report_year_input = ft.TextField(label="Year", value=str(datetime.now().year))
+        self.renewal_report_month_dropdown = ft.Dropdown(
+            label="Month",
+            options=[ft.dropdown.Option(str(i), str(i)) for i in range(1, 13)],
+            value=str(datetime.now().month)
+        )
+        self.generate_renewals_report_button = ft.ElevatedButton(
+            text="Generate Renewals Report",
+            on_click=self.on_generate_renewals_report_click
+        )
+        self.renewals_report_feedback_text = ft.Text("")
+
+        self.finance_report_year_input = ft.TextField(label="Year", value=str(datetime.now().year))
+        self.finance_report_month_dropdown = ft.Dropdown(
+            label="Month",
+            options=[ft.dropdown.Option(str(i), str(i)) for i in range(1, 13)],
+            value=str(datetime.now().month)
+        )
+        self.generate_finance_report_button = ft.ElevatedButton(
+            text="Generate Excel Finance Report",
+            on_click=self.on_generate_finance_report_click
+        )
+        self.finance_report_feedback_text = ft.Text("")
+
+        self.members_table_flet = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("ID")),
+                ft.DataColumn(ft.Text("Name")),
+                ft.DataColumn(ft.Text("Phone")),
+                ft.DataColumn(ft.Text("Join Date")),
+            ],
+            rows=[],
+            on_select_changed=self.on_member_select_changed
+        )
+
+        self.member_specific_history_table_flet = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("Type")),
+                ft.DataColumn(ft.Text("Plan/Details")),
+                ft.DataColumn(ft.Text("Paid Date")),
+                ft.DataColumn(ft.Text("Start Date")),
+                ft.DataColumn(ft.Text("End Date")),
+                ft.DataColumn(ft.Text("Amount ($)")),
+                ft.DataColumn(ft.Text("Method/Sessions")),
+            ],
+            rows=[]
+        )
+
+        self.full_history_table_flet = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("TXN ID")),
+                ft.DataColumn(ft.Text("Name")),
+                ft.DataColumn(ft.Text("Phone")),
+                ft.DataColumn(ft.Text("Joined")),
+                ft.DataColumn(ft.Text("Type")),
+                ft.DataColumn(ft.Text("Amount ($)")),
+                ft.DataColumn(ft.Text("Paid Date")),
+                ft.DataColumn(ft.Text("Start Date")),
+                ft.DataColumn(ft.Text("End Date")),
+                ft.DataColumn(ft.Text("Status")),
+                ft.DataColumn(ft.Text("Plan/Sessions")),
+                ft.DataColumn(ft.Text("Pay Method")),
+            ],
+            rows=[],
+            on_select_changed=self.on_full_history_select_changed
+        )
+
+        self.plans_table_flet = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("ID")),
+                ft.DataColumn(ft.Text("Name")),
+                ft.DataColumn(ft.Text("Duration (Days)")),
+                ft.DataColumn(ft.Text("Status")),
+            ],
+            rows=[],
+            on_select_changed=self.on_plan_select_changed
+        )
+        self.pending_renewals_table_flet = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("Member ID")),
+                ft.DataColumn(ft.Text("Name")),
+                ft.DataColumn(ft.Text("Phone")),
+                ft.DataColumn(ft.Text("Plan Name")),
+                ft.DataColumn(ft.Text("End Date")),
+                ft.DataColumn(ft.Text("Days Overdue")),
+            ],
+            rows=[]
+        )
+
+        # UI Assembly (moved from __init__)
         table_area_container = ft.Container(
             content=ft.Column(
                 controls=[
                     ft.Text("All Members", weight=ft.FontWeight.BOLD),
                     self.members_table_flet,
-                    ft.Divider(), # Visual separator
+                    ft.Divider(),
                     ft.Text("Selected Member Activity", weight=ft.FontWeight.BOLD),
                     self.member_specific_history_table_flet,
-                    self.delete_member_button_flet, # Added
-                    self.member_actions_feedback_text, # Added
+                    self.delete_member_button_flet,
+                    self.member_actions_feedback_text,
                 ],
                 scroll=ft.ScrollMode.AUTO,
                 expand=True,
-                spacing=10 # Added spacing
+                spacing=10
             ),
             expand=2,
-            bgcolor=ft.colors.BLUE_GREY_300, # Or your preferred background
+            bgcolor=ft.colors.BLUE_GREY_300,
             padding=10,
             alignment=ft.alignment.top_center
         )
