@@ -13,7 +13,7 @@ from reporter.database import create_database, seed_initial_plans
 
 # --- Simulation Database Setup ---
 SIMULATION_DB_DIR = os.path.join(project_root, "reporter", "simulations", "sim_data")
-# Using a specific DB file for this simulation
+# Using a specific DB file for this deactivation simulation
 SIMULATION_DB_FILE = os.path.join(SIMULATION_DB_DIR, "simulation_kranos_data_del_member.db")
 
 # original_db_file is captured in __main__ block
@@ -23,7 +23,7 @@ SIM_DB_DIR = os.path.join(project_root, "reporter", "simulations", "sim_data")
 SIM_DB_FILE = os.path.join(SIM_DB_DIR, "simulation_kranos_data_del_member.db")
 
 def main_simulation_logic(controller: GuiController): # Renamed and controller passed
-    print("\n--- Starting Simulation: Delete Member Flow ---")
+    print("\n--- Starting Simulation: Deactivate Member Flow ---")
 
     # 1. Add a test member
     member_name = f"MemberToDelete_{int(time.time())%1000}"
@@ -85,36 +85,36 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
     conn_setup_check.close()
 
     if transactions_count_before == 0:
-        print(f"FAILURE: Transaction for member ID {member_id_to_delete} not found before delete attempt.")
+        print(f"FAILURE: Transaction for member ID {member_id_to_delete} not found before deactivation attempt.")
         # cleanup_simulation_environment() # Handled by finally in __main__
         return
-    print(f"Found {transactions_count_before} transaction(s) for the member before deletion.")
+    print(f"Found {transactions_count_before} transaction(s) for the member before deactivation.")
 
 
-    # 3. Call controller.delete_member_action
-    print(f"\nStep 3: Calling controller.delete_member_action for member ID {member_id_to_delete}")
-    # Note: GuiController.delete_member_action in the actual app might involve a messagebox.askyesno.
+    # 3. Call controller.deactivate_member_action
+    print(f"\nStep 3: Calling controller.deactivate_member_action for member ID {member_id_to_delete}")
+    # Note: GuiController.deactivate_member_action in the actual app might involve a messagebox.askyesno.
     # Here, we are testing the action method directly. If it's hardcoded to use messagebox,
     # this simulation would require mocking or it might fail if tkinter is not fully available.
     # Based on test_gui_flows.py, the controller's deactivate_member_action does NOT use askyesno.
-    delete_success, delete_message = controller.deactivate_member_action(member_id_to_delete)
-    print(f"Controller action message: '{delete_message}' (Success: {delete_success})")
+    deactivate_success, deactivate_message = controller.deactivate_member_action(member_id_to_delete)
+    print(f"Controller action message: '{deactivate_message}' (Success: {deactivate_success})")
 
-    if not delete_success:
+    if not deactivate_success:
         print(f"FAILURE: controller.deactivate_member_action reported failure for member ID {member_id_to_delete}.")
         # cleanup_simulation_environment() # Keep env for inspection if needed on failure
         # return # Continue to verification to see state
 
-    # 4. Verify member is deleted
-    print("\nStep 4: Verifying member deletion...")
+    # 4. Verify member is deactivated
+    print("\nStep 4: Verifying member deactivation...")
     members_after = database_manager.get_all_members(phone_filter=member_phone)
     if not members_after:
-        print(f"SUCCESS: Member '{member_name}' (ID: {member_id_to_delete}) correctly deleted from members table.")
+        print(f"SUCCESS: Member '{member_name}' (ID: {member_id_to_delete}) correctly marked as inactive (not found by get_all_members).")
     else:
-        print(f"FAILURE: Member '{member_name}' (ID: {member_id_to_delete}) still found in members table.")
+        print(f"FAILURE: Member '{member_name}' (ID: {member_id_to_delete}) still found by get_all_members after deactivation attempt.")
 
-    # 5. Verify member's transactions are also deleted
-    print("\nStep 5: Verifying member's transactions deletion...")
+    # 5. Verify member's transactions are preserved after deactivation
+    print("\nStep 5: Verifying member's transactions are preserved after deactivation...")
     # Use get_transactions_with_member_details, filtering by member_id if possible,
     # or check all transactions if member_id is used in the details.
     # The function get_transactions_with_member_details itself joins with members table.
@@ -128,11 +128,11 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
     conn_check.close()
 
     if len(transactions_after) == transactions_count_before:
-        print(f"SUCCESS: Transactions for member ID {member_id_to_delete} correctly persisted ({len(transactions_after)} found).")
+        print(f"SUCCESS: Transactions for member ID {member_id_to_delete} correctly persisted after deactivation ({len(transactions_after)} found).")
     else:
-        print(f"FAILURE: Expected {transactions_count_before} transaction(s) for member ID {member_id_to_delete}, but found {len(transactions_after)}.")
+        print(f"FAILURE: Expected {transactions_count_before} transaction(s) for member ID {member_id_to_delete} to be preserved, but found {len(transactions_after)}.")
 
-    print("\n--- Simulation: Delete Member Flow Complete ---")
+    print("\n--- Simulation: Deactivate Member Flow Complete ---")
     # Cleanup is handled in the __main__ block's finally clause
 
 if __name__ == "__main__":

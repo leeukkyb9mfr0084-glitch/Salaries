@@ -12,18 +12,53 @@ def setup_database():
     # Use an in-memory SQLite database for testing
     database_manager.DB_FILE = ":memory:"
 
-    # Ensure tables are created
-    # create_database will establish a connection, create tables, and then close it.
-    # For in-memory, we need to manage a persistent connection for the test's duration.
+    # Establish the single in-memory connection for this test
     conn = sqlite3.connect(":memory:")
-    database_manager._TEST_IN_MEMORY_CONNECTION = conn # Set global for get_db_connection
+    database_manager._TEST_IN_MEMORY_CONNECTION = conn # Key: manager uses this specific conn
 
-    # Call create_database with :memory: which should now use the global connection
-    # if the logic in create_database and get_db_connection is adapted for it,
-    # or simply create tables directly using the connection 'conn'.
-    # For simplicity here, let's assume create_database handles it or we do it manually.
-    # Create tables using the provided create_database function which also handles schema
-    create_database(":memory:") # This will use the _TEST_IN_MEMORY_CONNECTION
+    # Create tables directly on this connection
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS members (
+        member_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_name TEXT NOT NULL,
+        phone TEXT UNIQUE,
+        join_date TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1
+    );
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS plans (
+        plan_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_name TEXT NOT NULL UNIQUE,
+        duration_days INTEGER NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE
+    );
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS transactions (
+        transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        member_id INTEGER NOT NULL,
+        transaction_type TEXT NOT NULL,
+        plan_id INTEGER,
+        payment_date TEXT,
+        start_date TEXT NOT NULL,
+        end_date TEXT,
+        amount_paid REAL NOT NULL,
+        payment_method TEXT,
+        sessions INTEGER,
+        FOREIGN KEY (member_id) REFERENCES members (member_id),
+        FOREIGN KEY (plan_id) REFERENCES plans (plan_id)
+    );
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS monthly_book_status (
+        month_key TEXT PRIMARY KEY, -- e.g., "2025-06"
+        status TEXT NOT NULL CHECK(status IN ('open', 'closed')),
+        closed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    conn.commit()
 
     controller = GuiController()
 
