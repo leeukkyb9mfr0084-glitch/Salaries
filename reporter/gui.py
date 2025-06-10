@@ -394,24 +394,26 @@ class GuiController:
             return False, f"An error occurred while deleting the plan: {str(e)}"
 
 
+from .components.membership_tab import MembershipTab # Added import
+
 class FletAppView(ft.Container):
     def __init__(self):
         super().__init__() # Calls ft.Container.__init__
         self.controller = GuiController()
-        self.selected_member_id_flet: Optional[int] = None
+        # self.selected_member_id_flet: Optional[int] = None # Moved to MembershipTab
         self.selected_transaction_id_flet: Optional[int] = None
         self.selected_plan_id_flet: Optional[int] = None
         self.current_plan_id_to_update_flet: Optional[int] = None
-        self.selected_start_date_flet: Optional[date] = None
-        self.selected_payment_date_flet: Optional[date] = None
-        self.active_date_picker_target: Optional[str] = None
+        # self.selected_start_date_flet: Optional[date] = None # Managed by MembershipTab locally
+        # self.selected_payment_date_flet: Optional[date] = None # Managed by MembershipTab locally
+        # self.active_date_picker_target: Optional[str] = None # Managed by MembershipTab locally
         # self.page is available via self.page once the control is added to a page.
 
         # UI declarations
-        self.member_actions_feedback_text: Optional[ft.Text] = None
+        # self.member_actions_feedback_text: Optional[ft.Text] = None # Moved to MembershipTab
         self.history_actions_feedback_text: Optional[ft.Text] = None
         self.book_status_display_label: Optional[ft.Text] = None
-        self.delete_member_button_flet: Optional[ft.ElevatedButton] = None
+        # self.delete_member_button_flet: Optional[ft.ElevatedButton] = None # Moved to MembershipTab
         self.delete_plan_button_flet: Optional[ft.ElevatedButton] = None
         self.delete_transaction_button_flet: Optional[ft.ElevatedButton] = None
         self.book_closing_year_input: Optional[ft.TextField] = None
@@ -419,10 +421,10 @@ class FletAppView(ft.Container):
         self.close_books_button_flet: Optional[ft.ElevatedButton] = None
         self.open_books_button_flet: Optional[ft.ElevatedButton] = None
         self.check_book_status_button_flet: Optional[ft.ElevatedButton] = None
-        self.member_name_input: Optional[ft.TextField] = None
-        self.member_phone_input: Optional[ft.TextField] = None
-        self.add_member_button: Optional[ft.ElevatedButton] = None
-        self.member_form_feedback_text: Optional[ft.Text] = None
+        # self.member_name_input: Optional[ft.TextField] = None # Moved to MembershipTab
+        # self.member_phone_input: Optional[ft.TextField] = None # Moved to MembershipTab
+        # self.add_member_button: Optional[ft.ElevatedButton] = None # Moved to MembershipTab
+        # self.member_form_feedback_text: Optional[ft.Text] = None # Moved to MembershipTab (specific instance)
         self.plan_name_input: Optional[ft.TextField] = None
         self.plan_duration_input: Optional[ft.TextField] = None
         self.save_plan_button: Optional[ft.ElevatedButton] = None
@@ -435,18 +437,18 @@ class FletAppView(ft.Container):
         self.history_join_date_filter_input: Optional[ft.TextField] = None
         self.apply_history_filters_button: Optional[ft.ElevatedButton] = None
         self.clear_history_filters_button: Optional[ft.ElevatedButton] = None
-        self.membership_type_dropdown: Optional[ft.Dropdown] = None
-        self.membership_member_dropdown: Optional[ft.Dropdown] = None
-        self.membership_plan_dropdown: Optional[ft.Dropdown] = None
-        self.membership_sessions_input: Optional[ft.TextField] = None
-        self.membership_start_date_picker_button: Optional[ft.ElevatedButton] = None
-        self.membership_start_date_text: Optional[ft.Text] = None
-        self.membership_payment_date_picker_button: Optional[ft.ElevatedButton] = None
-        self.membership_payment_date_text: Optional[ft.Text] = None
-        self.membership_amount_paid_input: Optional[ft.TextField] = None
-        self.membership_payment_method_input: Optional[ft.TextField] = None
-        self.save_membership_button: Optional[ft.ElevatedButton] = None
-        self.membership_form_feedback_text: Optional[ft.Text] = None
+        # self.membership_type_dropdown: Optional[ft.Dropdown] = None # Moved to MembershipTab
+        # self.membership_member_dropdown: Optional[ft.Dropdown] = None # Moved to MembershipTab
+        # self.membership_plan_dropdown: Optional[ft.Dropdown] = None # Moved to MembershipTab
+        # self.membership_sessions_input: Optional[ft.TextField] = None # Moved to MembershipTab
+        # self.membership_start_date_picker_button: Optional[ft.ElevatedButton] = None # Moved to MembershipTab
+        # self.membership_start_date_text: Optional[ft.Text] = None # Moved to MembershipTab
+        # self.membership_payment_date_picker_button: Optional[ft.ElevatedButton] = None # Moved to MembershipTab
+        # self.membership_payment_date_text: Optional[ft.Text] = None # Moved to MembershipTab
+        # self.membership_amount_paid_input: Optional[ft.TextField] = None # Moved to MembershipTab
+        # self.membership_payment_method_input: Optional[ft.TextField] = None # Moved to MembershipTab
+        # self.save_membership_button: Optional[ft.ElevatedButton] = None # Moved to MembershipTab
+        # self.membership_form_feedback_text: Optional[ft.Text] = None # Moved to MembershipTab (specific instance)
         self.renewal_report_year_input: Optional[ft.TextField] = None
         self.renewal_report_month_dropdown: Optional[ft.Dropdown] = None
         self.generate_renewals_report_button: Optional[ft.ElevatedButton] = None
@@ -455,8 +457,8 @@ class FletAppView(ft.Container):
         self.finance_report_month_dropdown: Optional[ft.Dropdown] = None
         self.generate_finance_report_button: Optional[ft.ElevatedButton] = None
         self.finance_report_feedback_text: Optional[ft.Text] = None
-        self.members_table_flet: Optional[ft.DataTable] = None
-        self.member_specific_history_table_flet: Optional[ft.DataTable] = None
+        # self.members_table_flet: Optional[ft.DataTable] = None # Moved to MembershipTab
+        # self.member_specific_history_table_flet: Optional[ft.DataTable] = None # Moved to MembershipTab
         self.full_history_table_flet: Optional[ft.DataTable] = None
         self.plans_table_flet: Optional[ft.DataTable] = None
         self.pending_renewals_table_flet: Optional[ft.DataTable] = None
@@ -465,472 +467,219 @@ class FletAppView(ft.Container):
         # Date Picker and File Picker are declared here and initialized in build
         self.date_picker: Optional[ft.DatePicker] = None
         self.file_picker: Optional[ft.FilePicker] = None
-        self.expand = True
+        self.expand = True # FletAppView itself should expand
 
-    # Event Handlers and Helper Methods
+        # Date Picker and File Picker are initialized here, they are shared across tabs if needed
+        # Handlers for DatePicker are now managed by individual tabs if they use it
+        self.date_picker = ft.DatePicker()
+        self.file_picker = ft.FilePicker(on_result=self.on_file_picker_result_flet)
+
+
+    # Event Handlers and Helper Methods (methods specific to MembershipTab have been moved)
     def on_full_history_select_changed(self, e: ft.ControlEvent):
         """Handles row selection changes in the full_history_table_flet."""
         selected_index_str = e.data
-        if selected_index_str:  # If a row is actually selected
+        if selected_index_str:
             try:
                 selected_index = int(selected_index_str)
                 if 0 <= selected_index < len(self.full_history_table_flet.rows):
                     selected_row = self.full_history_table_flet.rows[selected_index]
-                    # Assuming Transaction ID is in the first cell
                     txn_id_cell = selected_row.cells[0]
                     if isinstance(txn_id_cell.content, ft.Text):
                         self.selected_transaction_id_flet = int(txn_id_cell.content.value)
-                        print(f"DEBUG: Selected Transaction ID from full history: {self.selected_transaction_id_flet}")
                     else:
-                        print(f"DEBUG: Transaction ID cell content is not ft.Text: {type(txn_id_cell.content)}")
                         self.selected_transaction_id_flet = None
                 else:
-                    self.selected_transaction_id_flet = None  # Index out of bounds
-                    print(f"DEBUG: Selected index {selected_index} out of bounds for full_history_table_flet.")
+                    self.selected_transaction_id_flet = None
             except ValueError:
-                # This can happen if txn_id_cell.content.value is not a valid int string
-                txn_val = 'unknown cell'
-                if 'txn_id_cell' in locals() and hasattr(txn_id_cell, 'content') and hasattr(txn_id_cell.content, 'value'):
-                    txn_val = txn_id_cell.content.value
-                print(f"DEBUG: Error parsing Transaction ID from full history. Cell value: '{txn_val}'")
                 self.selected_transaction_id_flet = None
-            except Exception as ex:
-                print(f"DEBUG: An unexpected error occurred during full history selection: {ex}")
+            except Exception:
                 self.selected_transaction_id_flet = None
-        else:  # Selection was cleared
+        else:
             self.selected_transaction_id_flet = None
-            print("DEBUG: Full history table selection cleared.")
-        # self.update() # Not strictly necessary if only internal state is changed
+        # print(f"DEBUG: FletAppView - Selected Transaction ID: {self.selected_transaction_id_flet}")
+        # self.update()
 
     def on_plan_select_changed(self, e: ft.ControlEvent):
         """Handles row selection changes in the plans_table_flet."""
         selected_index_str = e.data
-        if selected_index_str:  # If a row is actually selected
+        if selected_index_str:
             try:
                 selected_index = int(selected_index_str)
                 if 0 <= selected_index < len(self.plans_table_flet.rows):
                     selected_row = self.plans_table_flet.rows[selected_index]
-                    # Assuming Plan ID is in the first cell
                     plan_id_cell = selected_row.cells[0]
                     if isinstance(plan_id_cell.content, ft.Text):
                         self.selected_plan_id_flet = int(plan_id_cell.content.value)
-                        print(f"DEBUG: Selected Plan ID: {self.selected_plan_id_flet}")
                     else:
-                        print(f"DEBUG: Plan ID cell content is not ft.Text: {type(plan_id_cell.content)}")
                         self.selected_plan_id_flet = None
                 else:
-                    self.selected_plan_id_flet = None  # Index out of bounds
-                    print(f"DEBUG: Selected index {selected_index} out of bounds for plans_table_flet.")
+                    self.selected_plan_id_flet = None
             except ValueError:
-                plan_val = 'unknown cell'
-                if 'plan_id_cell' in locals() and hasattr(plan_id_cell, 'content') and hasattr(plan_id_cell.content, 'value'):
-                    plan_val = plan_id_cell.content.value
-                print(f"DEBUG: Error parsing Plan ID. Cell value: '{plan_val}'")
                 self.selected_plan_id_flet = None
-            except Exception as ex:
-                print(f"DEBUG: An unexpected error occurred during plan selection: {ex}")
+            except Exception:
                 self.selected_plan_id_flet = None
-        else:  # Selection was cleared
+        else:
             self.selected_plan_id_flet = None
-            print("DEBUG: Plans table selection cleared.")
 
-        # Enable/disable toggle button based on selection
         if self.selected_plan_id_flet is not None:
             self.toggle_plan_status_button.disabled = False
         else:
             self.toggle_plan_status_button.disabled = True
 
-        if hasattr(self, 'toggle_plan_status_button') and self.toggle_plan_status_button.page: # Ensure button is on page
+        if hasattr(self, 'toggle_plan_status_button') and self.toggle_plan_status_button.page:
             self.toggle_plan_status_button.update()
-        # self.update() # Not strictly necessary if only internal state is changed, and covered by button update if needed
+        # print(f"DEBUG: FletAppView - Selected Plan ID: {self.selected_plan_id_flet}")
+        # self.update()
 
     def _get_membership_status_flet(self, end_date_str: Optional[str]) -> str:
-        """Helper to determine membership status based on end date string."""
+        """Helper to determine membership status based on end date string.
+           This can remain if other tabs use it, or be moved/duplicated if only used by one tab's logic.
+           For now, keeping it here as full_history_table_flet uses it.
+        """
         if not end_date_str or end_date_str.lower() == "n/a" or end_date_str.strip() == "":
-            return "N/A" # Or "Unknown" if "N/A" is ambiguous with a plan named "N/A"
+            return "N/A"
         try:
-            # Assuming end_date_str is in 'YYYY-MM-DD' format
             end_date_obj = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-            if end_date_obj >= date.today():
-                return "Active"
-            else:
-                return "Inactive"
+            return "Active" if end_date_obj >= date.today() else "Inactive"
         except ValueError:
-            # This can happen if end_date_str is not a valid date or not in the expected format
             return "Invalid Date"
 
     def refresh_membership_history_display_flet(self, transactions_list: Optional[list] = None):
         """Populates the full_history_table_flet with transaction data."""
-        self.full_history_table_flet.rows.clear()
+        if not hasattr(self, 'full_history_table_flet') or self.full_history_table_flet is None:
+            return # Table not initialized yet
 
+        self.full_history_table_flet.rows.clear()
         if transactions_list is None:
-            # Record structure from controller:
-            # (transaction_id, member_id, transaction_type, plan_id, payment_date,
-            #  start_date, end_date, amount_paid, payment_method_db, sessions,
-            #  client_name, phone, join_date)
             transactions_data = self.controller.get_filtered_transaction_history(None, None, None)
         else:
             transactions_data = transactions_list
 
         if not transactions_data:
             self.full_history_table_flet.rows.append(
-                ft.DataRow(cells=[
-                    ft.DataCell(ft.Text("No transaction records found."), colspan=len(self.full_history_table_flet.columns))
-                ])
+                ft.DataRow(cells=[ft.DataCell(ft.Text("No transaction records found."), colspan=len(self.full_history_table_flet.columns))])
             )
         else:
             for record in transactions_data:
-                # Unpack the record based on the structure from get_filtered_transaction_history
                 (transaction_id, _member_id, transaction_type, plan_id, payment_date,
                  start_date, end_date, amount_paid, payment_method_db, sessions,
                  client_name, phone, join_date) = record
-
-                plan_id_or_sessions_display = ""
-                if transaction_type == "Group Class":
-                    plan_id_or_sessions_display = str(plan_id) if plan_id is not None else "N/A"
-                elif transaction_type == "Personal Training":
-                    plan_id_or_sessions_display = str(sessions) if sessions is not None else "N/A"
-
-                amount_paid_formatted = "0.00"
-                if amount_paid is not None:
-                    try:
-                        amount_paid_formatted = f"{float(amount_paid):.2f}"
-                    except ValueError:
-                        amount_paid_formatted = "Error"
-
+                plan_id_or_sessions_display = str(plan_id) if transaction_type == "Group Class" and plan_id is not None else (str(sessions) if transaction_type == "Personal Training" and sessions is not None else "N/A")
+                amount_paid_formatted = f"{float(amount_paid):.2f}" if amount_paid is not None else "0.00"
                 end_date_display = str(end_date) if end_date is not None else "N/A"
-
-                # Pass the original end_date string (or None if it was None) to status calculation
-                # _get_membership_status_flet expects a string 'YYYY-MM-DD' or None
                 status = self._get_membership_status_flet(str(end_date) if end_date else None)
-
-                # Prepare all values for display, ensuring they are strings and handle None
                 ordered_values = [
-                    str(transaction_id),
-                    str(client_name if client_name is not None else "N/A"),
-                    str(phone if phone is not None else "N/A"),
-                    str(join_date if join_date is not None else "N/A"),
-                    str(transaction_type if transaction_type is not None else "N/A"),
-                    amount_paid_formatted,
-                    str(payment_date if payment_date is not None else "N/A"),
-                    str(start_date if start_date is not None else "N/A"),
-                    end_date_display, # Use the N/A handled version for display
-                    status,
-                    plan_id_or_sessions_display,
-                    str(payment_method_db if payment_method_db is not None else "N/A")
+                    str(transaction_id), str(client_name or "N/A"), str(phone or "N/A"), str(join_date or "N/A"),
+                    str(transaction_type or "N/A"), amount_paid_formatted, str(payment_date or "N/A"),
+                    str(start_date or "N/A"), end_date_display, status, plan_id_or_sessions_display,
+                    str(payment_method_db or "N/A")
                 ]
-
                 data_cells = [ft.DataCell(ft.Text(value)) for value in ordered_values]
                 self.full_history_table_flet.rows.append(ft.DataRow(cells=data_cells))
 
-        self.update()
+        if self.full_history_table_flet.page: self.full_history_table_flet.update()
+        # self.update()
 
     def apply_history_filters_flet(self, e):
-        """Applies transaction history filters."""
         name_filter = self.history_name_filter_input.value or None
         phone_filter = self.history_phone_filter_input.value or None
         join_date_filter = self.history_join_date_filter_input.value or None
-
         if join_date_filter:
             try:
-                # Validate date format YYYY-MM-DD
                 datetime.strptime(join_date_filter, '%Y-%m-%d')
             except ValueError:
                 self.history_actions_feedback_text.value = "Error: Invalid Join Date format. Use YYYY-MM-DD."
                 self.history_actions_feedback_text.color = ft.colors.RED
-                self.history_actions_feedback_text.update()
+                if self.history_actions_feedback_text.page: self.history_actions_feedback_text.update()
                 return
-
         filtered_data = self.controller.get_filtered_transaction_history(name_filter, phone_filter, join_date_filter)
         self.refresh_membership_history_display_flet(filtered_data)
-
-        if filtered_data:
-            self.history_actions_feedback_text.value = f"Filters applied. Found {len(filtered_data)} records."
-            self.history_actions_feedback_text.color = ft.colors.GREEN
-        else:
-            self.history_actions_feedback_text.value = "No results for current filters."
-            self.history_actions_feedback_text.color = ft.colors.ORANGE
-
-        self.history_actions_feedback_text.update()
-        self.update()
+        feedback_msg = f"Filters applied. Found {len(filtered_data)} records." if filtered_data else "No results for current filters."
+        self.history_actions_feedback_text.value = feedback_msg
+        self.history_actions_feedback_text.color = ft.colors.GREEN if filtered_data else ft.colors.ORANGE
+        if self.history_actions_feedback_text.page: self.history_actions_feedback_text.update()
+        # self.update()
 
     def clear_history_filters_flet(self, e):
-        """Clears transaction history filters and re-displays all history."""
         self.history_name_filter_input.value = ""
         self.history_phone_filter_input.value = ""
         self.history_join_date_filter_input.value = ""
-
-        self.history_name_filter_input.update()
-        self.history_phone_filter_input.update()
-        self.history_join_date_filter_input.update()
-
-        self.refresh_membership_history_display_flet() # Fetches all data
+        if self.history_name_filter_input.page: self.history_name_filter_input.update()
+        if self.history_phone_filter_input.page: self.history_phone_filter_input.update()
+        if self.history_join_date_filter_input.page: self.history_join_date_filter_input.update()
+        self.refresh_membership_history_display_flet()
         self.history_actions_feedback_text.value = "Filters cleared. Displaying all history."
         self.history_actions_feedback_text.color = ft.colors.BLUE
-        self.history_actions_feedback_text.update()
-        self.update()
-
-    def display_membership_history_flet(self, member_id: Optional[int]):
-        """Populates the member_specific_history_table_flet with activity for the given member_id."""
-        self.member_specific_history_table_flet.rows.clear()
-
-        if member_id is None:
-            placeholder_text = "Select a member to view their activity."
-            self.member_specific_history_table_flet.rows.append(
-                ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(placeholder_text), colspan=len(self.member_specific_history_table_flet.columns))
-                ])
-            )
-            self.update()
-            return
-
-        history_records = self.controller.get_all_activity_for_member(member_id)
-
-        if not history_records:
-            placeholder_text = "No activity history found for this member."
-            self.member_specific_history_table_flet.rows.append(
-                ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(placeholder_text), colspan=len(self.member_specific_history_table_flet.columns))
-                ])
-            )
-        else:
-            # record: (activity_type, name_or_description, payment_date, start_date, end_date, amount_paid, payment_method_or_sessions, activity_id)
-            for record in history_records:
-                cells = []
-                # Type (index 0)
-                cells.append(ft.DataCell(ft.Text(str(record[0] if record[0] is not None else "N/A"))))
-                # Plan/Details (index 1)
-                cells.append(ft.DataCell(ft.Text(str(record[1] if record[1] is not None else "N/A"))))
-                # Paid Date (index 2)
-                cells.append(ft.DataCell(ft.Text(str(record[2] if record[2] is not None else "N/A"))))
-                # Start Date (index 3)
-                cells.append(ft.DataCell(ft.Text(str(record[3] if record[3] is not None else "N/A"))))
-                # End Date (index 4)
-                cells.append(ft.DataCell(ft.Text(str(record[4] if record[4] is not None else "N/A"))))
-
-                # Amount Paid (index 5) - format as currency
-                amount_paid_val = record[5]
-                if isinstance(amount_paid_val, (int, float)):
-                    amount_text = f"{amount_paid_val:.2f}"
-                elif amount_paid_val is None: # Or any other representation for truly missing data
-                    amount_text = "0.00"
-                else:
-                    amount_text = str(amount_paid_val) # Fallback if it's some other type already a string
-                cells.append(ft.DataCell(ft.Text(amount_text)))
-
-                # Method/Sessions (index 6)
-                cells.append(ft.DataCell(ft.Text(str(record[6] if record[6] is not None else "N/A"))))
-
-                self.member_specific_history_table_flet.rows.append(ft.DataRow(cells=cells))
-
-        self.update()
-
-    def on_member_select_changed(self, e: ft.ControlEvent):
-        """Handles member selection changes in the members_table_flet."""
-        selected_index_str = e.data  # This is the string representation of the row index or ""
-
-        if selected_index_str:  # A row is selected
-            try:
-                selected_index = int(selected_index_str)
-                if 0 <= selected_index < len(self.members_table_flet.rows):
-                    selected_row = self.members_table_flet.rows[selected_index]
-                    member_id_cell = selected_row.cells[0] # ID is the first cell
-
-                    # Ensure content is ft.Text and access its value
-                    if isinstance(member_id_cell.content, ft.Text):
-                        self.selected_member_id_flet = int(member_id_cell.content.value)
-                        # print(f"DEBUG: Selected Member ID: {self.selected_member_id_flet}") # For debugging
-                    else:
-                        # Fallback or error if cell content is not as expected
-                        print(f"Error: Member ID cell content is not ft.Text: {type(member_id_cell.content)}")
-                        self.selected_member_id_flet = None
-                else:
-                    # Index out of bounds, should not happen with valid e.data
-                    print(f"Error: Selected index {selected_index} is out of bounds.")
-                    self.selected_member_id_flet = None
-            except ValueError:
-                # Handle cases where conversion to int fails for selected_index_str or member_id_cell.content.value
-                print(f"Error: Could not parse selected index or member ID. Data: '{selected_index_str}'")
-                self.selected_member_id_flet = None
-            except Exception as ex:
-                print(f"An unexpected error occurred during member selection: {ex}")
-                self.selected_member_id_flet = None
-        else:  # Selection was cleared (e.data is an empty string)
-            self.selected_member_id_flet = None
-            # print("DEBUG: Member selection cleared.") # For debugging
-
-        # Call the history display function regardless of whether a member is selected or deselected
-        self.display_membership_history_flet(self.selected_member_id_flet)
-
-        # self.update() # Typically not needed here as Flet handles updates from control events.
-                       # Only if this handler directly changes other controls not via standard Flet binding.
-
-    def display_all_members_flet(self, members_list: Optional[list] = None):
-        """Populates the members_table_flet with member data."""
-        if members_list is None:
-            # Fetches (member_id, client_name, phone, join_date, is_active)
-            members_list = self.controller.get_filtered_members(None, None)
-
-        self.members_table_flet.rows.clear()
-        if members_list:
-            for member_data in members_list:
-                # Display only the first 4 columns: ID, Name, Phone, Join Date
-                row = ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(str(member_data[0]))), # ID
-                    ft.DataCell(ft.Text(str(member_data[1]))), # Name
-                    ft.DataCell(ft.Text(str(member_data[2]))), # Phone
-                    ft.DataCell(ft.Text(str(member_data[3]))), # Join Date
-                ])
-                self.members_table_flet.rows.append(row)
-
-        # If the control is already part of a page, self.update() should refresh it.
-        # If self.page is directly accessible and an update is needed more broadly, self.page.update() could be used.
-        self.update()
-
-    def apply_member_filters_flet(self, e):
-        """Placeholder for applying member filters."""
-        # This will be implemented later. For now, it does nothing.
-        # Example:
-        # name_filter = self.member_name_filter_field.value or None
-        # phone_filter = self.member_phone_filter_field.value or None
-        # filtered_members = self.controller.get_filtered_members(name_filter, phone_filter)
-        # self.display_all_members_flet(filtered_members)
-        pass
-
-    def clear_member_filters_flet(self, e):
-        """Clears member filters and re-displays all members."""
-        # Assuming filter fields would be cleared here, e.g.:
-        # self.member_name_filter_field.value = ""
-        # self.member_phone_filter_field.value = ""
-        self.display_all_members_flet(self.controller.get_filtered_members(None, None))
-        # self.update() # display_all_members_flet already calls self.update()
+        if self.history_actions_feedback_text.page: self.history_actions_feedback_text.update()
+        # self.update()
 
     def display_all_plans_flet(self, plans_list: Optional[list] = None):
-        """Populates the plans_table_flet with plan data."""
+        if not hasattr(self, 'plans_table_flet') or self.plans_table_flet is None: return
         if plans_list is None:
-            # Fetches (plan_id, plan_name, duration_days, is_active)
             plans_list = self.controller.get_all_plans_with_inactive()
-
         self.plans_table_flet.rows.clear()
         if plans_list:
             for plan_data in plans_list:
                 plan_id, plan_name, duration_days, is_active = plan_data
                 status = "Active" if is_active else "Inactive"
                 row = ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(str(plan_id))),
-                    ft.DataCell(ft.Text(str(plan_name))),
-                    ft.DataCell(ft.Text(str(duration_days))),
-                    ft.DataCell(ft.Text(status)),
+                    ft.DataCell(ft.Text(str(plan_id))), ft.DataCell(ft.Text(str(plan_name))),
+                    ft.DataCell(ft.Text(str(duration_days))), ft.DataCell(ft.Text(status)),
                 ])
                 self.plans_table_flet.rows.append(row)
         else:
             self.plans_table_flet.rows.append(
-                ft.DataRow(cells=[
-                    ft.DataCell(ft.Text("No plans found."), colspan=len(self.plans_table_flet.columns))
-                ])
+                ft.DataRow(cells=[ft.DataCell(ft.Text("No plans found."), colspan=len(self.plans_table_flet.columns))])
             )
-        self.update()
+        if self.plans_table_flet.page: self.plans_table_flet.update()
+        # self.update()
 
-    def display_pending_renewals_flet(self):
-        """Populates the pending_renewals_table_flet with current month's pending renewal data."""
+    def display_pending_renewals_flet(self): # This seems to be for the "Reporting" tab, keep here.
+        if not hasattr(self, 'pending_renewals_table_flet') or self.pending_renewals_table_flet is None: return
         success, message, renewals_data = self.controller.generate_pending_renewals_action()
         self.pending_renewals_table_flet.rows.clear()
-
         if success and renewals_data:
             for renewal_item in renewals_data:
-                # (member_id, client_name, phone, plan_name, end_date, days_overdue)
                 cells = [ft.DataCell(ft.Text(str(item))) for item in renewal_item]
                 self.pending_renewals_table_flet.rows.append(ft.DataRow(cells=cells))
         else:
-            # Use the message from controller if an error occurred, otherwise a default message
             display_message = message if not success else "No pending renewals found for the current month."
             self.pending_renewals_table_flet.rows.append(
-                ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(display_message), colspan=len(self.pending_renewals_table_flet.columns))
-                ])
+                ft.DataRow(cells=[ft.DataCell(ft.Text(display_message), colspan=len(self.pending_renewals_table_flet.columns))])
             )
-        self.update()
-
-    def on_add_member_click(self, e):
-        """Handles the click event of the 'Add Member' button."""
-        name = self.member_name_input.value
-        phone = self.member_phone_input.value
-
-        success, message = self.controller.save_member_action(name, phone)
-
-        self.member_form_feedback_text.value = message
-        if success:
-            self.member_form_feedback_text.color = ft.colors.GREEN
-            self.member_name_input.value = ""
-            self.member_phone_input.value = ""
-            self.display_all_members_flet()
-            self.populate_member_dropdowns_flet() # Now implemented
-        else:
-            self.member_form_feedback_text.color = ft.colors.RED
-
-        self.member_name_input.update() # Ensure input fields are visually cleared
-        self.member_phone_input.update()
-        self.member_form_feedback_text.update()
-        self.update() # General UI update
-
-    def populate_member_dropdowns_flet(self):
-        """Populates the membership_member_dropdown with active members."""
-        members = self.controller.get_filtered_members(None, None)  # Fetches (id, name, phone, join_date, is_active)
-        options = [ft.dropdown.Option(key=str(m[0]), text=f"{m[1]} (ID: {m[0]})") for m in members if m[4]] # Only active
-
-        current_value = self.membership_member_dropdown.value
-        self.membership_member_dropdown.options = options
-        if options:
-            # Try to keep current selection if it's still valid, else default to first
-            if current_value and any(opt.key == current_value for opt in options):
-                self.membership_member_dropdown.value = current_value
-            else:
-                self.membership_member_dropdown.value = options[0].key
-        else:
-            self.membership_member_dropdown.value = None
-
-        if hasattr(self, 'membership_member_dropdown') and self.membership_member_dropdown.page: # Check if page exists
-            self.membership_member_dropdown.update() # Update only if part of the page
-        # self.update() # Broader update might not be needed if only dropdown changes
+        if self.pending_renewals_table_flet.page: self.pending_renewals_table_flet.update()
+        # self.update()
 
     def on_save_plan_click(self, e):
-        """Handles the click event of the 'Save Plan' button."""
         plan_name = self.plan_name_input.value
         duration_str = self.plan_duration_input.value
         plan_id_to_update_str = str(self.current_plan_id_to_update_flet) if self.current_plan_id_to_update_flet else None
-
         success, message, updated_plans = self.controller.save_plan_action(plan_name, duration_str, plan_id_to_update_str)
-
         self.plan_form_feedback_text.value = message
         if success:
             self.plan_form_feedback_text.color = ft.colors.GREEN
-            self.on_clear_plan_form_click(None) # Clear form and reset state
-            if updated_plans is not None: # Check if updated_plans is not None before passing
-                self.display_all_plans_flet(updated_plans)
-            else: # Fallback if updated_plans is None for some reason (e.g. error during fetch)
-                self.display_all_plans_flet() # Refresh with all plans
-            self.populate_plan_dropdowns_flet() # Now implemented
+            self.on_clear_plan_form_click(None)
+            if updated_plans is not None: self.display_all_plans_flet(updated_plans)
+            else: self.display_all_plans_flet()
+            # self.populate_plan_dropdowns_flet() # This method is now in MembershipTab
+            # If MembershipTab is already instantiated and needs update, it should handle its own dropdown refresh.
+            # Or FletAppView needs a reference to call it. For now, assume MembershipTab handles this.
+            if hasattr(self, 'membership_tab_ref') and self.membership_tab_ref:
+                 self.membership_tab_ref.populate_plan_dropdowns_flet()
+
         else:
             self.plan_form_feedback_text.color = ft.colors.RED
-
-        self.plan_form_feedback_text.update()
-        # self.plan_name_input.update() and self.plan_duration_input.update() are handled by on_clear_plan_form_click
-        self.update() # General UI update for table refresh
+        if self.plan_form_feedback_text.page: self.plan_form_feedback_text.update()
+        # self.update()
 
     def on_edit_selected_plan_click(self, e):
-        """Populates the plan form with data from the selected plan in the table."""
         if self.selected_plan_id_flet is not None:
             selected_plan_details = None
             for row in self.plans_table_flet.rows:
                 if int(row.cells[0].content.value) == self.selected_plan_id_flet:
-                    selected_plan_details = {
-                        "id": row.cells[0].content.value,
-                        "name": row.cells[1].content.value,
-                        "duration": row.cells[2].content.value,
-                        # Status (cell 3) is not directly editable in this form version
-                    }
+                    selected_plan_details = {"id": row.cells[0].content.value, "name": row.cells[1].content.value, "duration": row.cells[2].content.value}
                     break
-
             if selected_plan_details:
                 self.plan_name_input.value = selected_plan_details["name"]
                 self.plan_duration_input.value = selected_plan_details["duration"]
@@ -938,261 +687,114 @@ class FletAppView(ft.Container):
                 self.plan_form_feedback_text.value = f"Editing Plan ID: {self.current_plan_id_to_update_flet}"
                 self.plan_form_feedback_text.color = ft.colors.BLUE
             else:
-                self.plan_form_feedback_text.value = "Error: Could not find details for the selected plan."
+                self.plan_form_feedback_text.value = "Error: Could not find details for selected plan."
                 self.plan_form_feedback_text.color = ft.colors.RED
         else:
-            self.plan_form_feedback_text.value = "Please select a plan from the table to edit."
+            self.plan_form_feedback_text.value = "Please select a plan to edit."
             self.plan_form_feedback_text.color = ft.colors.ORANGE
-
-        self.plan_name_input.update()
-        self.plan_duration_input.update()
-        self.plan_form_feedback_text.update()
-        self.update()
+        if self.plan_name_input.page: self.plan_name_input.update()
+        if self.plan_duration_input.page: self.plan_duration_input.update()
+        if self.plan_form_feedback_text.page: self.plan_form_feedback_text.update()
+        # self.update()
 
     def on_clear_plan_form_click(self, e):
-        """Clears the plan form fields and resets the editing state."""
         self.plan_name_input.value = ""
         self.plan_duration_input.value = ""
         self.current_plan_id_to_update_flet = None
         self.plan_form_feedback_text.value = "Ready to add a new plan."
-        self.plan_form_feedback_text.color = ft.colors.BLACK # Default text color
-
-        self.plan_name_input.update()
-        self.plan_duration_input.update()
-        self.plan_form_feedback_text.update()
-        self.update() # Potentially to update other related UI elements if any
-
-    def populate_plan_dropdowns_flet(self):
-        """Populates the membership_plan_dropdown with active plans."""
-        plans = self.controller.get_active_plans()  # Fetches (id, name, duration)
-        options = [ft.dropdown.Option(key=str(p[0]), text=f"{p[1]} ({p[2]} days)") for p in plans]
-
-        current_value = self.membership_plan_dropdown.value
-        self.membership_plan_dropdown.options = options
-        if options:
-             # Try to keep current selection if it's still valid, else default to first
-            if current_value and any(opt.key == current_value for opt in options):
-                self.membership_plan_dropdown.value = current_value
-            else:
-                self.membership_plan_dropdown.value = options[0].key
-        else:
-            self.membership_plan_dropdown.value = None
-
-        if hasattr(self, 'membership_plan_dropdown') and self.membership_plan_dropdown.page: # Check if page exists
-            self.membership_plan_dropdown.update()
+        self.plan_form_feedback_text.color = ft.colors.BLACK
+        if self.plan_name_input.page: self.plan_name_input.update()
+        if self.plan_duration_input.page: self.plan_duration_input.update()
+        if self.plan_form_feedback_text.page: self.plan_form_feedback_text.update()
         # self.update()
 
-    def open_date_picker(self, e, date_type_to_set: str):
-        """Opens the date picker and sets the target for date selection."""
-        self.active_date_picker_target = date_type_to_set
-        # self.page.open(self.date_picker) # Old way
-        self.date_picker.pick_date()
+    # populate_plan_dropdowns_flet removed (moved to MembershipTab)
+    # open_date_picker removed (functionality moved to MembershipTab's local date picker)
+    # on_date_picker_change removed
+    # on_date_picker_dismiss removed
+    # on_membership_type_change_flet removed (moved to MembershipTab)
+    # on_save_membership_click removed (moved to MembershipTab)
 
-
-    def on_date_picker_change(self, e):
-        """Handles date selection from the DatePicker."""
-        selected_date = self.date_picker.value.date() if self.date_picker.value else None
-        if self.active_date_picker_target == "start_date":
-            self.selected_start_date_flet = selected_date
-            self.membership_start_date_text.value = f"Start Date: {selected_date.strftime('%Y-%m-%d') if selected_date else 'Not Selected'}"
-            if self.membership_start_date_text.page: self.membership_start_date_text.update()
-        elif self.active_date_picker_target == "payment_date":
-            self.selected_payment_date_flet = selected_date
-            self.membership_payment_date_text.value = f"Payment Date: {selected_date.strftime('%Y-%m-%d') if selected_date else 'Not Selected'}"
-            if self.membership_payment_date_text.page: self.membership_payment_date_text.update()
-
-        self.active_date_picker_target = None # Reset target
-        # self.update() # May not be needed if individual controls are updated
-
-    def on_date_picker_dismiss(self, e):
-        """Handles dismissal of the DatePicker."""
-        # User dismissed the picker, you might want to log this or do nothing.
-        self.active_date_picker_target = None # Reset target
-        # self.update() # Update UI if needed
-
-    def on_membership_type_change_flet(self, e):
-        """Shows/hides fields based on membership type selection."""
-        selection = self.membership_type_dropdown.value
-        is_group_class = selection == "Group Class"
-
-        self.membership_plan_dropdown.visible = is_group_class
-        self.membership_payment_date_picker_button.visible = is_group_class
-        self.membership_payment_date_text.visible = is_group_class
-        self.membership_payment_method_input.visible = is_group_class
-        self.membership_sessions_input.visible = not is_group_class
-
-        if self.page: # Ensure page exists before updating controls
-            self.membership_plan_dropdown.update()
-            self.membership_payment_date_picker_button.update()
-            self.membership_payment_date_text.update()
-            self.membership_payment_method_input.update()
-            self.membership_sessions_input.update()
-            self.update() # General update for layout changes
-
-    def on_save_membership_click(self, e):
-        """Handles the save membership action."""
-        membership_type = self.membership_type_dropdown.value
-        member_id_str = self.membership_member_dropdown.value
-        member_id = int(member_id_str) if member_id_str else None
-
-        start_date_str = self.selected_start_date_flet.strftime('%Y-%m-%d') if self.selected_start_date_flet else None
-        amount_paid_str = self.membership_amount_paid_input.value
-
-        plan_id = None
-        payment_date_str = None
-        payment_method = None
-        sessions_str = None
-
-        if membership_type == "Group Class":
-            plan_id_str = self.membership_plan_dropdown.value
-            plan_id = int(plan_id_str) if plan_id_str else None
-            payment_date_str = self.selected_payment_date_flet.strftime('%Y-%m-%d') if self.selected_payment_date_flet else None
-            payment_method = self.membership_payment_method_input.value
-        elif membership_type == "Personal Training":
-            sessions_str = self.membership_sessions_input.value
-            payment_date_str = start_date_str # PT payment date is the start date
-            payment_method = "N/A" # Default for PT
-
-        success, message = self.controller.save_membership_action(
-            membership_type, member_id, start_date_str, amount_paid_str,
-            plan_id, payment_date_str, payment_method, sessions_str
-        )
-
-        self.membership_form_feedback_text.value = message
-        if success:
-            self.membership_form_feedback_text.color = ft.colors.GREEN
-            # Clear form fields
-            self.membership_amount_paid_input.value = ""
-            self.membership_payment_method_input.value = "" # Specific to Group Class but clearing doesn't hurt
-            self.membership_sessions_input.value = ""    # Specific to PT
-
-            self.selected_start_date_flet = None
-            self.membership_start_date_text.value = "Start Date: Not Selected"
-            self.selected_payment_date_flet = None
-            self.membership_payment_date_text.value = "Payment Date: Not Selected"
-
-            # Optionally reset dropdowns - for now, let them keep their selection
-            # self.membership_type_dropdown.value = None # Or first option
-            # self.membership_member_dropdown.value = None # Or first option
-            # self.membership_plan_dropdown.value = None # Or first option
-
-            self.refresh_membership_history_display_flet() # Update full history
-            if member_id is not None and self.selected_member_id_flet == member_id:
-                self.display_membership_history_flet(member_id) # Update specific member view if shown
-
-        else:
-            self.membership_form_feedback_text.color = ft.colors.RED
-
-        # Update specific controls that changed
-        self.membership_form_feedback_text.update()
-        self.membership_amount_paid_input.update()
-        self.membership_payment_method_input.update()
-        self.membership_sessions_input.update()
-        self.membership_start_date_text.update()
-        self.membership_payment_date_text.update()
-        self.update() # General UI update
-
-    def on_generate_renewals_report_click(self, e):
-        """Handles the click event for generating the pending renewals report."""
+    def on_generate_renewals_report_click(self, e): # For Reporting Tab
         year_str = self.renewal_report_year_input.value
         month_str = self.renewal_report_month_dropdown.value
-
         if not year_str or not month_str:
             self.renewals_report_feedback_text.value = "Year and Month cannot be empty."
             self.renewals_report_feedback_text.color = ft.colors.RED
-            self.renewals_report_feedback_text.update()
+            if self.renewals_report_feedback_text.page: self.renewals_report_feedback_text.update()
             return
-
         try:
-            year = int(year_str)
-            month = int(month_str)
-            if not (1 <= month <= 12):
-                raise ValueError("Month out of range.")
+            year = int(year_str); month = int(month_str)
+            if not (1 <= month <= 12): raise ValueError("Month out of range.")
         except ValueError:
             self.renewals_report_feedback_text.value = "Invalid Year or Month format."
             self.renewals_report_feedback_text.color = ft.colors.RED
-            self.renewals_report_feedback_text.update()
+            if self.renewals_report_feedback_text.page: self.renewals_report_feedback_text.update()
             return
-
         success, message, renewals_data = self.controller.generate_custom_pending_renewals_action(year, month)
         self.renewals_report_feedback_text.value = message
         self.renewals_report_feedback_text.color = ft.colors.GREEN if success else ft.colors.RED
-        self.renewals_report_feedback_text.update()
-
+        if self.renewals_report_feedback_text.page: self.renewals_report_feedback_text.update()
         self.pending_renewals_table_flet.rows.clear()
         if success and renewals_data:
             for item in renewals_data:
-                # (member_id, client_name, phone, plan_name, end_date, days_overdue)
                 cells = [ft.DataCell(ft.Text(str(val))) for val in item]
                 self.pending_renewals_table_flet.rows.append(ft.DataRow(cells=cells))
-        elif success and not renewals_data: # Success but no data
-             self.pending_renewals_table_flet.rows.append(ft.DataRow(cells=[
-                ft.DataCell(ft.Text(message), colspan=len(self.pending_renewals_table_flet.columns))]))
-        else: # Not success or renewals_data is None
+        elif success and not renewals_data:
+             self.pending_renewals_table_flet.rows.append(ft.DataRow(cells=[ft.DataCell(ft.Text(message), colspan=len(self.pending_renewals_table_flet.columns))]))
+        else:
             error_message = message if message else "Error generating report or no data."
-            self.pending_renewals_table_flet.rows.append(ft.DataRow(cells=[
-                ft.DataCell(ft.Text(error_message), colspan=len(self.pending_renewals_table_flet.columns))]))
+            self.pending_renewals_table_flet.rows.append(ft.DataRow(cells=[ft.DataCell(ft.Text(error_message), colspan=len(self.pending_renewals_table_flet.columns))]))
+        if self.pending_renewals_table_flet.page: self.pending_renewals_table_flet.update()
+        # self.update()
 
-        self.pending_renewals_table_flet.update()
-        self.update()
-
-    def on_generate_finance_report_click(self, e):
-        """Handles the click event for generating the finance report."""
+    def on_generate_finance_report_click(self, e): # For Reporting Tab
         year_str = self.finance_report_year_input.value
         month_str = self.finance_report_month_dropdown.value
-
         if not year_str or not month_str:
             self.finance_report_feedback_text.value = "Year and Month cannot be empty."
             self.finance_report_feedback_text.color = ft.colors.RED
-            self.finance_report_feedback_text.update()
+            if self.finance_report_feedback_text.page: self.finance_report_feedback_text.update()
             return
         try:
-            int(year_str) # Validate year can be int
-            if not (1 <= int(month_str) <= 12):
-                 raise ValueError("Month out of range.")
+            int(year_str);
+            if not (1 <= int(month_str) <= 12): raise ValueError("Month out of range.")
         except ValueError:
             self.finance_report_feedback_text.value = "Invalid Year or Month format."
             self.finance_report_feedback_text.color = ft.colors.RED
-            self.finance_report_feedback_text.update()
+            if self.finance_report_feedback_text.page: self.finance_report_feedback_text.update()
             return
-
-        # Proceed to file picking
         self.file_picker.save_file(
             dialog_title="Save Finance Report",
             file_name=f"finance_report_{year_str}_{month_str}.xlsx",
             allowed_extensions=["xlsx"]
         )
 
-    def on_file_picker_result_flet(self, e: ft.FilePickerResultEvent):
-        """Handles the result of the file picker dialog."""
+    def on_file_picker_result_flet(self, e: ft.FilePickerResultEvent): # Used by Finance Report
         if e.path:
             save_path = e.path
-            year = int(self.finance_report_year_input.value) # Assumes valid from previous check
-            month = int(self.finance_report_month_dropdown.value) # Assumes valid
-
+            year = int(self.finance_report_year_input.value)
+            month = int(self.finance_report_month_dropdown.value)
             success, message = self.controller.generate_finance_report_excel_action(year, month, save_path)
             self.finance_report_feedback_text.value = message
             self.finance_report_feedback_text.color = ft.colors.GREEN if success else ft.colors.RED
         else:
             self.finance_report_feedback_text.value = "File save cancelled."
             self.finance_report_feedback_text.color = ft.colors.ORANGE
-
-        self.finance_report_feedback_text.update()
-        self.update()
+        if self.finance_report_feedback_text.page: self.finance_report_feedback_text.update()
+        # self.update()
 
     def build(self):
-        # UI Element Initializations
-        self.date_picker = ft.DatePicker(
-            on_change=self.on_date_picker_change,
-            on_dismiss=self.on_date_picker_dismiss,
-        )
-        self.file_picker = ft.FilePicker(on_result=self.on_file_picker_result_flet)
+        # DatePicker and FilePicker are already initialized in __init__
+        # self.date_picker = ft.DatePicker(...) # Removed specific handlers
+        # self.file_picker = ft.FilePicker(on_result=self.on_file_picker_result_flet) # Already in __init__
 
-        self.member_actions_feedback_text = ft.Text("")
+        # UI Element Initializations for controls remaining in FletAppView
+        # self.member_actions_feedback_text = ft.Text("") # Moved
         self.history_actions_feedback_text = ft.Text("")
-        self.book_status_display_label = ft.Text("") # For book closing feedback
+        self.book_status_display_label = ft.Text("")
 
-        self.delete_member_button_flet = ft.ElevatedButton(text="Deactivate Selected Member", on_click=self.on_delete_selected_member_click_flet)
+        # self.delete_member_button_flet = ft.ElevatedButton(...) # Moved
         self.delete_plan_button_flet = ft.ElevatedButton(text="Delete Selected Plan", on_click=self.on_delete_selected_plan_click_flet)
         self.delete_transaction_button_flet = ft.ElevatedButton(text="Delete Selected Transaction", on_click=self.on_delete_selected_transaction_click_flet)
 
@@ -1208,11 +810,8 @@ class FletAppView(ft.Container):
         self.open_books_button_flet = ft.ElevatedButton(text="Re-open Books", on_click=self._handle_open_books_action_flet)
         self.check_book_status_button_flet = ft.ElevatedButton(text="Check Book Status", on_click=self._handle_check_book_status_flet)
 
-        self.member_name_input = ft.TextField(label="Name")
-        self.member_phone_input = ft.TextField(label="Phone")
-        self.add_member_button = ft.ElevatedButton(text="Add Member", on_click=self.on_add_member_click)
-        self.member_form_feedback_text = ft.Text("")
-
+        # Member form controls moved to MembershipTab
+        # Plan form controls remain for Plan Management Tab
         self.plan_name_input = ft.TextField(label="Plan Name")
         self.plan_duration_input = ft.TextField(label="Duration (days)")
         self.save_plan_button = ft.ElevatedButton(text="Save Plan", on_click=self.on_save_plan_click)
@@ -1221,189 +820,75 @@ class FletAppView(ft.Container):
         self.clear_plan_form_button = ft.ElevatedButton(text="Clear Form / New Plan", on_click=self.on_clear_plan_form_click)
         self.toggle_plan_status_button = ft.ElevatedButton(text="Toggle Active/Inactive", on_click=self.on_toggle_plan_status_click, disabled=True)
 
+        # History filter controls remain for Membership History Tab
         self.history_name_filter_input = ft.TextField(label="Filter by Name")
         self.history_phone_filter_input = ft.TextField(label="Filter by Phone")
         self.history_join_date_filter_input = ft.TextField(label="Filter by Join Date (YYYY-MM-DD)")
         self.apply_history_filters_button = ft.ElevatedButton(text="Apply History Filters", on_click=self.apply_history_filters_flet)
         self.clear_history_filters_button = ft.ElevatedButton(text="Clear History Filters", on_click=self.clear_history_filters_flet)
 
-        self.membership_type_dropdown = ft.Dropdown(
-            label="Membership Type",
-            options=[ft.dropdown.Option("Group Class"), ft.dropdown.Option("Personal Training")],
-            on_change=self.on_membership_type_change_flet
-        )
-        self.membership_member_dropdown = ft.Dropdown(label="Select Member", options=[])
-        self.membership_plan_dropdown = ft.Dropdown(label="Select Plan", options=[])
-        self.membership_sessions_input = ft.TextField(label="Number of Sessions")
-        self.membership_start_date_picker_button = ft.ElevatedButton(
-            text="Pick Start Date",
-            on_click=lambda e: self.open_date_picker(e, "start_date")
-        )
-        self.membership_start_date_text = ft.Text("Start Date: Not Selected")
-        self.membership_payment_date_picker_button = ft.ElevatedButton(
-            text="Pick Payment Date",
-            on_click=lambda e: self.open_date_picker(e, "payment_date")
-        )
-        self.membership_payment_date_text = ft.Text("Payment Date: Not Selected")
-        self.membership_amount_paid_input = ft.TextField(label="Amount Paid")
-        self.membership_payment_method_input = ft.TextField(label="Payment Method")
-        self.save_membership_button = ft.ElevatedButton(text="Save Membership", on_click=self.on_save_membership_click)
-        self.membership_form_feedback_text = ft.Text("")
+        # Membership form controls moved to MembershipTab
 
+        # Reporting controls remain for Reporting Tab
         self.renewal_report_year_input = ft.TextField(label="Year", value=str(datetime.now().year))
         self.renewal_report_month_dropdown = ft.Dropdown(
-            label="Month",
-            options=[ft.dropdown.Option(str(i), str(i)) for i in range(1, 13)],
-            value=str(datetime.now().month)
+            label="Month", options=[ft.dropdown.Option(str(i), str(i)) for i in range(1, 13)], value=str(datetime.now().month)
         )
-        self.generate_renewals_report_button = ft.ElevatedButton(
-            text="Generate Renewals Report",
-            on_click=self.on_generate_renewals_report_click
-        )
+        self.generate_renewals_report_button = ft.ElevatedButton(text="Generate Renewals Report", on_click=self.on_generate_renewals_report_click)
         self.renewals_report_feedback_text = ft.Text("")
 
         self.finance_report_year_input = ft.TextField(label="Year", value=str(datetime.now().year))
         self.finance_report_month_dropdown = ft.Dropdown(
-            label="Month",
-            options=[ft.dropdown.Option(str(i), str(i)) for i in range(1, 13)],
-            value=str(datetime.now().month)
+            label="Month", options=[ft.dropdown.Option(str(i), str(i)) for i in range(1, 13)], value=str(datetime.now().month)
         )
-        self.generate_finance_report_button = ft.ElevatedButton(
-            text="Generate Excel Finance Report",
-            on_click=self.on_generate_finance_report_click
-        )
+        self.generate_finance_report_button = ft.ElevatedButton(text="Generate Excel Finance Report", on_click=self.on_generate_finance_report_click)
         self.finance_report_feedback_text = ft.Text("")
 
-        self.members_table_flet = ft.DataTable(
-            columns=[
-                ft.DataColumn(ft.Text("ID")),
-                ft.DataColumn(ft.Text("Name")),
-                ft.DataColumn(ft.Text("Phone")),
-                ft.DataColumn(ft.Text("Join Date")),
-            ],
-            rows=[],
-            on_select_changed=self.on_member_select_changed
-        )
-
-        self.member_specific_history_table_flet = ft.DataTable(
-            columns=[
-                ft.DataColumn(ft.Text("Type")),
-                ft.DataColumn(ft.Text("Plan/Details")),
-                ft.DataColumn(ft.Text("Paid Date")),
-                ft.DataColumn(ft.Text("Start Date")),
-                ft.DataColumn(ft.Text("End Date")),
-                ft.DataColumn(ft.Text("Amount ($)")),
-                ft.DataColumn(ft.Text("Method/Sessions")),
-            ],
-            rows=[]
-        )
-
+        # Tables: members_table_flet and member_specific_history_table_flet moved to MembershipTab
+        # Full history table remains for Membership History Tab
         self.full_history_table_flet = ft.DataTable(
             columns=[
-                ft.DataColumn(ft.Text("TXN ID")),
-                ft.DataColumn(ft.Text("Name")),
-                ft.DataColumn(ft.Text("Phone")),
-                ft.DataColumn(ft.Text("Joined")),
-                ft.DataColumn(ft.Text("Type")),
-                ft.DataColumn(ft.Text("Amount ($)")),
-                ft.DataColumn(ft.Text("Paid Date")),
-                ft.DataColumn(ft.Text("Start Date")),
-                ft.DataColumn(ft.Text("End Date")),
-                ft.DataColumn(ft.Text("Status")),
-                ft.DataColumn(ft.Text("Plan/Sessions")),
-                ft.DataColumn(ft.Text("Pay Method")),
+                ft.DataColumn(ft.Text("TXN ID")), ft.DataColumn(ft.Text("Name")), ft.DataColumn(ft.Text("Phone")),
+                ft.DataColumn(ft.Text("Joined")), ft.DataColumn(ft.Text("Type")), ft.DataColumn(ft.Text("Amount ($)")),
+                ft.DataColumn(ft.Text("Paid Date")), ft.DataColumn(ft.Text("Start Date")), ft.DataColumn(ft.Text("End Date")),
+                ft.DataColumn(ft.Text("Status")), ft.DataColumn(ft.Text("Plan/Sessions")), ft.DataColumn(ft.Text("Pay Method")),
             ],
-            rows=[],
-            on_select_changed=self.on_full_history_select_changed
+            rows=[], on_select_changed=self.on_full_history_select_changed
         )
-
+        # Plans table remains for Plan Management Tab
         self.plans_table_flet = ft.DataTable(
             columns=[
-                ft.DataColumn(ft.Text("ID")),
-                ft.DataColumn(ft.Text("Name")),
-                ft.DataColumn(ft.Text("Duration (Days)")),
-                ft.DataColumn(ft.Text("Status")),
+                ft.DataColumn(ft.Text("ID")), ft.DataColumn(ft.Text("Name")),
+                ft.DataColumn(ft.Text("Duration (Days)")), ft.DataColumn(ft.Text("Status")),
             ],
-            rows=[],
-            on_select_changed=self.on_plan_select_changed
+            rows=[], on_select_changed=self.on_plan_select_changed
         )
+        # Pending renewals table remains for Reporting Tab
         self.pending_renewals_table_flet = ft.DataTable(
             columns=[
-                ft.DataColumn(ft.Text("Member ID")),
-                ft.DataColumn(ft.Text("Name")),
-                ft.DataColumn(ft.Text("Phone")),
-                ft.DataColumn(ft.Text("Plan Name")),
-                ft.DataColumn(ft.Text("End Date")),
-                ft.DataColumn(ft.Text("Days Overdue")),
+                ft.DataColumn(ft.Text("Member ID")), ft.DataColumn(ft.Text("Name")), ft.DataColumn(ft.Text("Phone")),
+                ft.DataColumn(ft.Text("Plan Name")), ft.DataColumn(ft.Text("End Date")), ft.DataColumn(ft.Text("Days Overdue")),
             ],
             rows=[]
         )
 
-        # UI Assembly (moved from __init__)
-        table_area_container = ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.Text("All Members", weight=ft.FontWeight.BOLD),
-                    self.members_table_flet,
-                    ft.Divider(),
-                    ft.Text("Selected Member Activity", weight=ft.FontWeight.BOLD),
-                    self.member_specific_history_table_flet,
-                    self.delete_member_button_flet,
-                    self.member_actions_feedback_text,
-                ],
-                scroll=ft.ScrollMode.AUTO,
-                expand=True,
-                spacing=10
-            ),
-            expand=2,
-            bgcolor=ft.colors.BLUE_GREY_300,
-            padding=10,
-            alignment=ft.alignment.top_center
-        )
+        # Instantiate MembershipTab
+        self.membership_tab_ref = MembershipTab(self.controller, self.date_picker)
+
+
+        # UI Assembly
+        # table_area_container related to members_table_flet is now part of MembershipTab.build()
 
         self.tabs_control = ft.Tabs(
             tabs=[
                 ft.Tab(
                     text="Membership Management",
-                    content=ft.Row(
-                        controls=[
-                            ft.Container(
-                                content=ft.Column(
-                                    controls=[
-                                        ft.Text("Add New Member", weight=ft.FontWeight.BOLD),
-                                        self.member_name_input,
-                                        self.member_phone_input,
-                                        self.add_member_button,
-                                        self.member_form_feedback_text,
-                                        ft.Divider(),
-                                        ft.Text("Add New Membership", weight=ft.FontWeight.BOLD),
-                                        self.membership_type_dropdown,
-                                        self.membership_member_dropdown,
-                                        self.membership_plan_dropdown, # Visibility toggled
-                                        self.membership_sessions_input, # Visibility toggled
-                                        ft.Row([self.membership_start_date_picker_button, self.membership_start_date_text]),
-                                        ft.Row([self.membership_payment_date_picker_button, self.membership_payment_date_text]), # Visibility toggled
-                                        self.membership_amount_paid_input,
-                                        self.membership_payment_method_input, # Visibility toggled
-                                        self.save_membership_button,
-                                        self.membership_form_feedback_text,
-                                    ],
-                                    scroll=ft.ScrollMode.AUTO # Make this column scrollable
-                                ),
-                                expand=1,
-                                bgcolor=ft.colors.BLUE_GREY_200,
-                                padding=10,
-                                alignment=ft.alignment.top_center,
-                            ),
-                            table_area_container,
-                        ]
-                    )
+                    content=self.membership_tab_ref # Use the instance of MembershipTab
                 ),
                 ft.Tab(
                     text="Membership History",
                     content=ft.Column(
                         controls=[
-                            # Container for History Filters
                             ft.Container(
                                 content=ft.Column(
                                     controls=[
@@ -1412,41 +897,19 @@ class FletAppView(ft.Container):
                                         self.history_phone_filter_input,
                                         self.history_join_date_filter_input,
                                         ft.Row(
-                                            controls=[
-                                                self.apply_history_filters_button,
-                                                self.clear_history_filters_button,
-                                            ],
+                                            controls=[self.apply_history_filters_button, self.clear_history_filters_button],
                                             alignment=ft.MainAxisAlignment.START,
                                         ),
-                                    ],
-                                    spacing=10 # Spacing within the filter column
-                                ),
-                                bgcolor=ft.colors.GREEN_200, # Example color
-                                padding=10,
-                                border_radius=5,
-                                # Adjust height or remove expand to size to content
-                                # height=200, # Example fixed height, or let it size automatically
+                                    ], spacing=10
+                                ), bgcolor=ft.colors.GREEN_200, padding=10, border_radius=5,
                             ),
-                            # Container for the full history table
                             ft.Container(
-                                content=ft.Column(
-                                    controls=[self.full_history_table_flet],
-                                    scroll=ft.ScrollMode.AUTO,
-                                    expand=True
-                                ),
-                                expand=4, # Retain original expand factor for the table area
-                                bgcolor=ft.colors.GREEN_300,
-                                padding=10,
-                                alignment=ft.alignment.top_center
+                                content=ft.Column(controls=[self.full_history_table_flet], scroll=ft.ScrollMode.AUTO, expand=True),
+                                expand=4, bgcolor=ft.colors.GREEN_300, padding=10, alignment=ft.alignment.top_center
                             ),
-                            # Adding delete transaction button and feedback to history tab
-                            self.delete_transaction_button_flet, # Added
-                            self.history_actions_feedback_text, # Added
-                        ],
-                        # Optional: Adjust spacing for the main Column of the tab
-                        spacing=10,
-                        # Optional: Stretch filter container width if needed
-                        # horizontal_alignment=ft.CrossAxisAlignment.STRETCH
+                            self.delete_transaction_button_flet,
+                            self.history_actions_feedback_text,
+                        ], spacing=10
                     )
                 ),
                 ft.Tab(
@@ -1460,41 +923,26 @@ class FletAppView(ft.Container):
                                         self.plan_name_input,
                                         self.plan_duration_input,
                                         self.save_plan_button,
-                                        self.edit_plan_button, # Added button
-                                        self.clear_plan_form_button, # Added button
-                                        self.toggle_plan_status_button, # Added button
-                                        self.delete_plan_button_flet, # Added
-                                        self.plan_form_feedback_text, # Existing, will be used for feedback
+                                        self.edit_plan_button,
+                                        self.clear_plan_form_button,
+                                        self.toggle_plan_status_button,
+                                        self.delete_plan_button_flet,
+                                        self.plan_form_feedback_text,
                                     ]
-                                ),
-                                expand=1,
-                                bgcolor=ft.colors.AMBER_200,
-                                padding=10,
-                                alignment=ft.alignment.top_center,
+                                ), expand=1, bgcolor=ft.colors.AMBER_200, padding=10, alignment=ft.alignment.top_center,
                             ),
-                            # Container for the plans table
                             ft.Container(
-                                content=ft.Column(
-                                    controls=[self.plans_table_flet],
-                                    scroll=ft.ScrollMode.AUTO,
-                                    expand=True
-                                ),
-                                expand=2,
-                                bgcolor=ft.colors.AMBER_300,
-                                padding=10,
-                                alignment=ft.alignment.top_center
+                                content=ft.Column(controls=[self.plans_table_flet], scroll=ft.ScrollMode.AUTO, expand=True),
+                                expand=2, bgcolor=ft.colors.AMBER_300, padding=10, alignment=ft.alignment.top_center
                             ),
-                        ],
-                        # Optional: Adjust spacing for the main Row of the tab
-                        # spacing=10,
-                        # vertical_alignment=ft.CrossAxisAlignment.START
+                        ]
                     )
                 ),
                 ft.Tab(
                     text="Reporting",
                     content=ft.Column(
                         controls=[
-                            ft.Container( # Container for Renewals Report Form and Table
+                            ft.Container(
                                 content=ft.Column(
                                     controls=[
                                         ft.Text("Custom Pending Renewals Report", weight=ft.FontWeight.BOLD),
@@ -1505,16 +953,10 @@ class FletAppView(ft.Container):
                                         ft.Divider(),
                                         ft.Text("Pending Renewals Results", weight=ft.FontWeight.BOLD),
                                         self.pending_renewals_table_flet
-                                    ],
-                                    scroll=ft.ScrollMode.AUTO,
-                                    expand=True # Ensure this column can expand
-                                ),
-                                expand=1,
-                                bgcolor=ft.colors.TEAL_200,
-                                padding=10,
-                                alignment=ft.alignment.top_center
+                                    ], scroll=ft.ScrollMode.AUTO, expand=True
+                                ), expand=1, bgcolor=ft.colors.TEAL_200, padding=10, alignment=ft.alignment.top_center
                             ),
-                            ft.Container( # Container for Finance Report Form
+                            ft.Container(
                                 content=ft.Column(
                                     controls=[
                                         ft.Text("Generate Monthly Finance Report (Excel)", weight=ft.FontWeight.BOLD),
@@ -1523,82 +965,56 @@ class FletAppView(ft.Container):
                                         self.generate_finance_report_button,
                                         self.finance_report_feedback_text,
                                     ]
-                                ),
-                                expand=1,
-                                bgcolor=ft.colors.TEAL_300,
-                                padding=10,
-                                alignment=ft.alignment.top_center, # Changed from center
+                                ), expand=1, bgcolor=ft.colors.TEAL_300, padding=10, alignment=ft.alignment.top_center,
                             ),
                         ]
                     )
                 ),
                 ft.Tab(
-                    text="Settings", # Updated "Settings" tab to include book management
+                    text="Settings",
                     content=ft.Column(
                         controls=[
                             ft.Text("Book Management", weight=ft.FontWeight.BOLD),
                             self.book_closing_year_input,
                             self.book_closing_month_dropdown,
                             ft.Row(controls=[
-                                self.check_book_status_button_flet,
-                                self.close_books_button_flet,
-                                self.open_books_button_flet,
-                            ], alignment=ft.MainAxisAlignment.START), # Buttons in a row
-                            self.book_status_display_label, # Feedback label for book operations
+                                self.check_book_status_button_flet, self.close_books_button_flet, self.open_books_button_flet,
+                            ], alignment=ft.MainAxisAlignment.START),
+                            self.book_status_display_label,
                             ft.Divider(),
-                            # Placeholder for other settings
-                            ft.Container( # This container can hold other settings content
-                                content=ft.Text("Other Settings Placeholder"),
-                                # expand=True, # Allow this container to fill the column if needed
-                                # bgcolor=ft.colors.ORANGE_200, # Example color
-                                padding=10,
-                                alignment=ft.alignment.center,
-                            )
-                        ],
-                        spacing=10, # Spacing for the main column in Settings tab
-                        scroll=ft.ScrollMode.AUTO # Make settings tab scrollable if content exceeds view
+                            ft.Container(content=ft.Text("Other Settings Placeholder"), padding=10, alignment=ft.alignment.center)
+                        ], spacing=10, scroll=ft.ScrollMode.AUTO
                     )
                 ),
             ]
         )
 
-        # Populate members table after tabs_control is defined and uses members_table_flet
-        self.display_all_members_flet()
-        # Populate full history table as well
-        self.refresh_membership_history_display_flet()
-        # Populate plans table
-        self.display_all_plans_flet()
-        # Populate pending renewals table - Now handled by on_generate_renewals_report_click called below
-        # self.display_pending_renewals_flet()
+        # Initial data population for tables remaining in FletAppView
+        # self.display_all_members_flet() # Moved to MembershipTab
+        self.refresh_membership_history_display_flet() # For full history table
+        self.display_all_plans_flet() # For plans table
 
-        # Populate dropdowns
-        self.populate_member_dropdowns_flet()
-        self.populate_plan_dropdowns_flet()
+        # Populate dropdowns related to MembershipTab are handled within MembershipTab itself.
+        # self.populate_member_dropdowns_flet() # Moved to MembershipTab
+        # self.populate_plan_dropdowns_flet() # Moved to MembershipTab & also called from on_save_plan_click if plans change
 
-        # Set initial visibility for membership form based on default type
-        self.on_membership_type_change_flet(None)
+        # Set initial visibility for membership form - handled by MembershipTab.build()
+        # self.on_membership_type_change_flet(None) # Moved to MembershipTab
 
-
-        # Add DatePicker to the page overlay once the page is available
-        # This is often done in did_mount or after the main control is added to the page.
-        # For now, let's assume self.page will be set by Flet when app_view is added.
-        # A common pattern is to check self.page and add overlay items.
-        # This logic will be moved to did_mount.
-
+        # Add DatePicker to the page overlay. This is done in did_mount.
         # Initial population of the pending renewals table with default/current month's data
-        self.on_generate_renewals_report_click(None)
-
+        self.on_generate_renewals_report_click(None) # For Reporting Tab
 
         return self.tabs_control
 
     def did_mount(self):
         """Called after the control is added to the page."""
         if self.page:
-            if self.date_picker not in self.page.overlay:
+            if self.date_picker not in self.page.overlay: # Shared date_picker
                 self.page.overlay.append(self.date_picker)
-            if self.file_picker not in self.page.overlay: # Add FilePicker to overlay
+            if self.file_picker not in self.page.overlay: # Shared file_picker
                 self.page.overlay.append(self.file_picker)
-            self.page.update() # Ensure overlays are processed
+            self.page.update()
 
 def main(page: ft.Page):
     page.title = "Kranos MMA Reporter"
