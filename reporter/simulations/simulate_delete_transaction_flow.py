@@ -13,36 +13,16 @@ from reporter.database import create_database, seed_initial_plans
 
 # --- Simulation Database Setup ---
 SIMULATION_DB_DIR = os.path.join(project_root, "reporter", "simulations", "sim_data")
-SIMULATION_DB_FILE = os.path.join(SIMULATION_DB_DIR, "simulation_kranos_data.db")
+# Using a specific DB file for this simulation
+SIMULATION_DB_FILE = os.path.join(SIMULATION_DB_DIR, "simulation_kranos_data_del_trans.db")
 
-original_db_file = database_manager.DB_FILE
+# original_db_file is captured in __main__ block
 
-def setup_simulation_environment():
-    print(f"--- Setting up Simulation Environment ---")
-    print(f"Using simulation database: {SIMULATION_DB_FILE}")
-    os.makedirs(SIMULATION_DB_DIR, exist_ok=True)
-    database_manager.DB_FILE = SIMULATION_DB_FILE
-    conn = create_database(db_name=SIMULATION_DB_FILE)
-    if conn:
-        try:
-            seed_initial_plans(conn)
-            conn.commit()
-            print("Simulation database created and initial plans seeded.")
-        except Exception as e:
-            print(f"Error seeding plans: {e}")
-        finally:
-            conn.close()
-    else:
-        print("Simulation database ensured (may have existed).")
-    print("--- Simulation Environment Setup Complete ---")
+# Define SIM_DB_DIR and SIM_DB_FILE at global scope
+SIM_DB_DIR = os.path.join(project_root, "reporter", "simulations", "sim_data")
+SIM_DB_FILE = os.path.join(SIM_DB_DIR, "simulation_kranos_data_del_trans.db")
 
-def cleanup_simulation_environment():
-    database_manager.DB_FILE = original_db_file
-    print(f"--- Simulation Environment Cleaned Up (DB_FILE restored to {original_db_file}) ---")
-
-def main():
-    setup_simulation_environment()
-    controller = GuiController()
+def main_simulation_logic(controller: GuiController): # Renamed and controller passed
     print("\n--- Starting Simulation: Delete Transaction Flow ---")
 
     # 1. Add a test member
@@ -172,7 +152,44 @@ def main():
         print(f"FAILURE: Member '{member_name}' (ID: {member_id}) was deleted or not found.")
 
     print("\n--- Simulation: Delete Transaction Flow Complete ---")
-    cleanup_simulation_environment()
+    # Cleanup is handled in the __main__ block's finally clause
 
 if __name__ == "__main__":
-    main()
+    original_db_manager_db_file = database_manager.DB_FILE # Store original
+
+    try:
+        print(f"--- Main: Setting up simulation DB: {SIM_DB_FILE} ---")
+        os.makedirs(SIMULATION_DB_DIR, exist_ok=True)
+        if os.path.exists(SIM_DB_FILE):
+            os.remove(SIM_DB_FILE)
+            print(f"Deleted existing simulation DB: {SIM_DB_FILE}")
+
+        database_manager.DB_FILE = SIM_DB_FILE # Monkeypatch
+
+        create_database(db_name=SIM_DB_FILE)
+
+        import sqlite3 # Ensure sqlite3 is imported
+        seed_conn = None
+        try:
+            seed_conn = sqlite3.connect(SIM_DB_FILE)
+            seed_initial_plans(seed_conn)
+            seed_conn.commit()
+            print(f"Recreated and seeded simulation DB: {SIM_DB_FILE}")
+        except Exception as e_seed:
+            print(f"Error seeding simulation DB {SIM_DB_FILE}: {e_seed}", file=sys.stderr)
+            raise
+        finally:
+            if seed_conn:
+                seed_conn.close()
+
+        controller = GuiController()
+        main_simulation_logic(controller)
+
+    except Exception as e_outer:
+        print(f"--- SIMULATION SCRIPT ERROR: {e_outer} ---", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    finally:
+        database_manager.DB_FILE = original_db_manager_db_file
+        print(f"--- Main: Restored database_manager.DB_FILE to: {original_db_manager_db_file} ---")

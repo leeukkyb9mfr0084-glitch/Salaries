@@ -13,44 +13,16 @@ from reporter.database import create_database, seed_initial_plans
 
 # --- Simulation Database Setup ---
 SIMULATION_DB_DIR = os.path.join(project_root, "reporter", "simulations", "sim_data")
-SIMULATION_DB_FILE = os.path.join(SIMULATION_DB_DIR, "simulation_kranos_data.db")
+# Using a specific DB file for this simulation
+SIMULATION_DB_FILE = os.path.join(SIMULATION_DB_DIR, "simulation_kranos_data_del_member.db")
 
-original_db_file = database_manager.DB_FILE # Store original DB_FILE
+# original_db_file is captured in __main__ block
 
-def setup_simulation_environment():
-    """Prepares the simulation environment (database and paths)."""
-    print(f"--- Setting up Simulation Environment ---")
-    print(f"Using simulation database: {SIMULATION_DB_FILE}")
-    os.makedirs(SIMULATION_DB_DIR, exist_ok=True)
+# Define SIM_DB_DIR and SIM_DB_FILE at global scope if they depend on project_root
+SIM_DB_DIR = os.path.join(project_root, "reporter", "simulations", "sim_data")
+SIM_DB_FILE = os.path.join(SIM_DB_DIR, "simulation_kranos_data_del_member.db")
 
-    database_manager.DB_FILE = SIMULATION_DB_FILE
-
-    conn = create_database(db_name=SIMULATION_DB_FILE)
-    if conn:
-        try:
-            seed_initial_plans(conn)
-            conn.commit()
-            print("Simulation database created and initial plans seeded.")
-        except Exception as e:
-            print(f"Error seeding plans: {e}")
-        finally:
-            conn.close()
-    else:
-        # If create_database returns None, it means the DB file was already there.
-        # We might need to connect manually to seed if seed_initial_plans is not idempotent
-        # or if we want to ensure it's always fresh.
-        # For this simulation, let's assume it's okay or seed_initial_plans handles it.
-        print("Simulation database ensured (may have existed).")
-    print("--- Simulation Environment Setup Complete ---")
-
-def cleanup_simulation_environment():
-    """Restores the original DB_FILE setting."""
-    database_manager.DB_FILE = original_db_file
-    print(f"--- Simulation Environment Cleaned Up (DB_FILE restored to {original_db_file}) ---")
-
-def main():
-    setup_simulation_environment()
-    controller = GuiController()
+def main_simulation_logic(controller: GuiController): # Renamed and controller passed
     print("\n--- Starting Simulation: Delete Member Flow ---")
 
     # 1. Add a test member
@@ -106,12 +78,17 @@ def main():
     print(f"Transaction added for member ID {member_id_to_delete}.")
 
     # Verify transaction was added
-    transactions_before_delete = database_manager.get_transactions_with_member_details(member_id_filter=member_id_to_delete)
-    if not transactions_before_delete:
+    conn_setup_check = database_manager.get_db_connection()
+    cursor_setup_check = conn_setup_check.cursor()
+    cursor_setup_check.execute("SELECT COUNT(*) FROM transactions WHERE member_id = ?", (member_id_to_delete,))
+    transactions_count_before = cursor_setup_check.fetchone()[0]
+    conn_setup_check.close()
+
+    if transactions_count_before == 0:
         print(f"FAILURE: Transaction for member ID {member_id_to_delete} not found before delete attempt.")
-        cleanup_simulation_environment()
+        # cleanup_simulation_environment() # Handled by finally in __main__
         return
-    print(f"Found {len(transactions_before_delete)} transaction(s) for the member before deletion.")
+    print(f"Found {transactions_count_before} transaction(s) for the member before deletion.")
 
 
     # 3. Call controller.delete_member_action
@@ -119,12 +96,12 @@ def main():
     # Note: GuiController.delete_member_action in the actual app might involve a messagebox.askyesno.
     # Here, we are testing the action method directly. If it's hardcoded to use messagebox,
     # this simulation would require mocking or it might fail if tkinter is not fully available.
-    # Based on test_gui_flows.py, the controller's delete_member_action does NOT use askyesno.
-    delete_success, delete_message = controller.delete_member_action(member_id_to_delete)
+    # Based on test_gui_flows.py, the controller's deactivate_member_action does NOT use askyesno.
+    delete_success, delete_message = controller.deactivate_member_action(member_id_to_delete)
     print(f"Controller action message: '{delete_message}' (Success: {delete_success})")
 
     if not delete_success:
-        print(f"FAILURE: controller.delete_member_action reported failure for member ID {member_id_to_delete}.")
+        print(f"FAILURE: controller.deactivate_member_action reported failure for member ID {member_id_to_delete}.")
         # cleanup_simulation_environment() # Keep env for inspection if needed on failure
         # return # Continue to verification to see state
 
@@ -150,13 +127,50 @@ def main():
     transactions_after = cursor_check.fetchall()
     conn_check.close()
 
-    if not transactions_after:
-        print(f"SUCCESS: Transactions for member ID {member_id_to_delete} correctly deleted from transactions table.")
+    if len(transactions_after) == transactions_count_before:
+        print(f"SUCCESS: Transactions for member ID {member_id_to_delete} correctly persisted ({len(transactions_after)} found).")
     else:
-        print(f"FAILURE: {len(transactions_after)} transaction(s) for member ID {member_id_to_delete} still found in transactions table.")
+        print(f"FAILURE: Expected {transactions_count_before} transaction(s) for member ID {member_id_to_delete}, but found {len(transactions_after)}.")
 
     print("\n--- Simulation: Delete Member Flow Complete ---")
-    cleanup_simulation_environment()
+    # Cleanup is handled in the __main__ block's finally clause
 
 if __name__ == "__main__":
-    main()
+    original_db_manager_db_file = database_manager.DB_FILE # Store original
+
+    try:
+        print(f"--- Main: Setting up simulation DB: {SIM_DB_FILE} ---")
+        os.makedirs(SIMULATION_DB_DIR, exist_ok=True)
+        if os.path.exists(SIM_DB_FILE):
+            os.remove(SIM_DB_FILE)
+            print(f"Deleted existing simulation DB: {SIM_DB_FILE}")
+
+        database_manager.DB_FILE = SIM_DB_FILE # Monkeypatch
+
+        create_database(db_name=SIM_DB_FILE)
+
+        import sqlite3 # Ensure sqlite3 is imported
+        seed_conn = None
+        try:
+            seed_conn = sqlite3.connect(SIM_DB_FILE)
+            seed_initial_plans(seed_conn)
+            seed_conn.commit()
+            print(f"Recreated and seeded simulation DB: {SIM_DB_FILE}")
+        except Exception as e_seed:
+            print(f"Error seeding simulation DB {SIM_DB_FILE}: {e_seed}", file=sys.stderr)
+            raise
+        finally:
+            if seed_conn:
+                seed_conn.close()
+
+        controller = GuiController()
+        main_simulation_logic(controller)
+
+    except Exception as e_outer:
+        print(f"--- SIMULATION SCRIPT ERROR: {e_outer} ---", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    finally:
+        database_manager.DB_FILE = original_db_manager_db_file
+        print(f"--- Main: Restored database_manager.DB_FILE to: {original_db_manager_db_file} ---")

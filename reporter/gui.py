@@ -102,8 +102,8 @@ class GuiController:
 
         try:
             amount_paid = float(amount_paid_str)
-            if amount_paid < 0:
-                return False, "Error: Amount Paid cannot be negative."
+            if amount_paid <= 0: # Changed from < to <=
+                return False, "Error: Amount Paid must be a positive number."
         except ValueError:
             return False, "Error: Invalid Amount Paid. Must be a number."
 
@@ -154,11 +154,12 @@ class GuiController:
             else:
                 return False, "Error: Unknown membership type selected."
 
-            if success:
+            # success from database_manager.add_transaction is (bool, message)
+            if success[0]: # If the first element (boolean) is True
                 return True, f"{membership_type} membership added successfully!"
             else:
-                # This path might be taken if add_transaction itself returns False (e.g., DB constraint)
-                return False, "Failed to add membership. Check logs or input."
+                # Return the specific error message from database_manager
+                return False, success[1]
         except Exception as e:
             # Log the exception e for debugging purposes if possible
             return False, f"An error occurred: {str(e)}"
@@ -205,7 +206,7 @@ class GuiController:
 
         try:
             # Call the updated database_manager.get_pending_renewals with year and month
-            renewals = database_manager.get_pending_renewals(current_year, current_month)
+            renewals = database_manager.get_pending_renewals(year=current_year, month=current_month)
             if renewals: # renewals is a list, empty list means no data or DB error handled by get_pending_renewals
                 return True, f"Found {len(renewals)} pending renewals for {month_name} {current_year}.", renewals
             else:
