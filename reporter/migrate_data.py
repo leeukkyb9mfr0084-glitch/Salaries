@@ -83,16 +83,22 @@ def process_gc_data():
                 phone = row.get('Phone', '').strip()
                 plan_start_date_raw = row.get('Plan Start Date', '').strip()
                 payment_date_raw = row.get('Payment Date', '').strip()
+                plan_end_date_raw = row.get('Plan End Date', '').strip() # Read Plan End Date
 
-                if not all([name, phone, plan_start_date_raw, payment_date_raw]):
-                    print(f"Skipping row due to missing essential data: {row}")
+                # If 'Plan Start Date' is missing, skip the row.
+                if not plan_start_date_raw:
+                    print(f"Skipping row due to missing Plan Start Date: {row}")
+                    continue
+
+                if not all([name, phone, payment_date_raw]): # Plan End Date can be missing
+                    print(f"Skipping row due to missing essential data (Name, Phone, or Payment Date): {row}")
                     continue
 
                 plan_start_date = parse_date(plan_start_date_raw)
                 payment_date = parse_date(payment_date_raw)
 
-                if not plan_start_date or not payment_date:
-                    print(f"Skipping row due to unparsable date: {row}")
+                if not plan_start_date or not payment_date: # Check essential dates
+                    print(f"Skipping row due to unparsable Plan Start Date or Payment Date: {row}")
                     continue
 
                 member_info = get_member_by_phone(phone)
@@ -111,9 +117,83 @@ def process_gc_data():
                         print(f"Created new member: {name}")
 
                 plan_name = row['Plan Type'].strip()
-                duration_months = int(row['Plan Duration'])
-                # Assuming an average of 30 days per month for duration calculation
-                duration_days = duration_months * 30
+                plan_end_date_for_db = None
+                duration_days = None
+
+                if plan_end_date_raw:
+                    # plan_start_date is already a 'YYYY-MM-DD' string from its parse_date call earlier.
+                    # plan_end_date_str will also be 'YYYY-MM-DD' string or None.
+                    plan_end_date_str = parse_date(plan_end_date_raw)
+                    if plan_end_date_str:
+                        try:
+                            # Convert date strings to datetime objects for calculation
+                            start_dt = datetime.strptime(plan_start_date, '%Y-%m-%d')
+                            end_dt = datetime.strptime(plan_end_date_str, '%Y-%m-%d')
+
+                            if end_dt < start_dt:
+                                print(f"Warning: Plan End Date '{plan_end_date_str}' is before Plan Start Date '{plan_start_date}'. Row: {row}. Falling back to Plan Duration.")
+                                # Fallback to duration months
+                                duration_months_str = row.get('Plan Duration', '').strip()
+                                if duration_months_str:
+                                    duration_months = int(duration_months_str) # Assuming valid int
+                                    duration_days = duration_months * 30
+                                    plan_end_date_for_db = None # Reset as end date is invalid relative to start date
+                                else:
+                                    print(f"Skipping row due to missing Plan Duration (and invalid end date relative to start date): {row}")
+                                    continue
+                            else:
+                                delta = end_dt - start_dt
+                                duration_days = delta.days
+                                plan_end_date_for_db = plan_end_date_str # Already in YYYY-MM-DD string format
+                        except ValueError as e:
+                            print(f"Error converting parsed date strings ('{plan_start_date}', '{plan_end_date_str}') to datetime objects: {e}. Row: {row}. Falling back to Plan Duration.")
+                            # Fallback to duration months if date string to datetime conversion fails
+                            duration_months_str = row.get('Plan Duration', '').strip()
+                            if duration_months_str:
+                                try:
+                                    duration_months = int(duration_months_str)
+                                    duration_days = duration_months * 30
+                                    plan_end_date_for_db = None # Reset as end date processing failed
+                                except ValueError:
+                                    print(f"Skipping row due to invalid Plan Duration '{duration_months_str}': {row}")
+                                    continue
+                            else:
+                                print(f"Skipping row due to missing Plan Duration (and date conversion error): {row}")
+                                continue
+                    else:
+                        # Fallback if 'Plan End Date' parsing by parse_date fails
+                        print(f"Warning: Could not parse Plan End Date '{plan_end_date_raw}'. Falling back to Plan Duration for row: {row}")
+                        duration_months_str = row.get('Plan Duration', '').strip()
+                        if duration_months_str:
+                            try:
+                                duration_months = int(duration_months_str)
+                                duration_days = duration_months * 30
+                            except ValueError:
+                                print(f"Skipping row due to invalid Plan Duration '{duration_months_str}': {row}")
+                                continue
+                        else:
+                            print(f"Skipping row due to missing Plan Duration (and unparsable Plan End Date): {row}")
+                            continue
+                else:
+                    # Fallback if 'Plan End Date' is not present
+                    duration_months_str = row.get('Plan Duration', '').strip()
+                    if duration_months_str:
+                        try:
+                            duration_months = int(duration_months_str)
+                            duration_days = duration_months * 30
+                        except ValueError:
+                            print(f"Skipping row due to invalid Plan Duration '{duration_months_str}': {row}")
+                            continue
+                    else:
+                        # This case should ideally not happen if data is clean or handled by essential checks,
+                        # but as a safeguard:
+                        print(f"Skipping row due to missing Plan End Date and Plan Duration: {row}")
+                        continue
+
+                if duration_days is None or duration_days < 0:
+                    print(f"Skipping row due to invalid calculated duration_days ({duration_days}): {row}")
+                    continue
+
                 plan_id = get_or_create_plan_id(plan_name, duration_days)
 
                 if not plan_id:
@@ -130,7 +210,8 @@ def process_gc_data():
                     start_date=plan_start_date,
                     amount_paid=amount,
                     payment_method=row.get('Payment Mode', '').strip(),
-                    sessions=None
+                    sessions=None,
+                    end_date_override=plan_end_date_for_db # Pass the prepared end date
                 )
             except (ValueError, KeyError) as e:
                 print(f"Skipping row due to data error ('{e}'): {row}")

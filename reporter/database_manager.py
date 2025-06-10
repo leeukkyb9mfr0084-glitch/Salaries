@@ -266,10 +266,10 @@ def get_all_plans_with_inactive() -> list:
 
 def add_transaction(transaction_type: str, member_id: int, start_date: str, amount_paid: float,
                     plan_id: int = None, sessions: int = None, payment_method: str = None,
-                    payment_date: str = None) -> bool:
+                    payment_date: str = None, end_date_override: str = None) -> bool:
     """
     Adds a new transaction to the database.
-    For 'Group Class' transactions, calculates end_date based on plan_id's duration.
+    For 'Group Class' transactions, calculates end_date based on plan_id's duration, unless end_date_override is provided.
     Updates member's join_date if the transaction's start_date is earlier.
     Args:
         transaction_type (str): Type of transaction (e.g., 'Group Class', 'Personal Training').
@@ -300,20 +300,33 @@ def add_transaction(transaction_type: str, member_id: int, start_date: str, amou
 
         end_date = None
         if transaction_type == 'Group Class':
-            if not plan_id:
-                print("Error: plan_id is required for Group Class transactions.")
-                return False # Connection closed in finally
+            if end_date_override:
+                # Validate end_date_override format if necessary, or trust it's 'YYYY-MM-DD'
+                try:
+                    datetime.strptime(end_date_override, '%Y-%m-%d') # Validate format
+                    end_date = end_date_override
+                except ValueError:
+                    print(f"Warning: Invalid end_date_override format '{end_date_override}'. It will be ignored.")
+                    # Proceed to calculate end_date based on plan duration
+                    end_date = None # Ensure it's None so the block below executes
 
-            cursor.execute("SELECT duration_days FROM plans WHERE plan_id = ?", (plan_id,))
-            plan_duration_row = cursor.fetchone()
-            if not plan_duration_row:
-                print(f"Error: Plan with ID {plan_id} not found.")
-                return False # Connection closed in finally
+            if end_date is None: # If override not provided or was invalid
+                if not plan_id:
+                    print("Error: plan_id is required for Group Class transactions when end_date_override is not used.")
+                    return False # Connection closed in finally
 
-            duration_days = plan_duration_row[0]
-            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
-            end_date_obj = start_date_obj + timedelta(days=duration_days)
-            end_date = end_date_obj.strftime('%Y-%m-%d')
+                cursor.execute("SELECT duration_days FROM plans WHERE plan_id = ?", (plan_id,))
+                plan_duration_row = cursor.fetchone()
+                if not plan_duration_row:
+                    print(f"Error: Plan with ID {plan_id} not found.")
+                    return False # Connection closed in finally
+
+                duration_days = plan_duration_row[0]
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+                end_date_obj = start_date_obj + timedelta(days=duration_days)
+                end_date = end_date_obj.strftime('%Y-%m-%d')
+        # For other transaction types like 'Personal Training', end_date remains None
+        # unless explicitly handled otherwise, which is current behavior.
 
         cursor.execute(
             """

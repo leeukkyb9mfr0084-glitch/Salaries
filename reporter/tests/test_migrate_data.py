@@ -129,3 +129,106 @@ def test_migration_clears_tables(migrate_test_db): # Uses the fixture
 
     # Cleanup (assertion connection, fixture handles file deletion)
     conn_assert.close()
+
+
+# Test for new duration and end_date logic in process_gc_data
+def test_process_gc_data_duration_and_end_date_logic(migrate_test_db, monkeypatch):
+    """
+    Tests the logic for calculating duration_days and handling end_date_override
+    in process_gc_data based on 'Plan Start Date', 'Plan End Date', and 'Plan Duration'.
+    """
+    from reporter.migrate_data import process_gc_data # Re-import for clarity or if not top-level
+    from datetime import datetime, timedelta # For date calculations
+
+    test_db_path = migrate_test_db
+
+    # 1. Define CSV data as a string
+    csv_data = """Client Name,Phone,Plan Type,Plan Duration,Plan Start Date,Plan End Date,Payment Date,Amount,Payment Mode
+User With EndDate,1001,Explicit EndDate Plan,3,01/01/2024,31/01/2024,01/01/2024,100,Cash
+User With Duration,1002,Duration Plan,2,15/02/2024,,15/02/2024,200,Online
+User Invalid EndDate,1003,Invalid EndDate Plan,1,01/03/2024,01/01/2000,01/03/2024,300,Card
+User Missing StartDate,1004,No Start Plan,1,,01/01/2025,01/03/2024,400,Card
+"""
+    # 2. Create a temporary CSV file
+    temp_csv_filename = "test_specific_gc_data.csv"
+    temp_csv_path = os.path.join(TEST_DB_DIR_MIGRATE, temp_csv_filename)
+    with open(temp_csv_path, "w") as f:
+        f.write(csv_data)
+
+    # 3. Use monkeypatch to make process_gc_data use this temporary CSV
+    monkeypatch.setattr("reporter.migrate_data.GC_CSV_PATH", temp_csv_path)
+
+    # 4. Call process_gc_data()
+    process_gc_data()
+
+    # 5. Connect to the test database
+    conn = sqlite3.connect(test_db_path)
+    cursor = conn.cursor()
+
+    # Helper to get member_id
+    def get_member_id(phone):
+        cursor.execute("SELECT member_id FROM members WHERE phone = ?", (phone,))
+        result = cursor.fetchone()
+        return result[0] if result else None
+
+    # 6. Assertions
+    # User With EndDate (Phone 1001)
+    member_id_1001 = get_member_id("1001")
+    assert member_id_1001 is not None
+    cursor.execute("SELECT start_date, end_date, plan_id FROM transactions WHERE member_id = ?", (member_id_1001,))
+    tx_1001 = cursor.fetchone()
+    assert tx_1001 is not None
+    assert tx_1001[0] == "2024-01-01" # start_date
+    assert tx_1001[1] == "2024-01-31" # end_date (from CSV)
+    plan_id_1001 = tx_1001[2]
+    cursor.execute("SELECT duration_days FROM plans WHERE plan_id = ?", (plan_id_1001,))
+    plan_1001 = cursor.fetchone()
+    assert plan_1001 is not None
+    # Duration from dates: 31/01/2024 - 01/01/2024 = 30 days
+    assert plan_1001[0] == 30
+
+    # User With Duration (Phone 1002)
+    member_id_1002 = get_member_id("1002")
+    assert member_id_1002 is not None
+    cursor.execute("SELECT start_date, end_date, plan_id FROM transactions WHERE member_id = ?", (member_id_1002,))
+    tx_1002 = cursor.fetchone()
+    assert tx_1002 is not None
+    start_date_1002_str = "2024-02-15"
+    assert tx_1002[0] == start_date_1002_str # start_date
+    # Expected end_date: 15/02/2024 + (2 months * 30 days/month) = 15/02/2024 + 60 days
+    expected_end_date_1002 = (datetime.strptime(start_date_1002_str, '%Y-%m-%d') + timedelta(days=60)).strftime('%Y-%m-%d')
+    assert tx_1002[1] == expected_end_date_1002 # end_date
+    plan_id_1002 = tx_1002[2]
+    cursor.execute("SELECT duration_days FROM plans WHERE plan_id = ?", (plan_id_1002,))
+    plan_1002 = cursor.fetchone()
+    assert plan_1002 is not None
+    assert plan_1002[0] == 60 # 2 months * 30 days
+
+    # User Invalid EndDate (Phone 1003) - End date is before start date, fallback to duration
+    member_id_1003 = get_member_id("1003")
+    assert member_id_1003 is not None
+    cursor.execute("SELECT start_date, end_date, plan_id FROM transactions WHERE member_id = ?", (member_id_1003,))
+    tx_1003 = cursor.fetchone()
+    assert tx_1003 is not None
+    start_date_1003_str = "2024-03-01"
+    assert tx_1003[0] == start_date_1003_str # start_date
+    # Expected end_date: 01/03/2024 + (1 month * 30 days/month) = 01/03/2024 + 30 days
+    expected_end_date_1003 = (datetime.strptime(start_date_1003_str, '%Y-%m-%d') + timedelta(days=30)).strftime('%Y-%m-%d')
+    assert tx_1003[1] == expected_end_date_1003 # end_date
+    plan_id_1003 = tx_1003[2]
+    cursor.execute("SELECT duration_days FROM plans WHERE plan_id = ?", (plan_id_1003,))
+    plan_1003 = cursor.fetchone()
+    assert plan_1003 is not None
+    assert plan_1003[0] == 30 # 1 month * 30 days
+
+    # User Missing StartDate (Phone 1004) - Should be skipped
+    member_id_1004 = get_member_id("1004")
+    assert member_id_1004 is None # Member should not have been created
+    cursor.execute("SELECT COUNT(*) FROM transactions WHERE member_id = (SELECT member_id FROM members WHERE phone = '1004')")
+    tx_count_1004 = cursor.fetchone()[0]
+    assert tx_count_1004 == 0 # No transactions for this user
+
+    # Cleanup
+    conn.close()
+    if os.path.exists(temp_csv_path):
+        os.remove(temp_csv_path)
