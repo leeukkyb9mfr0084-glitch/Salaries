@@ -3,8 +3,8 @@
 # Ensure script exits on error
 set -e
 
-# Initialize LOG_FILE
-LOG_FILE="reporter/tests/test_results.log"
+# Initialize LOG_FILE for test results
+LOG_FILE="test_results.log"
 # Clear the log file at the beginning of the script run
 rm -f ${LOG_FILE}
 echo "Logging results to ${LOG_FILE}" # Announce log file at the very start
@@ -81,10 +81,11 @@ echo "
 # Ensure pytest runs from the project root so 'reporter.tests' is found.
 # Add -v for verbose output, and --tb=short for shorter tracebacks.
 # Explicitly use /usr/bin/python3 to ensure system tkinter is accessible
-/usr/bin/python3 -m pytest -v --tb=short reporter/tests/ >> ${LOG_FILE} 2>&1
+# All output (stdout and stderr) is redirected to LOG_FILE, overwriting it.
+/usr/bin/python3 -m pytest -v --tb=short reporter/tests/ > ${LOG_FILE} 2>&1
 PYTEST_EXIT_CODE=$? # Capture pytest exit code
 
-echo "Pytest execution finished."
+echo "Pytest execution finished." | tee -a ${LOG_FILE} # Also log this message
 
 # 4. Run simulation scripts and append output to log
 echo "
@@ -124,13 +125,15 @@ echo "
 --- Test Execution Summary ---" | tee -a ${LOG_FILE}
 if [ ${PYTEST_EXIT_CODE} -eq 0 ] && [ "${SIMULATION_SUCCESS}" = true ]; then
     echo "All tests and simulations passed successfully." | tee -a ${LOG_FILE}
+    # Echo final success message to stdout directly, not just log file
     echo "SUCCESS: All tests passed."
 else
     echo "One or more tests or simulations failed. Please check ${LOG_FILE} for details." | tee -a ${LOG_FILE}
-    echo "FAILURE: Some tests failed."
+    # Echo final failure message to stdout directly, not just log file
+    echo "FAILURE: Some tests failed. Check ${LOG_FILE} for details."
 fi
 
-echo "Test execution complete. See ${LOG_FILE} for details."
+echo "Test execution complete. See ${LOG_FILE} for details." | tee -a ${LOG_FILE} # Log this too
 
 # Clean up Xvfb
 echo "Stopping Xvfb..."

@@ -19,7 +19,7 @@ def get_db_connection():
         print(f"Error connecting to database {DB_FILE}: {e}")
         raise  # Re-raise the exception if connection fails
 
-def add_member_to_db(name: str, phone: str, join_date: str = None) -> bool:
+def add_member_to_db(name: str, phone: str, join_date: str = None) -> Tuple[bool, str]:
     """
     Adds a new member to the database.
     Args:
@@ -27,11 +27,12 @@ def add_member_to_db(name: str, phone: str, join_date: str = None) -> bool:
         phone (str): The phone number of the member (must be unique).
         join_date (str, optional): The join date in 'YYYY-MM-DD' format. Defaults to None (inserted as NULL).
     Returns:
-        bool: True if the member was added successfully, False otherwise.
+        Tuple[bool, str]: (True, "Member added successfully.") if successful,
+                          (False, "Error message") otherwise.
     """
     if not name or not phone:
         print("Error: Member name and phone number cannot be empty.", file=sys.stderr)
-        return False
+        return False, "Error: Member name and phone number cannot be empty."
     conn = None
     try:
         conn = get_db_connection()
@@ -43,14 +44,14 @@ def add_member_to_db(name: str, phone: str, join_date: str = None) -> bool:
             (name, phone, join_date)
         )
         conn.commit()
-        return True
+        return True, "Member added successfully."
     except sqlite3.IntegrityError:
         # This typically means the phone number already exists due to UNIQUE constraint
         print(f"Error adding member: Phone number '{phone}' likely already exists.")
-        return False
+        return False, f"Error adding member: Phone number '{phone}' likely already exists."
     except sqlite3.Error as e:
         print(f"Database error while adding member: {e}")
-        return False
+        return False, f"Database error while adding member: {e}"
     finally:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
@@ -137,7 +138,7 @@ def get_all_members(name_filter: str = None, phone_filter: str = None) -> list:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
-def add_plan(name: str, duration_days: int, is_active: bool = True) -> int | None:
+def add_plan(name: str, duration_days: int, is_active: bool = True) -> Tuple[bool, str, Optional[int]]:
     """
     Adds a new plan to the database.
     Args:
@@ -145,11 +146,12 @@ def add_plan(name: str, duration_days: int, is_active: bool = True) -> int | Non
         duration_days (int): The duration of the plan in days.
         is_active (bool): Whether the plan is active. Defaults to True.
     Returns:
-        int | None: The ID of the newly added plan, or None if an error occurs.
+        Tuple[bool, str, Optional[int]]: (True, "Plan added successfully.", plan_id) if successful,
+                                         (False, "Error message", None) otherwise.
     """
     if duration_days <= 0:
         print("Error: Plan duration must be a positive number of days.", file=sys.stderr)
-        return None
+        return False, "Error: Plan duration must be a positive number of days.", None
     conn = None
     try:
         conn = get_db_connection()
@@ -159,18 +161,18 @@ def add_plan(name: str, duration_days: int, is_active: bool = True) -> int | Non
             (name, duration_days, is_active)
         )
         conn.commit()
-        return cursor.lastrowid
+        return True, "Plan added successfully.", cursor.lastrowid
     except sqlite3.IntegrityError:
         print(f"Error adding plan: Plan name '{name}' likely already exists.")
-        return None
+        return False, f"Error adding plan: Plan name '{name}' likely already exists.", None
     except sqlite3.Error as e:
         print(f"Database error while adding plan: {e}")
-        return None
+        return False, f"Database error while adding plan: {e}", None
     finally:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
-def update_plan(plan_id: int, name: str, duration_days: int) -> bool:
+def update_plan(plan_id: int, name: str, duration_days: int) -> Tuple[bool, str]:
     """
     Updates an existing plan in the database.
     Args:
@@ -178,7 +180,8 @@ def update_plan(plan_id: int, name: str, duration_days: int) -> bool:
         name (str): The new name of the plan.
         duration_days (int): The new duration of the plan in days.
     Returns:
-        bool: True if the plan was updated successfully, False otherwise.
+        Tuple[bool, str]: (True, "Plan updated successfully.") if successful,
+                          (False, "Error message") otherwise.
     """
     conn = None
     try:
@@ -189,25 +192,29 @@ def update_plan(plan_id: int, name: str, duration_days: int) -> bool:
             (name, duration_days, plan_id)
         )
         conn.commit()
-        return cursor.rowcount > 0  # Check if any row was affected
+        if cursor.rowcount > 0:
+            return True, "Plan updated successfully."
+        else:
+            return False, "Failed to update plan. Plan not found or data unchanged."
     except sqlite3.IntegrityError:
         print(f"Error updating plan: New plan name '{name}' likely already exists for another plan.")
-        return False
+        return False, f"Error updating plan: New plan name '{name}' likely already exists for another plan."
     except sqlite3.Error as e:
         print(f"Database error while updating plan {plan_id}: {e}")
-        return False
+        return False, f"Database error while updating plan {plan_id}: {e}"
     finally:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
 
-def set_plan_active_status(plan_id: int, is_active: bool) -> bool:
+def set_plan_active_status(plan_id: int, is_active: bool) -> Tuple[bool, str]:
     """
     Sets the active status of a plan.
     Args:
         plan_id (int): The ID of the plan.
         is_active (bool): The new active status (True for active, False for inactive).
     Returns:
-        bool: True if the status was updated successfully, False otherwise.
+        Tuple[bool, str]: (True, "Plan status updated successfully.") if successful,
+                          (False, "Error message") otherwise.
     """
     conn = None
     try:
@@ -218,10 +225,13 @@ def set_plan_active_status(plan_id: int, is_active: bool) -> bool:
             (is_active, plan_id)
         )
         conn.commit()
-        return cursor.rowcount > 0
+        if cursor.rowcount > 0:
+            return True, "Plan status updated successfully."
+        else:
+            return False, "Failed to update plan status. Plan not found."
     except sqlite3.Error as e:
         print(f"Database error while setting active status for plan {plan_id}: {e}")
-        return False
+        return False, f"Database error while setting active status for plan {plan_id}: {e}"
     finally:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
@@ -968,13 +978,14 @@ def set_book_status(month_key: str, status: str) -> bool:
 #         print(f"Could not retrieve finance report for {calendar.month_name[current_month]} {current_year}.")
 
 
-def deactivate_member(member_id: int) -> bool:
+def deactivate_member(member_id: int) -> Tuple[bool, str]:
     """
     Deactivates a member in the database by setting is_active to 0.
     Args:
         member_id (int): The ID of the member to deactivate.
     Returns:
-        bool: True if the member was deactivated successfully, False otherwise.
+        Tuple[bool, str]: (True, "Member deactivated successfully.") if successful,
+                          (False, "Error message") otherwise.
     """
     conn = None
     try:
@@ -983,10 +994,13 @@ def deactivate_member(member_id: int) -> bool:
         # Set is_active to 0 for the member
         cursor.execute("UPDATE members SET is_active = 0 WHERE member_id = ?", (member_id,))
         conn.commit()
-        return cursor.rowcount > 0 # True if a row was updated
+        if cursor.rowcount > 0:
+            return True, "Member deactivated successfully."
+        else:
+            return False, "Failed to deactivate member. Member not found."
     except sqlite3.Error as e:
         print(f"Database error while deactivating member {member_id}: {e}", file=sys.stderr)
-        return False
+        return False, f"Database error while deactivating member {member_id}: {e}"
     finally:
         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
             conn.close()
