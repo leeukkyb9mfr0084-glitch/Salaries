@@ -12,6 +12,14 @@ except ModuleNotFoundError as e:
     print(f"CRITICAL ERROR: Could not import necessary modules: {e}")
     sys.exit(1)
 
+# Define project_root globally for use in SIM_DB_DIR
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+# --- Simulation Database Setup ---
+SIM_DB_DIR = os.path.join(project_root, "reporter", "simulations", "sim_data")
+SIM_DB_FILE = os.path.join(SIM_DB_DIR, "simulation_kranos_data_manage_plans.db")
+
+
 def find_plan_in_list_by_id(plans_list, plan_id_to_find):
     if plans_list:
         for plan in plans_list: # plan format: (plan_id, plan_name, duration_days, is_active)
@@ -26,7 +34,7 @@ def find_plan_in_list_by_name(plans_list, plan_name_to_find):
                 return plan
     return None
 
-def main():
+def main_simulation_logic(): # Renamed main to main_simulation_logic
     controller = GuiController() # Instantiate controller
     unique_suffix = f"{int(time.time()) % 10000:04d}"
     test_plan_id = None
@@ -158,4 +166,40 @@ def main():
         print(f"ERROR (Part 5): An exception occurred: {e}")
 
 if __name__ == '__main__':
-    main()
+    original_db_manager_db_file = database_manager.DB_FILE # Store original
+    from reporter.database import create_database, seed_initial_plans # Ensure imports
+    import sqlite3
+
+    try:
+        print(f"--- Main: Setting up simulation DB: {SIM_DB_FILE} ---")
+        os.makedirs(SIM_DB_DIR, exist_ok=True)
+        if os.path.exists(SIM_DB_FILE):
+            os.remove(SIM_DB_FILE)
+            print(f"Deleted existing simulation DB: {SIM_DB_FILE}")
+
+        database_manager.DB_FILE = SIM_DB_FILE # Monkeypatch
+
+        create_database(db_name=SIM_DB_FILE)
+        seed_conn = None
+        try:
+            seed_conn = sqlite3.connect(SIM_DB_FILE)
+            seed_initial_plans(seed_conn)
+            seed_conn.commit()
+            print(f"Recreated and seeded simulation DB: {SIM_DB_FILE}")
+        except Exception as e_seed:
+            print(f"Error seeding simulation DB {SIM_DB_FILE}: {e_seed}", file=sys.stderr)
+            raise
+        finally:
+            if seed_conn:
+                seed_conn.close()
+
+        main_simulation_logic() # Call the renamed main logic function
+
+    except Exception as e_outer:
+        print(f"--- SIMULATION SCRIPT ERROR: {e_outer} ---", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1) # Indicate script error
+    finally:
+        database_manager.DB_FILE = original_db_manager_db_file
+        print(f"--- Main: Restored database_manager.DB_FILE to: {original_db_manager_db_file} ---")

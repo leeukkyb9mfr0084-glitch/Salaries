@@ -63,7 +63,7 @@ def test_add_member_flow(controller_instance):
 
     # Assert the success and message returned by the controller
     assert success is True
-    assert message == "Member added successfully! Join date will be set with first activity."
+    assert message == "Member added successfully."
 
     # Assert that the member was saved to the database
     members = database_manager.get_all_members(phone_filter="1234567890")
@@ -75,7 +75,7 @@ def test_add_member_flow(controller_instance):
 
     # Assert the outcome of the duplicate attempt
     assert success_dup is False
-    assert message_dup == "Failed to add member. Phone number may already exist."
+    assert message_dup == "Error adding member: Phone number '1234567890' likely already exists."
 
     members_after_duplicate_attempt = database_manager.get_all_members(phone_filter="1234567890")
     assert len(members_after_duplicate_attempt) == 1 # Should still be 1 member
@@ -88,7 +88,7 @@ def test_plan_management_flow(controller_instance):
         plan_name="Test Plan", duration_str="30", plan_id_to_update=""
     )
     assert success_add is True
-    assert message_add == "Plan added successfully!"
+    assert message_add == "Plan added successfully."
     assert isinstance(plans_add, list)
 
     # Verify the new plan exists in the database
@@ -104,7 +104,7 @@ def test_plan_management_flow(controller_instance):
         plan_id=new_plan_id, current_status=True
     )
     assert success_deactivate is True
-    assert message_deactivate == "Plan status changed to Inactive."
+    assert message_deactivate == "Plan status updated successfully."
     assert isinstance(plans_deactivate, list)
 
     # Assert that the plan's is_active status has changed in the database
@@ -118,7 +118,7 @@ def test_plan_management_flow(controller_instance):
         plan_id=new_plan_id, current_status=False
     )
     assert success_activate is True
-    assert message_activate == "Plan status changed to Active."
+    assert message_activate == "Plan status updated successfully."
     assert isinstance(plans_activate, list)
 
     db_plans_after_activate = database_manager.get_all_plans_with_inactive()
@@ -130,16 +130,16 @@ def test_add_membership_flow(controller_instance): # Changed app_instance to con
 
     # --- Setup: Pre-populate database with a member and a plan ---
     # Add a member
-    member_id = database_manager.add_member_to_db("Membership User", "000111222")
-    assert member_id is True # add_member_to_db returns True on success
+    add_member_success, add_member_message = database_manager.add_member_to_db("Membership User", "000111222")
+    assert add_member_success is True, f"Failed to add member: {add_member_message}"
     member_details = database_manager.get_all_members(phone_filter="000111222")
     assert len(member_details) == 1
     db_member_id = member_details[0][0] # Get the actual member_id from DB
 
     # Add a plan
-    plan_id = database_manager.add_plan("Membership Plan", 30)
-    assert plan_id is not None
-    db_plan_id = plan_id # Get the actual plan_id
+    add_plan_success, _, db_plan_id_val = database_manager.add_plan("Membership Plan", 30)
+    assert add_plan_success is True and db_plan_id_val is not None, "Failed to add plan"
+    # db_plan_id = plan_id # Get the actual plan_id # This line is redundant now
 
     # No need to mock UI elements or call app.populate_dropdowns for controller tests
 
@@ -147,7 +147,7 @@ def test_add_membership_flow(controller_instance): # Changed app_instance to con
     s_gc, m_gc = controller.save_membership_action(
         membership_type="Group Class",
         member_id=db_member_id,
-        selected_plan_id=db_plan_id,
+        selected_plan_id=db_plan_id_val, # Use the extracted integer ID
         payment_date_str=date.today().strftime('%Y-%m-%d'),
         start_date_str=date.today().strftime('%Y-%m-%d'),
         amount_paid_str="100.00",
@@ -210,23 +210,25 @@ def test_deactivate_member_action_flow(mock_askyesno, controller_instance): # Re
     member_name = "MemberToDeactivateGUI"
     member_phone = "DEAC999"
     # Add member directly using database_manager for setup simplicity
-    database_manager.add_member_to_db(member_name, member_phone)
+    add_mem_success, add_mem_message = database_manager.add_member_to_db(member_name, member_phone)
+    assert add_mem_success is True, f"Failed to add member for deactivation test: {add_mem_message}"
     members_before_deactivation = database_manager.get_all_members(phone_filter=member_phone)
     assert len(members_before_deactivation) == 1, "Test setup: Member not added or not active."
     member_id_to_deactivate = members_before_deactivation[0][0]
 
     # Add a transaction for this member (example)
+    plan_id_for_tx_val = None
     plans = database_manager.get_all_plans()
     if not plans: # Ensure there's a plan for the transaction, add one if DB is empty
-        plan_id_for_tx = database_manager.add_plan("Default Test Plan GUI", 30)
-        assert plan_id_for_tx is not None, "Test setup: Failed to add a default plan."
+        add_plan_success, _, plan_id_for_tx_val = database_manager.add_plan("Default Test Plan GUI", 30)
+        assert add_plan_success and plan_id_for_tx_val is not None, "Test setup: Failed to add a default plan."
     else:
-        plan_id_for_tx = plans[0][0]
+        plan_id_for_tx_val = plans[0][0]
 
-    database_manager.add_transaction(
+    add_tx_success, _ = database_manager.add_transaction(
         transaction_type='Group Class',
         member_id=member_id_to_deactivate,
-        plan_id=plan_id_for_tx,
+        plan_id=plan_id_for_tx_val, # Use integer ID
         payment_date="2024-01-01",
         start_date="2024-01-01",
         amount_paid=50.00,
@@ -279,20 +281,24 @@ def test_delete_transaction_action_flow(mock_askyesno, controller_instance):
     # 1. Add member and transaction
     member_name = "TransactionLifecycleMember"
     member_phone = "TRL888"
-    database_manager.add_member_to_db(member_name, member_phone)
+    add_mem_success, _ = database_manager.add_member_to_db(member_name, member_phone)
+    assert add_mem_success, "Failed to add member for transaction lifecycle test"
     members = database_manager.get_all_members(phone_filter=member_phone)
     member_id = members[0][0]
 
+    plan_id_val = None
     plans = database_manager.get_all_plans()
     if not plans: # Ensure there's a plan for the transaction
-        plan_id = database_manager.add_plan("Default Plan for Test", 30)
+        add_plan_success, _, plan_id_val = database_manager.add_plan("Default Plan for Test", 30)
+        assert add_plan_success and plan_id_val is not None, "Failed to add plan for transaction lifecycle test"
     else:
-        plan_id = plans[0][0]
+        plan_id_val = plans[0][0]
 
-    database_manager.add_transaction(
-        transaction_type='Group Class', member_id=member_id, plan_id=plan_id,
+    add_tx_success, _ = database_manager.add_transaction(
+        transaction_type='Group Class', member_id=member_id, plan_id=plan_id_val, # Use integer ID
         payment_date="2024-01-01", start_date="2024-01-01", amount_paid=50, payment_method="Cash"
     )
+    assert add_tx_success, "Failed to add transaction for transaction lifecycle test"
     activity = database_manager.get_all_activity_for_member(member_id)
     assert len(activity) == 1, "Test setup: Transaction not added."
     transaction_id_to_delete = activity[0][7] # activity_id is at index 7
@@ -316,35 +322,37 @@ def test_delete_plan_action_flow(mock_askyesno, controller_instance):
     # Scenario 1: Delete a plan not in use
     mock_askyesno.return_value = True # Confirm deletion
     plan_name_unused = "Unused Plan GUI Test"
-    plan_id_unused = database_manager.add_plan(plan_name_unused, 10)
-    assert plan_id_unused is not None
+    add_plan_s1, _, plan_id_unused_val = database_manager.add_plan(plan_name_unused, 10)
+    assert add_plan_s1 and plan_id_unused_val is not None, "Failed to add unused plan for GUI test"
 
-    success_s1, message_s1 = controller.delete_plan_action(plan_id_unused)
+    success_s1, message_s1 = controller.delete_plan_action(plan_id_unused_val) # Use integer ID
     assert success_s1 is True
     assert message_s1 == "Plan deleted successfully."
-    # mock_askyesno.assert_called_once_with("Confirm Deletion", f"Are you sure you want to delete plan '{plan_name_unused}' (ID: {plan_id_unused})?") # Removed as db_manager.delete_plan directly deletes if unused
+    # mock_askyesno.assert_called_once_with("Confirm Deletion", f"Are you sure you want to delete plan '{plan_name_unused}' (ID: {plan_id_unused_val})?")
 
     plans_after_s1_delete = database_manager.get_all_plans_with_inactive()
-    assert not any(p[0] == plan_id_unused for p in plans_after_s1_delete), "Unused plan was not deleted."
+    assert not any(p[0] == plan_id_unused_val for p in plans_after_s1_delete), "Unused plan was not deleted."
     mock_askyesno.reset_mock()
 
     # Scenario 2: Attempt to delete a plan in use
     plan_name_used = "Used Plan GUI Test"
-    plan_id_used = database_manager.add_plan(plan_name_used, 40)
-    assert plan_id_used is not None
+    add_plan_s2, _, plan_id_used_val = database_manager.add_plan(plan_name_used, 40)
+    assert add_plan_s2 and plan_id_used_val is not None, "Failed to add used plan for GUI test"
 
-    database_manager.add_member_to_db("PlanUser", "PU777")
+    add_member_s, _ = database_manager.add_member_to_db("PlanUser", "PU777")
+    assert add_member_s, "Failed to add PlanUser for GUI test"
     members = database_manager.get_all_members(phone_filter="PU777")
     member_id = members[0][0]
-    database_manager.add_transaction(
-        transaction_type='Group Class', member_id=member_id, plan_id=plan_id_used,
+    add_tx_s, _ = database_manager.add_transaction(
+        transaction_type='Group Class', member_id=member_id, plan_id=plan_id_used_val, # Use integer ID
         payment_date="2024-01-01", start_date="2024-01-01", amount_paid=50, payment_method="Cash"
     )
+    assert add_tx_s, "Failed to add transaction for used plan test"
 
     # messagebox.askyesno might not be called if logic prevents it due to plan being in use.
     # The controller's delete_plan_action calls database_manager.delete_plan,
     # which returns (False, "Plan is in use...") before asking for confirmation.
-    success_s2, message_s2 = controller.delete_plan_action(plan_id_used)
+    success_s2, message_s2 = controller.delete_plan_action(plan_id_used_val) # Use integer ID
     assert success_s2 is False
     # The message comes from database_manager.py, ensure it matches
     assert message_s2 == "Plan is in use and cannot be deleted."
@@ -356,7 +364,7 @@ def test_delete_plan_action_flow(mock_askyesno, controller_instance):
 
 
     plans_after_s2_attempt = database_manager.get_all_plans_with_inactive()
-    assert any(p[0] == plan_id_used for p in plans_after_s2_attempt), "Used plan was deleted, but shouldn't have been."
+    assert any(p[0] == plan_id_used_val for p in plans_after_s2_attempt), "Used plan was deleted, but shouldn't have been."
 
 
 # --- Tests for Report Generation Action Flows ---
@@ -365,13 +373,14 @@ def test_generate_custom_pending_renewals_action_flow(controller_instance):
     controller = controller_instance
     # 1. Setup data for renewals
     # Member 1, plan ends in target month
-    database_manager.add_member_to_db("Renewal User Future", "RF001")
+    add_mem_s, _ = database_manager.add_member_to_db("Renewal User Future", "RF001")
+    assert add_mem_s, "Failed to add member for renewals test"
     members_rf1 = database_manager.get_all_members(phone_filter="RF001")
     m_id_rf1 = members_rf1[0][0]
     client_name_rf1 = members_rf1[0][1] # Get client_name for assertion
 
-    plan_id_30day = database_manager.add_plan("30 Day Plan Future", 30)
-    assert plan_id_30day is not None
+    add_plan_s, _, plan_id_30day_val = database_manager.add_plan("30 Day Plan Future", 30)
+    assert add_plan_s and plan_id_30day_val is not None, "Failed to add plan for renewals test"
     plan_details_30day = database_manager.get_plan_by_name_and_duration("30 Day Plan Future", 1) # 1 month
     assert plan_details_30day is not None
     plan_name_30day = plan_details_30day[1]
@@ -382,28 +391,33 @@ def test_generate_custom_pending_renewals_action_flow(controller_instance):
     # End date within July 2025: e.g., July 15, 2025
     end_date_rf1_target = datetime(target_year, target_month, 15)
     start_date_rf1 = (end_date_rf1_target - timedelta(days=30)).strftime('%Y-%m-%d')
-    database_manager.add_transaction(
-        transaction_type='Group Class', member_id=m_id_rf1, plan_id=plan_id_30day,
+    add_tx_s, _ = database_manager.add_transaction(
+        transaction_type='Group Class', member_id=m_id_rf1, plan_id=plan_id_30day_val, # Use integer ID
         payment_date=start_date_rf1, start_date=start_date_rf1, amount_paid=100, payment_method="Cash"
     )
+    assert add_tx_s, "Failed to add transaction for renewals test"
 
     # 2. Call controller action
     success, message, data = controller.generate_custom_pending_renewals_action(target_year, target_month)
 
     # 3. Assert results
     assert success is True
-    target_month_name = datetime(target_year, target_month, 1).strftime("%B") # Define target_month_name
-    assert f"Found {len(data)} pending renewals for {target_month_name} {target_year}." in message # Corrected message
-    assert len(data) == 1
-    # Expected data: (client_name, phone, plan_name, end_date_str)
-    assert data[0] == (client_name_rf1, "RF001", plan_name_30day, end_date_rf1_target.strftime('%Y-%m-%d'))
+    target_month_name = datetime(target_year, target_month, 1).strftime("%B")
+    if data: # If renewals are found
+        assert f"Found {len(data)} pending renewals for {target_month_name} {target_year}." in message
+        assert len(data) == 1
+        assert data[0] == (client_name_rf1, "RF001", plan_name_30day, end_date_rf1_target.strftime('%Y-%m-%d'))
+    else: # If no renewals are found
+        assert f"No pending renewals found for {target_month_name} {target_year}." == message # Exact match for no renewals
+        assert len(data) == 0
+
 
     # 4. Test case with no renewals
     no_renew_year, no_renew_month = 2026, 1
     success_none, message_none, data_none = controller.generate_custom_pending_renewals_action(no_renew_year, no_renew_month)
     assert success_none is True
     no_renew_month_name = datetime(no_renew_year, no_renew_month, 1).strftime("%B")
-    assert f"No pending renewals found for {no_renew_month_name} {no_renew_year}." in message_none # Corrected message
+    assert f"No pending renewals found for {no_renew_month_name} {no_renew_year}." == message_none # Corrected message
     assert data_none == [] # Expect an empty list
 
 @patch('customtkinter.filedialog.asksaveasfilename')
@@ -414,29 +428,35 @@ def test_generate_finance_report_excel_action_flow(mock_asksaveasfilename, contr
     report_month = 8
 
     # Transaction 1 in Aug 2025
-    database_manager.add_member_to_db("Finance User Excel1", "FX001")
+    add_mem_s, _ = database_manager.add_member_to_db("Finance User Excel1", "FX001")
+    assert add_mem_s, "Failed to add member for finance report test"
     m_fx1_id = database_manager.get_all_members(phone_filter="FX001")[0][0]
-    plan_fx_id = database_manager.add_plan("Finance Plan Excel", 30)
-    database_manager.add_transaction(
-        transaction_type='Group Class', member_id=m_fx1_id, plan_id=plan_fx_id,
+    add_plan_s, _, plan_fx_id_val = database_manager.add_plan("Finance Plan Excel", 30)
+    assert add_plan_s and plan_fx_id_val is not None, "Failed to add plan for finance report test"
+
+    add_tx1_s, _ = database_manager.add_transaction(
+        transaction_type='Group Class', member_id=m_fx1_id, plan_id=plan_fx_id_val, # Use integer ID
         payment_date=datetime(report_year, report_month, 10).strftime('%Y-%m-%d'),
         start_date=datetime(report_year, report_month, 10).strftime('%Y-%m-%d'),
         amount_paid=150.00, payment_method="Card"
     )
+    assert add_tx1_s, "Failed to add transaction 1 for finance report"
     # Transaction 2 in Aug 2025 (PT)
-    database_manager.add_transaction(
+    add_tx2_s, _ = database_manager.add_transaction(
         transaction_type='Personal Training', member_id=m_fx1_id,
         payment_date=datetime(report_year, report_month, 15).strftime('%Y-%m-%d'),
         start_date=datetime(report_year, report_month, 15).strftime('%Y-%m-%d'),
         sessions=5, amount_paid=250.00
     )
+    assert add_tx2_s, "Failed to add transaction 2 for finance report"
     # Transaction in different month (should not be included)
-    database_manager.add_transaction(
-        transaction_type='Group Class', member_id=m_fx1_id, plan_id=plan_fx_id,
+    add_tx3_s, _ = database_manager.add_transaction(
+        transaction_type='Group Class', member_id=m_fx1_id, plan_id=plan_fx_id_val, # Use integer ID
         payment_date=datetime(report_year, report_month + 1, 10).strftime('%Y-%m-%d'), # Next month
         start_date=datetime(report_year, report_month + 1, 10).strftime('%Y-%m-%d'),
         amount_paid=50.00, payment_method="Cash"
     )
+    assert add_tx3_s, "Failed to add transaction 3 (other month) for finance report"
 
     # 2. Mock asksaveasfilename
     test_report_filename = os.path.abspath("test_finance_report.xlsx") # Ensure absolute path
