@@ -1637,6 +1637,24 @@ class App(customtkinter.CTk):
 
         self.excel_report_status_label.configure(text=message, text_color="green" if success else "red")
 
+    def _handle_check_book_status(self):
+        """Handles the check book status button click."""
+        year_str = self.book_closing_year_entry.get().strip()
+        month_str = self.book_closing_month_var.get()
+
+        try:
+            year_int = int(year_str)
+            month_int = int(month_str)
+            if not (2000 <= year_int <= 2100):
+                self.book_status_display_label.configure(text="Invalid year.", text_color="red")
+                return
+        except ValueError:
+            self.book_status_display_label.configure(text="Year and month must be valid numbers.", text_color="red")
+            return
+
+        status_message = self.controller.get_book_status_action(year_int, month_int)
+        self.book_status_display_label.configure(text=status_message, text_color="white")
+
     def on_save_membership_click(self):
         """Handles the click event for the 'Save Membership' button."""
         membership_type = self.membership_type_var.get()
