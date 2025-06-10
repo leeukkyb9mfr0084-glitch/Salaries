@@ -26,13 +26,14 @@ class GuiController:
         #     return False, "Error: Phone number must be 10 digits."
 
         try:
-            success = database_manager.add_member_to_db(name, phone)
-            if success:
-                return True, "Member added successfully! Join date will be set with first activity."
-            else:
-                return False, "Failed to add member. Phone number may already exist."
+            # database_manager.add_member_to_db now returns -> Tuple[bool, str]
+            success, message = database_manager.add_member_to_db(name, phone)
+            # Use the returned success and message directly
+            return success, message
         except Exception as e:
-            return False, f"An error occurred: {str(e)}"
+            # This catch block might be redundant if database_manager handles all its specific errors
+            # and returns (False, error_message). However, it can catch unexpected errors.
+            return False, f"An unexpected error occurred: {str(e)}"
 
     def save_plan_action(self, plan_name: str, duration_str: str, plan_id_to_update: str) -> tuple[bool, str, list | None]:
         """Saves a new plan or updates an existing one."""
@@ -53,31 +54,40 @@ class GuiController:
         try:
             if plan_id_to_update:  # Editing existing plan
                 plan_id = int(plan_id_to_update)
-                success = database_manager.update_plan(plan_id, plan_name, duration_days)
-                message = "Plan updated successfully!" if success else "Failed to update plan. Name might exist."
+                # database_manager.update_plan now returns -> Tuple[bool, str]
+                db_success, db_message = database_manager.update_plan(plan_id, plan_name, duration_days)
+                success = db_success
+                message = db_message
             else:  # Adding new plan
-                new_plan_id = database_manager.add_plan(plan_name, duration_days)
-                if new_plan_id:
-                    success = True
-                message = "Plan added successfully!" if success else "Failed to add plan. Name might exist."
+                # database_manager.add_plan now returns -> Tuple[bool, str, Optional[int]]
+                db_success, db_message, returned_plan_id = database_manager.add_plan(plan_name, duration_days)
+                success = db_success
+                message = db_message
+                # returned_plan_id is available if needed, e.g., for logging or immediate use,
+                # but current logic just relies on success status.
 
             if success:
                 updated_plans = database_manager.get_all_plans_with_inactive()
             return success, message, updated_plans
         except Exception as e:
-            return False, f"An error occurred: {str(e)}", None
+            # Catch unexpected errors during the controller logic (e.g., int conversion if not validated)
+            return False, f"An unexpected error occurred in save_plan_action: {str(e)}", None
 
     def toggle_plan_status_action(self, plan_id: int, current_status: bool) -> tuple[bool, str, list | None]:
         """Activates or deactivates a plan."""
         new_status = not current_status
-        success = database_manager.set_plan_active_status(plan_id, new_status)
+        # database_manager.set_plan_active_status now returns -> Tuple[bool, str]
+        db_success, db_message = database_manager.set_plan_active_status(plan_id, new_status)
+        success = db_success
+        message = db_message # Use the message from the database manager
         updated_plans = None
-        message = ""
+
         if success:
-            message = f"Plan status changed to {'Active' if new_status else 'Inactive'}."
+            # Optionally, you could still use a custom success message or augment db_message
+            # For now, directly using db_message. If a custom success message is preferred:
+            # message = f"Plan status changed to {'Active' if new_status else 'Inactive'}."
             updated_plans = database_manager.get_all_plans_with_inactive()
-        else:
-            message = "Failed to update plan status."
+        # If not successful, db_message already contains the error.
         return success, message, updated_plans
 
     def save_membership_action(self, membership_type: str, member_id: int | None,
@@ -376,14 +386,13 @@ class GuiController:
     def deactivate_member_action(self, member_id: int) -> tuple[bool, str]:
         """Handles the action of deactivating a member."""
         try:
-            success = database_manager.deactivate_member(member_id)
-            if success:
-                return True, "Member deactivated successfully."
-            else:
-                return False, "Failed to deactivate member. Check logs for details."
+            # database_manager.deactivate_member now returns -> Tuple[bool, str]
+            success, message = database_manager.deactivate_member(member_id)
+            # Use the returned success and message directly
+            return success, message
         except Exception as e:
-            # Log the exception e
-            return False, f"An error occurred while deactivating the member: {str(e)}"
+            # This catch block can handle unexpected errors.
+            return False, f"An unexpected error occurred while deactivating the member: {str(e)}"
 
     def delete_transaction_action(self, transaction_id: int) -> tuple[bool, str]:
         """Calls database_manager.delete_transaction and returns status."""

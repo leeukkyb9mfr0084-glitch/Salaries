@@ -1,203 +1,377 @@
 ============================= test session starts ==============================
-platform linux -- Python 3.12.3, pytest-8.4.0, pluggy-1.6.0
+platform linux -- Python 3.10.18, pytest-8.3.5, pluggy-1.5.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+metadata: {'Python': '3.10.18', 'Platform': 'Linux-6.8.0-x86_64-with-glibc2.39', 'Packages': {'pytest': '8.3.5', 'pluggy': '1.5.0'}, 'Plugins': {'anyio': '4.9.0', 'cov': '6.1.1', 'json-report': '1.5.0', 'metadata': '3.1.1'}}
 rootdir: /app
-collected 45 items
+plugins: anyio-4.9.0, cov-6.1.1, json-report-1.5.0, metadata-3.1.1
+collecting ... collected 65 items
 
-reporter/tests/test_database.py ..                                       [  4%]
-reporter/tests/test_database_manager.py ................................ [ 75%]
-.......                                                                  [ 91%]
-reporter/tests/test_gui_flows.py EEE                                     [ 97%]
-reporter/tests/test_migrate_data.py .                                    [100%]
+reporter/tests/test_book_closing.py::test_close_and_reopen_flow PASSED   [  1%]
+reporter/tests/test_book_closing.py::test_add_transaction_to_closed_month FAILED [  3%]
+reporter/tests/test_book_closing.py::test_delete_transaction_from_closed_month FAILED [  4%]
+reporter/tests/test_database.py::test_create_database_tables PASSED      [  6%]
+reporter/tests/test_database.py::test_seed_initial_plans PASSED          [  7%]
+reporter/tests/test_database_manager.py::test_add_member_successful FAILED [  9%]
+reporter/tests/test_database_manager.py::test_add_member_duplicate_phone FAILED [ 10%]
+reporter/tests/test_database_manager.py::test_get_all_members_empty PASSED [ 12%]
+reporter/tests/test_database_manager.py::test_get_all_members_multiple FAILED [ 13%]
+reporter/tests/test_database_manager.py::test_get_all_members_filter_by_name FAILED [ 15%]
+reporter/tests/test_database_manager.py::test_get_all_members_filter_by_phone FAILED [ 16%]
+reporter/tests/test_database_manager.py::test_get_all_members_filter_by_name_and_phone FAILED [ 18%]
+reporter/tests/test_database_manager.py::test_get_all_plans PASSED       [ 20%]
+reporter/tests/test_database_manager.py::test_get_all_plans_no_plans PASSED [ 21%]
+reporter/tests/test_database_manager.py::test_get_all_plans_with_inactive_no_plans PASSED [ 23%]
+reporter/tests/test_database_manager.py::test_get_all_plans_with_inactive_only_active PASSED [ 24%]
+reporter/tests/test_database_manager.py::test_get_all_plans_with_inactive_only_inactive PASSED [ 26%]
+reporter/tests/test_database_manager.py::test_get_all_plans_with_inactive_mixed PASSED [ 27%]
+reporter/tests/test_database_manager.py::test_get_plan_by_name_and_duration_exists PASSED [ 29%]
+reporter/tests/test_database_manager.py::test_get_plan_by_name_and_duration_not_exists PASSED [ 30%]
+reporter/tests/test_database_manager.py::test_get_plan_by_name_and_duration_wrong_duration PASSED [ 32%]
+reporter/tests/test_database_manager.py::test_get_or_create_plan_id_get_existing PASSED [ 33%]
+reporter/tests/test_database_manager.py::test_get_or_create_plan_id_create_new PASSED [ 35%]
+reporter/tests/test_database_manager.py::test_add_transaction_group_class FAILED [ 36%]
+reporter/tests/test_database_manager.py::test_get_memberships_for_member_none FAILED [ 38%]
+reporter/tests/test_database_manager.py::test_add_transaction_group_class_invalid_plan_id FAILED [ 40%]
+reporter/tests/test_database_manager.py::test_add_transaction_personal_training FAILED [ 41%]
+reporter/tests/test_database_manager.py::test_get_all_activity_for_member FAILED [ 43%]
+reporter/tests/test_database_manager.py::test_get_pending_renewals FAILED [ 44%]
+reporter/tests/test_database_manager.py::test_get_pending_renewals_none_when_no_relevant_data PASSED [ 46%]
+reporter/tests/test_database_manager.py::test_get_finance_report FAILED  [ 47%]
+reporter/tests/test_database_manager.py::test_get_finance_report_no_transactions PASSED [ 49%]
+reporter/tests/test_database_manager.py::test_get_finance_report_with_pt_bookings FAILED [ 50%]
+reporter/tests/test_database_manager.py::test_join_date_standardization_new_member_then_group_membership FAILED [ 52%]
+reporter/tests/test_database_manager.py::test_join_date_standardization_new_member_then_pt_booking FAILED [ 53%]
+reporter/tests/test_database_manager.py::test_join_date_standardization_existing_member_earlier_activity FAILED [ 55%]
+reporter/tests/test_database_manager.py::test_join_date_standardization_existing_member_later_activity FAILED [ 56%]
+reporter/tests/test_database_manager.py::test_deactivate_member FAILED   [ 58%]
+reporter/tests/test_database_manager.py::test_delete_transaction FAILED  [ 60%]
+reporter/tests/test_database_manager.py::test_delete_plan FAILED         [ 61%]
+reporter/tests/test_database_manager.py::test_get_transactions_with_member_details_no_filters PASSED [ 63%]
+reporter/tests/test_database_manager.py::test_get_transactions_with_member_details_name_filter PASSED [ 64%]
+reporter/tests/test_database_manager.py::test_get_transactions_with_member_details_phone_filter PASSED [ 66%]
+reporter/tests/test_database_manager.py::test_get_transactions_with_member_details_join_date_filter PASSED [ 67%]
+reporter/tests/test_database_manager.py::test_get_transactions_with_member_details_combined_filters PASSED [ 69%]
+reporter/tests/test_database_manager.py::test_get_transactions_with_member_details_invalid_date_format_filter PASSED [ 70%]
+reporter/tests/test_database_manager.py::test_get_transactions_with_member_details_no_results PASSED [ 72%]
+reporter/tests/test_database_manager.py::test_get_book_status_non_existent PASSED [ 73%]
+reporter/tests/test_database_manager.py::test_set_and_get_book_status_closed PASSED [ 75%]
+reporter/tests/test_database_manager.py::test_set_and_get_book_status_open PASSED [ 76%]
+reporter/tests/test_database_manager.py::test_set_book_status_update_existing PASSED [ 78%]
+reporter/tests/test_database_manager.py::test_add_transaction_when_books_closed PASSED [ 80%]
+reporter/tests/test_database_manager.py::test_delete_transaction_when_books_closed PASSED [ 81%]
+reporter/tests/test_database_manager.py::test_add_transaction_when_books_open PASSED [ 83%]
+reporter/tests/test_database_manager.py::test_delete_transaction_when_books_open PASSED [ 84%]
+reporter/tests/test_gui_flows.py::test_add_member_flow FAILED            [ 86%]
+reporter/tests/test_gui_flows.py::test_plan_management_flow FAILED       [ 87%]
+reporter/tests/test_gui_flows.py::test_add_membership_flow FAILED        [ 89%]
+reporter/tests/test_gui_flows.py::test_deactivate_member_action_flow FAILED [ 90%]
+reporter/tests/test_gui_flows.py::test_delete_transaction_action_flow FAILED [ 92%]
+reporter/tests/test_gui_flows.py::test_delete_plan_action_flow FAILED    [ 93%]
+reporter/tests/test_gui_flows.py::test_generate_custom_pending_renewals_action_flow FAILED [ 95%]
+reporter/tests/test_gui_flows.py::test_generate_finance_report_excel_action_flow FAILED [ 96%]
+reporter/tests/test_migrate_data.py::test_migration_clears_tables PASSED [ 98%]
+reporter/tests/test_migrate_data.py::test_end_date_calculation_and_record_processing PASSED [100%]
 
-==================================== ERRORS ====================================
-____________________ ERROR at setup of test_add_member_flow ____________________
-
-setup_teardown_test_db = None
-
-    @pytest.fixture
-    def app_instance(setup_teardown_test_db):
-        # This fixture depends on setup_teardown_test_db to ensure DB is ready
-        # Mock customtkinter and tkinter elements that are not needed for flow logic
-        with patch('customtkinter.CTk'), \
-             patch('customtkinter.CTkFrame'), \
-             patch('customtkinter.CTkLabel'), \
-             patch('customtkinter.CTkEntry'), \
-             patch('customtkinter.CTkButton'), \
-             patch('customtkinter.CTkOptionMenu'), \
-             patch('customtkinter.CTkScrollableFrame'), \
-             patch('customtkinter.CTkTabview'), \
-             patch('tkinter.StringVar'), \
-             patch('tkcalendar.DateEntry'), \
-             patch('tkinter.Tk', new_callable=MagicMock):  # Prevent main Tk window init
-
-            # Instantiate the App. It will use the monkeypatched DB_FILE.
->           app = App()
-                  ^^^^^
-
-reporter/tests/test_gui_flows.py:64:
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-reporter/gui.py:10: in __init__
-    super().__init__(*args, **kwargs)
-.venv/lib/python3.12/site-packages/customtkinter/windows/ctk_tk.py:40: in __init__
-    CTK_PARENT_CLASS.__init__(self, **pop_from_dict_by_set(kwargs, self._valid_tk_constructor_arguments))
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-
-self = <reporter.gui.App object .>, screenName = None, baseName = '__main__'
-className = 'Tk', useTk = True, sync = False, use = None
-
-    def __init__(self, screenName=None, baseName=None, className='Tk',
-                 useTk=True, sync=False, use=None):
-        """Return a new top level widget on screen SCREENNAME. A new Tcl interpreter will
-        be created. BASENAME will be used for the identification of the profile file (see
-        readprofile).
-        It is constructed from sys.argv[0] without extensions if None is given. CLASSNAME
-        is the name of the widget class."""
-        self.master = None
-        self.children = {}
-        self._tkloaded = False
-        # to avoid recursions in the getattr code in case of failure, we
-        # ensure that self.tk is always _something_.
-        self.tk = None
-        if baseName is None:
-            import os
-            baseName = os.path.basename(sys.argv[0])
-            baseName, ext = os.path.splitext(baseName)
-            if ext not in ('.py', '.pyc'):
-                baseName = baseName + ext
-        interactive = False
->       self.tk = _tkinter.create(screenName, baseName, className, interactive, wantobjects, useTk, sync, use)
-                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E       _tkinter.TclError: no display name and no $DISPLAY environment variable
-
-/usr/lib/python3.12/tkinter/__init__.py:2345: TclError
+=================================== FAILURES ===================================
+_____________________ test_add_transaction_to_closed_month _____________________
+reporter/tests/test_book_closing.py:161: in test_add_transaction_to_closed_month
+    assert add_success_reopened is True
+E   assert False is True
+----------------------------- Captured stderr call -----------------------------
+Failed: Books for month 2026-03 are closed.
+Database error while adding transaction: Error binding parameter 0 - probably unsupported type.
+__________________ test_delete_transaction_from_closed_month ___________________
+reporter/tests/test_book_closing.py:194: in test_delete_transaction_from_closed_month
+    assert add_tx_success is True, "Failed to add initial transaction for deletion test."
+E   AssertionError: Failed to add initial transaction for deletion test.
+E   assert False is True
+----------------------------- Captured stderr call -----------------------------
+Database error while adding transaction: Error binding parameter 0 - probably unsupported type.
+__________________________ test_add_member_successful __________________________
+reporter/tests/test_database_manager.py:74: in test_add_member_successful
+    assert success is True, "add_member_to_db should return True on success."
+E   AssertionError: add_member_to_db should return True on success.
+E   assert (True, 'Member added successfully.') is True
 ---------------------------- Captured stdout setup -----------------------------
-Database 'reporter/tests/test_data_gui_flows/test_gui_flows.db' created and tables ensured.
-_________________ ERROR at setup of test_plan_management_flow __________________
-
-setup_teardown_test_db = None
-
-    @pytest.fixture
-    def app_instance(setup_teardown_test_db):
-        # This fixture depends on setup_teardown_test_db to ensure DB is ready
-        # Mock customtkinter and tkinter elements that are not needed for flow logic
-        with patch('customtkinter.CTk'), \
-             patch('customtkinter.CTkFrame'), \
-             patch('customtkinter.CTkLabel'), \
-             patch('customtkinter.CTkEntry'), \
-             patch('customtkinter.CTkButton'), \
-             patch('customtkinter.CTkOptionMenu'), \
-             patch('customtkinter.CTkScrollableFrame'), \
-             patch('customtkinter.CTkTabview'), \
-             patch('tkinter.StringVar'), \
-             patch('tkcalendar.DateEntry'), \
-             patch('tkinter.Tk', new_callable=MagicMock):  # Prevent main Tk window init
-
-            # Instantiate the App. It will use the monkeypatched DB_FILE.
->           app = App()
-                  ^^^^^
-
-reporter/tests/test_gui_flows.py:64:
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-reporter/gui.py:10: in __init__
-    super().__init__(*args, **kwargs)
-.venv/lib/python3.12/site-packages/customtkinter/windows/ctk_tk.py:40: in __init__
-    CTK_PARENT_CLASS.__init__(self, **pop_from_dict_by_set(kwargs, self._valid_tk_constructor_arguments))
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-
-self = <reporter.gui.App object .>, screenName = None, baseName = '__main__'
-className = 'Tk', useTk = True, sync = False, use = None
-
-    def __init__(self, screenName=None, baseName=None, className='Tk',
-                 useTk=True, sync=False, use=None):
-        """Return a new top level widget on screen SCREENNAME. A new Tcl interpreter will
-        be created. BASENAME will be used for the identification of the profile file (see
-        readprofile).
-        It is constructed from sys.argv[0] without extensions if None is given. CLASSNAME
-        is the name of the widget class."""
-        self.master = None
-        self.children = {}
-        self._tkloaded = False
-        # to avoid recursions in the getattr code in case of failure, we
-        # ensure that self.tk is always _something_.
-        self.tk = None
-        if baseName is None:
-            import os
-            baseName = os.path.basename(sys.argv[0])
-            baseName, ext = os.path.splitext(baseName)
-            if ext not in ('.py', '.pyc'):
-                baseName = baseName + ext
-        interactive = False
->       self.tk = _tkinter.create(screenName, baseName, className, interactive, wantobjects, useTk, sync, use)
-                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E       _tkinter.TclError: no display name and no $DISPLAY environment variable
-
-/usr/lib/python3.12/tkinter/__init__.py:2345: TclError
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+_______________________ test_add_member_duplicate_phone ________________________
+reporter/tests/test_database_manager.py:97: in test_add_member_duplicate_phone
+    assert success1 is True, "First member addition should be successful."
+E   AssertionError: First member addition should be successful.
+E   assert (True, 'Member added successfully.') is True
 ---------------------------- Captured stdout setup -----------------------------
-Database 'reporter/tests/test_data_gui_flows/test_gui_flows.db' created and tables ensured.
-__________________ ERROR at setup of test_add_membership_flow __________________
-
-setup_teardown_test_db = None
-
-    @pytest.fixture
-    def app_instance(setup_teardown_test_db):
-        # This fixture depends on setup_teardown_test_db to ensure DB is ready
-        # Mock customtkinter and tkinter elements that are not needed for flow logic
-        with patch('customtkinter.CTk'), \
-             patch('customtkinter.CTkFrame'), \
-             patch('customtkinter.CTkLabel'), \
-             patch('customtkinter.CTkEntry'), \
-             patch('customtkinter.CTkButton'), \
-             patch('customtkinter.CTkOptionMenu'), \
-             patch('customtkinter.CTkScrollableFrame'), \
-             patch('customtkinter.CTkTabview'), \
-             patch('tkinter.StringVar'), \
-             patch('tkcalendar.DateEntry'), \
-             patch('tkinter.Tk', new_callable=MagicMock):  # Prevent main Tk window init
-
-            # Instantiate the App. It will use the monkeypatched DB_FILE.
->           app = App()
-                  ^^^^^
-
-reporter/tests/test_gui_flows.py:64:
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-reporter/gui.py:10: in __init__
-    super().__init__(*args, **kwargs)
-.venv/lib/python3.12/site-packages/customtkinter/windows/ctk_tk.py:40: in __init__
-    CTK_PARENT_CLASS.__init__(self, **pop_from_dict_by_set(kwargs, self._valid_tk_constructor_arguments))
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-
-self = <reporter.gui.App object .>, screenName = None, baseName = '__main__'
-className = 'Tk', useTk = True, sync = False, use = None
-
-    def __init__(self, screenName=None, baseName=None, className='Tk',
-                 useTk=True, sync=False, use=None):
-        """Return a new top level widget on screen SCREENNAME. A new Tcl interpreter will
-        be created. BASENAME will be used for the identification of the profile file (see
-        readprofile).
-        It is constructed from sys.argv[0] without extensions if None is given. CLASSNAME
-        is the name of the widget class."""
-        self.master = None
-        self.children = {}
-        self._tkloaded = False
-        # to avoid recursions in the getattr code in case of failure, we
-        # ensure that self.tk is always _something_.
-        self.tk = None
-        if baseName is None:
-            import os
-            baseName = os.path.basename(sys.argv[0])
-            baseName, ext = os.path.splitext(baseName)
-            if ext not in ('.py', '.pyc'):
-                baseName = baseName + ext
-        interactive = False
->       self.tk = _tkinter.create(screenName, baseName, className, interactive, wantobjects, useTk, sync, use)
-                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E       _tkinter.TclError: no display name and no $DISPLAY environment variable
-
-/usr/lib/python3.12/tkinter/__init__.py:2345: TclError
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+________________________ test_get_all_members_multiple _________________________
+reporter/tests/test_database_manager.py:126: in test_get_all_members_multiple
+    assert add_member_to_db(name, phone) is True, f"Failed to add member {name}"
+E   AssertionError: Failed to add member Charlie Brown
+E   assert (True, 'Member added successfully.') is True
+E    +  where (True, 'Member added successfully.') = add_member_to_db('Charlie Brown', '3330001111')
 ---------------------------- Captured stdout setup -----------------------------
-Database 'reporter/tests/test_data_gui_flows/test_gui_flows.db' created and tables ensured.
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+_____________________ test_get_all_members_filter_by_name ______________________
+reporter/tests/test_database_manager.py:166: in test_get_all_members_filter_by_name
+    assert add_member_to_db(name, phone) is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+E    +  where (True, 'Member added successfully.') = add_member_to_db('John Doe', '1112223333')
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+_____________________ test_get_all_members_filter_by_phone _____________________
+reporter/tests/test_database_manager.py:192: in test_get_all_members_filter_by_phone
+    assert add_member_to_db(name, phone) is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+E    +  where (True, 'Member added successfully.') = add_member_to_db('User One', '1234567890')
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+________________ test_get_all_members_filter_by_name_and_phone _________________
+reporter/tests/test_database_manager.py:218: in test_get_all_members_filter_by_name_and_phone
+    assert add_member_to_db(name, phone) is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+E    +  where (True, 'Member added successfully.') = add_member_to_db('Alice Johnson', '1112223333')
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+_______________________ test_add_transaction_group_class _______________________
+reporter/tests/test_database_manager.py:414: in test_add_transaction_group_class
+    assert add_member_to_db(member_name, member_phone) is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+E    +  where (True, 'Member added successfully.') = add_member_to_db('Membership User', '9998887777')
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+_____________________ test_get_memberships_for_member_none _____________________
+reporter/tests/test_database_manager.py:533: in test_get_memberships_for_member_none
+    assert member_c_id_success is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+_______________ test_add_transaction_group_class_invalid_plan_id _______________
+reporter/tests/test_database_manager.py:550: in test_add_transaction_group_class_invalid_plan_id
+    assert add_member_to_db(member_name, member_phone) is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+E    +  where (True, 'Member added successfully.') = add_member_to_db('Transaction Test User', 'TRX001')
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+____________________ test_add_transaction_personal_training ____________________
+reporter/tests/test_database_manager.py:585: in test_add_transaction_personal_training
+    assert add_member_to_db(member_name, member_phone) is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+E    +  where (True, 'Member added successfully.') = add_member_to_db('PT User', 'PT123456')
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+_______________________ test_get_all_activity_for_member _______________________
+reporter/tests/test_database_manager.py:637: in test_get_all_activity_for_member
+    assert add_member_to_db(member_name, member_phone) is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+E    +  where (True, 'Member added successfully.') = add_member_to_db('Activity User', 'ACT001')
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+__________________________ test_get_pending_renewals ___________________________
+reporter/tests/test_database_manager.py:732: in test_get_pending_renewals
+    assert add_member_to_db(name, data["phone"]) is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+E    +  where (True, 'Member added successfully.') = add_member_to_db('User A', 'R001')
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+___________________________ test_get_finance_report ____________________________
+reporter/tests/test_database_manager.py:851: in test_get_finance_report
+    assert member_f1_id is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+___________________ test_get_finance_report_with_pt_bookings ___________________
+reporter/tests/test_database_manager.py:931: in test_get_finance_report_with_pt_bookings
+    assert member_f1_id is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+_______ test_join_date_standardization_new_member_then_group_membership ________
+reporter/tests/test_database_manager.py:983: in test_join_date_standardization_new_member_then_group_membership
+    assert add_member_to_db("JoinDate User GM", member_phone) is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+E    +  where (True, 'Member added successfully.') = add_member_to_db('JoinDate User GM', 'JD_GM01')
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+__________ test_join_date_standardization_new_member_then_pt_booking ___________
+reporter/tests/test_database_manager.py:1003: in test_join_date_standardization_new_member_then_pt_booking
+    assert add_member_to_db("JoinDate User PT", member_phone) is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+E    +  where (True, 'Member added successfully.') = add_member_to_db('JoinDate User PT', 'JD_PT01')
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+_______ test_join_date_standardization_existing_member_earlier_activity ________
+reporter/tests/test_database_manager.py:1023: in test_join_date_standardization_existing_member_earlier_activity
+    assert add_member_to_db("JoinDate User Early", member_phone) is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+E    +  where (True, 'Member added successfully.') = add_member_to_db('JoinDate User Early', 'JD_EARLY01')
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+________ test_join_date_standardization_existing_member_later_activity _________
+reporter/tests/test_database_manager.py:1049: in test_join_date_standardization_existing_member_later_activity
+    assert add_member_to_db("JoinDate User Later", member_phone) is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+E    +  where (True, 'Member added successfully.') = add_member_to_db('JoinDate User Later', 'JD_LATER01')
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+____________________________ test_deactivate_member ____________________________
+reporter/tests/test_database_manager.py:1079: in test_deactivate_member
+    assert add_member_to_db(member_name, member_phone) is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+E    +  where (True, 'Member added successfully.') = add_member_to_db('Member to Deactivate', 'DEACT001')
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+___________________________ test_delete_transaction ____________________________
+reporter/tests/test_database_manager.py:1127: in test_delete_transaction
+    assert add_member_to_db(member_name, member_phone) is True
+E   AssertionError: assert (True, 'Member added successfully.') is True
+E    +  where (True, 'Member added successfully.') = add_member_to_db('Transaction Test Member', 'TRXDEL001')
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+_______________________________ test_delete_plan _______________________________
+reporter/tests/test_database_manager.py:1188: in test_delete_plan
+    assert result_unused is True, "delete_plan should return True for unused plan."
+E   AssertionError: delete_plan should return True for unused plan.
+E   assert False is True
+---------------------------- Captured stdout setup -----------------------------
+Database 'reporter/tests/test_data_dir/test_kranos_data.db' created and tables ensured.
+Seeded 3 initial plans.
+----------------------------- Captured stderr call -----------------------------
+Database error while deleting plan (True, 'Plan added successfully.', 4): Error binding parameter 0 - probably unsupported type.
+_____________________________ test_add_member_flow _____________________________
+reporter/tests/test_gui_flows.py:66: in test_add_member_flow
+    assert message == "Member added successfully! Join date will be set with first activity."
+E   AssertionError: assert 'Member added successfully.' == 'Member added...rst activity.'
+E
+E     - Member added successfully! Join date will be set with first activity.
+E     + Member added successfully.
+---------------------------- Captured stdout setup -----------------------------
+Database '/app/test_gui_flows.db' created and tables ensured.
+--------------------------- Captured stdout teardown ---------------------------
+Tearing down, removing /app/test_gui_flows.db
+__________________________ test_plan_management_flow ___________________________
+reporter/tests/test_gui_flows.py:91: in test_plan_management_flow
+    assert message_add == "Plan added successfully!"
+E   AssertionError: assert 'Plan added successfully.' == 'Plan added successfully!'
+E
+E     - Plan added successfully!
+E     ?                        ^
+E     + Plan added successfully.
+E     ?                        ^
+---------------------------- Captured stdout setup -----------------------------
+Database '/app/test_gui_flows.db' created and tables ensured.
+--------------------------- Captured stdout teardown ---------------------------
+Tearing down, removing /app/test_gui_flows.db
+___________________________ test_add_membership_flow ___________________________
+reporter/tests/test_gui_flows.py:134: in test_add_membership_flow
+    assert member_id is True # add_member_to_db returns True on success
+E   AssertionError: assert (True, 'Member added successfully.') is True
+---------------------------- Captured stdout setup -----------------------------
+Database '/app/test_gui_flows.db' created and tables ensured.
+--------------------------- Captured stdout teardown ---------------------------
+Tearing down, removing /app/test_gui_flows.db
+______________________ test_deactivate_member_action_flow ______________________
+reporter/tests/test_gui_flows.py:236: in test_deactivate_member_action_flow
+    assert len(transactions_before_deactivation) == 1, "Test setup: Transaction not added."
+E   AssertionError: Test setup: Transaction not added.
+E   assert 0 == 1
+E    +  where 0 = len([])
+---------------------------- Captured stdout setup -----------------------------
+Database '/app/test_gui_flows.db' created and tables ensured.
+----------------------------- Captured stderr call -----------------------------
+Database error while adding transaction: Error binding parameter 0 - probably unsupported type.
+--------------------------- Captured stdout teardown ---------------------------
+Tearing down, removing /app/test_gui_flows.db
+_____________________ test_delete_transaction_action_flow ______________________
+reporter/tests/test_gui_flows.py:297: in test_delete_transaction_action_flow
+    assert len(activity) == 1, "Test setup: Transaction not added."
+E   AssertionError: Test setup: Transaction not added.
+E   assert 0 == 1
+E    +  where 0 = len([])
+---------------------------- Captured stdout setup -----------------------------
+Database '/app/test_gui_flows.db' created and tables ensured.
+----------------------------- Captured stderr call -----------------------------
+Database error while adding transaction: Error binding parameter 0 - probably unsupported type.
+--------------------------- Captured stdout teardown ---------------------------
+Tearing down, removing /app/test_gui_flows.db
+_________________________ test_delete_plan_action_flow _________________________
+reporter/tests/test_gui_flows.py:323: in test_delete_plan_action_flow
+    assert success_s1 is True
+E   assert False is True
+---------------------------- Captured stdout setup -----------------------------
+Database '/app/test_gui_flows.db' created and tables ensured.
+----------------------------- Captured stderr call -----------------------------
+Database error while deleting plan (True, 'Plan added successfully.', 1): Error binding parameter 0 - probably unsupported type.
+--------------------------- Captured stdout teardown ---------------------------
+Tearing down, removing /app/test_gui_flows.db
+______________ test_generate_custom_pending_renewals_action_flow _______________
+reporter/tests/test_gui_flows.py:396: in test_generate_custom_pending_renewals_action_flow
+    assert f"Found {len(data)} pending renewals for {target_month_name} {target_year}." in message # Corrected message
+E   AssertionError: assert 'Found 0 pending renewals for July 2025.' in 'No pending renewals found for July 2025.'
+---------------------------- Captured stdout setup -----------------------------
+Database '/app/test_gui_flows.db' created and tables ensured.
+----------------------------- Captured stderr call -----------------------------
+Database error while adding transaction: Error binding parameter 0 - probably unsupported type.
+--------------------------- Captured stdout teardown ---------------------------
+Tearing down, removing /app/test_gui_flows.db
+________________ test_generate_finance_report_excel_action_flow ________________
+reporter/tests/test_gui_flows.py:467: in test_generate_finance_report_excel_action_flow
+    assert total_revenue_from_db == 400.00 # 150 + 250
+E   assert 250.0 == 400.0
+---------------------------- Captured stdout setup -----------------------------
+Database '/app/test_gui_flows.db' created and tables ensured.
+----------------------------- Captured stderr call -----------------------------
+Database error while adding transaction: Error binding parameter 0 - probably unsupported type.
+Database error while adding transaction: Error binding parameter 0 - probably unsupported type.
+--------------------------- Captured stdout teardown ---------------------------
+Tearing down, removing /app/test_gui_flows.db
 =========================== short test summary info ============================
-ERROR reporter/tests/test_gui_flows.py::test_add_member_flow - _tkinter.TclEr...
-ERROR reporter/tests/test_gui_flows.py::test_plan_management_flow - _tkinter....
-ERROR reporter/tests/test_gui_flows.py::test_add_membership_flow - _tkinter.T...
-========================= 42 passed, 3 errors in 3.99s =========================
+FAILED reporter/tests/test_book_closing.py::test_add_transaction_to_closed_month
+FAILED reporter/tests/test_book_closing.py::test_delete_transaction_from_closed_month
+FAILED reporter/tests/test_database_manager.py::test_add_member_successful - ...
+FAILED reporter/tests/test_database_manager.py::test_add_member_duplicate_phone
+FAILED reporter/tests/test_database_manager.py::test_get_all_members_multiple
+FAILED reporter/tests/test_database_manager.py::test_get_all_members_filter_by_name
+FAILED reporter/tests/test_database_manager.py::test_get_all_members_filter_by_phone
+FAILED reporter/tests/test_database_manager.py::test_get_all_members_filter_by_name_and_phone
+FAILED reporter/tests/test_database_manager.py::test_add_transaction_group_class
+FAILED reporter/tests/test_database_manager.py::test_get_memberships_for_member_none
+FAILED reporter/tests/test_database_manager.py::test_add_transaction_group_class_invalid_plan_id
+FAILED reporter/tests/test_database_manager.py::test_add_transaction_personal_training
+FAILED reporter/tests/test_database_manager.py::test_get_all_activity_for_member
+FAILED reporter/tests/test_database_manager.py::test_get_pending_renewals - A...
+FAILED reporter/tests/test_database_manager.py::test_get_finance_report - Ass...
+FAILED reporter/tests/test_database_manager.py::test_get_finance_report_with_pt_bookings
+FAILED reporter/tests/test_database_manager.py::test_join_date_standardization_new_member_then_group_membership
+FAILED reporter/tests/test_database_manager.py::test_join_date_standardization_new_member_then_pt_booking
+FAILED reporter/tests/test_database_manager.py::test_join_date_standardization_existing_member_earlier_activity
+FAILED reporter/tests/test_database_manager.py::test_join_date_standardization_existing_member_later_activity
+FAILED reporter/tests/test_database_manager.py::test_deactivate_member - Asse...
+FAILED reporter/tests/test_database_manager.py::test_delete_transaction - Ass...
+FAILED reporter/tests/test_database_manager.py::test_delete_plan - AssertionE...
+FAILED reporter/tests/test_gui_flows.py::test_add_member_flow - AssertionErro...
+FAILED reporter/tests/test_gui_flows.py::test_plan_management_flow - Assertio...
+FAILED reporter/tests/test_gui_flows.py::test_add_membership_flow - Assertion...
+FAILED reporter/tests/test_gui_flows.py::test_deactivate_member_action_flow
+FAILED reporter/tests/test_gui_flows.py::test_delete_transaction_action_flow
+FAILED reporter/tests/test_gui_flows.py::test_delete_plan_action_flow - asser...
+FAILED reporter/tests/test_gui_flows.py::test_generate_custom_pending_renewals_action_flow
+FAILED reporter/tests/test_gui_flows.py::test_generate_finance_report_excel_action_flow
+======================== 31 failed, 34 passed in 3.37s =========================
