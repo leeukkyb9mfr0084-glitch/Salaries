@@ -49,6 +49,14 @@ def create_database(db_name: str):
             FOREIGN KEY (plan_id) REFERENCES plans (plan_id)
         );
         """)
+
+        # Create monthly_book_status table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS monthly_book_status (
+            month_key TEXT PRIMARY KEY, -- Format: "YYYY-MM", e.g., "2025-07"
+            status TEXT NOT NULL      -- Values: "open" or "closed"
+        );
+        """)
         conn.commit()
         print(f"Database '{db_name}' created and tables ensured.")
     except sqlite3.Error as e:

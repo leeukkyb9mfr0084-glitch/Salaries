@@ -309,6 +309,45 @@ class GuiController:
         except Exception as e:
             return False, f"An error occurred during report generation: {str(e)}"
 
+    def get_book_status_action(self, year: int, month: int) -> str:
+        """
+        Constructs month_key, calls database_manager.get_book_status, and returns a user-friendly message.
+        """
+        try:
+            month_key = f"{year:04d}-{month:02d}"
+            status = database_manager.get_book_status(month_key)
+            return f"Status for {month_key}: {status.upper()}"
+        except Exception as e:
+            return f"Error getting book status: {str(e)}"
+
+    def close_books_action(self, year: int, month: int) -> tuple[bool, str]:
+        """
+        Constructs month_key, calls database_manager.set_book_status to "closed", and returns status.
+        """
+        try:
+            month_key = f"{year:04d}-{month:02d}"
+            success = database_manager.set_book_status(month_key, "closed")
+            if success:
+                return True, f"Books for {month_key} closed successfully."
+            else:
+                return False, f"Failed to close books for {month_key}."
+        except Exception as e:
+            return False, f"Error closing books for {month_key}: {str(e)}"
+
+    def open_books_action(self, year: int, month: int) -> tuple[bool, str]:
+        """
+        Constructs month_key, calls database_manager.set_book_status to "open", and returns status.
+        """
+        try:
+            month_key = f"{year:04d}-{month:02d}"
+            success = database_manager.set_book_status(month_key, "open")
+            if success:
+                return True, f"Books for {month_key} re-opened successfully."
+            else:
+                return False, f"Failed to re-open books for {month_key}."
+        except Exception as e:
+            return False, f"Error re-opening books for {month_key}: {str(e)}"
+
     def get_filtered_members(self, name_filter: Optional[str], phone_filter: Optional[str]) -> list:
         """Fetches members based on name and/or phone filters."""
         return database_manager.get_all_members(name_filter=name_filter, phone_filter=phone_filter)
@@ -386,6 +425,10 @@ class App(customtkinter.CTk):
         self.tab_view.add("Membership Management")
         self.tab_view.add("Plan Management") # New Tab
         self.tab_view.add("Reporting")
+        self.tab_view.add("Membership History") # Moved from later
+
+        # Initialize labels that might be accessed before their setup method is called if user clicks fast
+        self.book_status_display_label = None
 
         # Add placeholder content to tabs
         membership_tab = self.tab_view.tab("Membership Management")
@@ -402,8 +445,9 @@ class App(customtkinter.CTk):
         self.setup_plan_management_tab(plan_management_tab) # Setup for the new tab
 
         # --- Membership History Tab ---
-        history_tab = self.tab_view.add("Membership History")
-        self.setup_membership_history_tab(history_tab)
+        # history_tab = self.tab_view.add("Membership History") # Moved to __init__
+        self.setup_membership_history_tab(self.tab_view.tab("Membership History"))
+
 
     # def populate_pt_member_dropdown(self): # REMOVED
     #     pass
@@ -1196,9 +1240,10 @@ class App(customtkinter.CTk):
         tab.grid_columnconfigure(0, weight=1) # Single column that expands
         tab.grid_rowconfigure(0, weight=0)    # Row for Pending Renewals title and button
         tab.grid_rowconfigure(1, weight=0)    # Row for Pending Renewals status label
-        tab.grid_rowconfigure(2, weight=1)    # Row for Pending Renewals scrollable results
-        tab.grid_rowconfigure(3, weight=0)    # Row for Finance Report section
-        # tab.grid_rowconfigure(4, weight=0) # Potentially for finance report results/status if not packed
+        tab.grid_rowconfigure(2, weight=1)    # Row for Pending Renewals scrollable results (Treeview)
+        tab.grid_rowconfigure(3, weight=0)    # Row for Finance Report section (Frame)
+        tab.grid_rowconfigure(4, weight=0)    # Row for Monthly Book Closing section (Frame)
+        # tab.grid_rowconfigure(5, weight=0) # Potentially for book closing results/status if not packed
 
         # --- Frame for Pending Renewals ---
         # This section sets up the UI for generating and displaying pending membership renewals.
@@ -1301,6 +1346,46 @@ class App(customtkinter.CTk):
         # NEW Status Label for Excel Report
         self.excel_report_status_label = CTkLabel(finance_report_frame, text="", font=CTkFont(size=12))
         self.excel_report_status_label.pack(pady=5)
+
+        # --- Frame for Monthly Book Closing (below Finance Report) ---
+        book_closing_frame = CTkFrame(tab)
+        book_closing_frame.grid(row=4, column=0, padx=10, pady=10, sticky="nsew")
+        book_closing_frame.grid_columnconfigure(0, weight=1)
+
+        book_closing_title = CTkLabel(book_closing_frame, text="Monthly Book Closing", font=CTkFont(weight="bold"))
+        book_closing_title.pack(pady=(5,10))
+
+        book_closing_input_frame = CTkFrame(book_closing_frame)
+        book_closing_input_frame.pack(pady=5)
+
+        current_year = datetime.now().year
+        current_month_str = str(datetime.now().month)
+
+        CTkLabel(book_closing_input_frame, text="Year:").grid(row=0, column=0, padx=5, pady=5)
+        self.book_closing_year_entry = CTkEntry(book_closing_input_frame, placeholder_text="YYYY")
+        self.book_closing_year_entry.insert(0, str(current_year))
+        self.book_closing_year_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        CTkLabel(book_closing_input_frame, text="Month:").grid(row=0, column=2, padx=5, pady=5)
+        self.book_closing_month_var = StringVar(value=current_month_str)
+        months_list = [str(i) for i in range(1, 13)]
+        self.book_closing_month_menu = CTkOptionMenu(book_closing_input_frame, variable=self.book_closing_month_var, values=months_list)
+        self.book_closing_month_menu.grid(row=0, column=3, padx=5, pady=5)
+
+        self.check_book_status_button = CTkButton(book_closing_input_frame, text="Check Status", command=self._handle_check_book_status)
+        self.check_book_status_button.grid(row=0, column=4, padx=10, pady=5)
+
+        self.book_status_display_label = CTkLabel(book_closing_frame, text="Status: N/A", font=CTkFont(size=12))
+        self.book_status_display_label.pack(pady=5)
+
+        book_actions_frame = CTkFrame(book_closing_frame)
+        book_actions_frame.pack(pady=5)
+
+        self.close_books_button = CTkButton(book_actions_frame, text="Close Books for Selected Month", command=self._handle_close_books_action)
+        self.close_books_button.grid(row=0, column=0, padx=5, pady=5)
+
+        self.open_books_button = CTkButton(book_actions_frame, text="Re-open Books for Selected Month", command=self._handle_open_books_action)
+        self.open_books_button.grid(row=0, column=1, padx=5, pady=5)
 
 
     # def setup_group_membership_frame(self, parent_frame): # Method removed
