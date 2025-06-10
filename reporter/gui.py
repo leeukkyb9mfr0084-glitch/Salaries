@@ -417,19 +417,11 @@ class FletAppView(ft.Container):
         # self.member_actions_feedback_text: Optional[ft.Text] = None # Moved to MembershipTab
         self.history_actions_feedback_text: Optional[ft.Text] = None
         # self.delete_member_button_flet: Optional[ft.ElevatedButton] = None # Moved to MembershipTab
-        self.delete_plan_button_flet: Optional[ft.ElevatedButton] = None
         self.delete_transaction_button_flet: Optional[ft.ElevatedButton] = None
         # self.member_name_input: Optional[ft.TextField] = None # Moved to MembershipTab
         # self.member_phone_input: Optional[ft.TextField] = None # Moved to MembershipTab
         # self.add_member_button: Optional[ft.ElevatedButton] = None # Moved to MembershipTab
         # self.member_form_feedback_text: Optional[ft.Text] = None # Moved to MembershipTab (specific instance)
-        self.plan_name_input: Optional[ft.TextField] = None
-        self.plan_duration_input: Optional[ft.TextField] = None
-        self.save_plan_button: Optional[ft.ElevatedButton] = None
-        self.plan_form_feedback_text: Optional[ft.Text] = None
-        self.edit_plan_button: Optional[ft.ElevatedButton] = None
-        self.clear_plan_form_button: Optional[ft.ElevatedButton] = None
-        self.toggle_plan_status_button: Optional[ft.ElevatedButton] = None
         self.history_name_filter_input: Optional[ft.TextField] = None
         self.history_phone_filter_input: Optional[ft.TextField] = None
         self.history_join_date_filter_input: Optional[ft.TextField] = None
@@ -458,7 +450,6 @@ class FletAppView(ft.Container):
         # self.members_table_flet: Optional[ft.DataTable] = None # Moved to MembershipTab
         # self.member_specific_history_table_flet: Optional[ft.DataTable] = None # Moved to MembershipTab
         self.full_history_table_flet: Optional[ft.DataTable] = None
-        self.plans_table_flet: Optional[ft.DataTable] = None
         self.pending_renewals_table_flet: Optional[ft.DataTable] = None
         self.tabs_control: Optional[ft.Tabs] = None
 
@@ -496,38 +487,6 @@ class FletAppView(ft.Container):
         else:
             self.selected_transaction_id_flet = None
         # print(f"DEBUG: FletAppView - Selected Transaction ID: {self.selected_transaction_id_flet}")
-        # self.update()
-
-    def on_plan_select_changed(self, e: ft.ControlEvent):
-        """Handles row selection changes in the plans_table_flet."""
-        selected_index_str = e.data
-        if selected_index_str:
-            try:
-                selected_index = int(selected_index_str)
-                if 0 <= selected_index < len(self.plans_table_flet.rows):
-                    selected_row = self.plans_table_flet.rows[selected_index]
-                    plan_id_cell = selected_row.cells[0]
-                    if isinstance(plan_id_cell.content, ft.Text):
-                        self.selected_plan_id_flet = int(plan_id_cell.content.value)
-                    else:
-                        self.selected_plan_id_flet = None
-                else:
-                    self.selected_plan_id_flet = None
-            except ValueError:
-                self.selected_plan_id_flet = None
-            except Exception:
-                self.selected_plan_id_flet = None
-        else:
-            self.selected_plan_id_flet = None
-
-        if self.selected_plan_id_flet is not None:
-            self.toggle_plan_status_button.disabled = False
-        else:
-            self.toggle_plan_status_button.disabled = True
-
-        if hasattr(self, 'toggle_plan_status_button') and self.toggle_plan_status_button.page:
-            self.toggle_plan_status_button.update()
-        # print(f"DEBUG: FletAppView - Selected Plan ID: {self.selected_plan_id_flet}")
         # self.update()
 
     def _get_membership_status_flet(self, end_date_str: Optional[str]) -> str:
@@ -612,27 +571,6 @@ class FletAppView(ft.Container):
         if self.history_actions_feedback_text.page: self.history_actions_feedback_text.update()
         # self.update()
 
-    def display_all_plans_flet(self, plans_list: Optional[list] = None):
-        if not hasattr(self, 'plans_table_flet') or self.plans_table_flet is None: return
-        if plans_list is None:
-            plans_list = self.controller.get_all_plans_with_inactive()
-        self.plans_table_flet.rows.clear()
-        if plans_list:
-            for plan_data in plans_list:
-                plan_id, plan_name, duration_days, is_active = plan_data
-                status = "Active" if is_active else "Inactive"
-                row = ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(str(plan_id))), ft.DataCell(ft.Text(str(plan_name))),
-                    ft.DataCell(ft.Text(str(duration_days))), ft.DataCell(ft.Text(status)),
-                ])
-                self.plans_table_flet.rows.append(row)
-        else:
-            self.plans_table_flet.rows.append(
-                ft.DataRow(cells=[ft.DataCell(ft.Text("No plans found."), colspan=len(self.plans_table_flet.columns))])
-            )
-        if self.plans_table_flet.page: self.plans_table_flet.update()
-        # self.update()
-
     def display_pending_renewals_flet(self): # This seems to be for the "Reporting" tab, keep here.
         if not hasattr(self, 'pending_renewals_table_flet') or self.pending_renewals_table_flet is None: return
         success, message, renewals_data = self.controller.generate_pending_renewals_action()
@@ -647,63 +585,6 @@ class FletAppView(ft.Container):
                 ft.DataRow(cells=[ft.DataCell(ft.Text(display_message), colspan=len(self.pending_renewals_table_flet.columns))])
             )
         if self.pending_renewals_table_flet.page: self.pending_renewals_table_flet.update()
-        # self.update()
-
-    def on_save_plan_click(self, e):
-        plan_name = self.plan_name_input.value
-        duration_str = self.plan_duration_input.value
-        plan_id_to_update_str = str(self.current_plan_id_to_update_flet) if self.current_plan_id_to_update_flet else None
-        success, message, updated_plans = self.controller.save_plan_action(plan_name, duration_str, plan_id_to_update_str)
-        self.plan_form_feedback_text.value = message
-        if success:
-            self.plan_form_feedback_text.color = ft.colors.GREEN
-            self.on_clear_plan_form_click(None)
-            if updated_plans is not None: self.display_all_plans_flet(updated_plans)
-            else: self.display_all_plans_flet()
-            # self.populate_plan_dropdowns_flet() # This method is now in MembershipTab
-            # If MembershipTab is already instantiated and needs update, it should handle its own dropdown refresh.
-            # Or FletAppView needs a reference to call it. For now, assume MembershipTab handles this.
-            if hasattr(self, 'membership_tab_ref') and self.membership_tab_ref:
-                 self.membership_tab_ref.populate_plan_dropdowns_flet()
-
-        else:
-            self.plan_form_feedback_text.color = ft.colors.RED
-        if self.plan_form_feedback_text.page: self.plan_form_feedback_text.update()
-        # self.update()
-
-    def on_edit_selected_plan_click(self, e):
-        if self.selected_plan_id_flet is not None:
-            selected_plan_details = None
-            for row in self.plans_table_flet.rows:
-                if int(row.cells[0].content.value) == self.selected_plan_id_flet:
-                    selected_plan_details = {"id": row.cells[0].content.value, "name": row.cells[1].content.value, "duration": row.cells[2].content.value}
-                    break
-            if selected_plan_details:
-                self.plan_name_input.value = selected_plan_details["name"]
-                self.plan_duration_input.value = selected_plan_details["duration"]
-                self.current_plan_id_to_update_flet = self.selected_plan_id_flet
-                self.plan_form_feedback_text.value = f"Editing Plan ID: {self.current_plan_id_to_update_flet}"
-                self.plan_form_feedback_text.color = ft.colors.BLUE
-            else:
-                self.plan_form_feedback_text.value = "Error: Could not find details for selected plan."
-                self.plan_form_feedback_text.color = ft.colors.RED
-        else:
-            self.plan_form_feedback_text.value = "Please select a plan to edit."
-            self.plan_form_feedback_text.color = ft.colors.ORANGE
-        if self.plan_name_input.page: self.plan_name_input.update()
-        if self.plan_duration_input.page: self.plan_duration_input.update()
-        if self.plan_form_feedback_text.page: self.plan_form_feedback_text.update()
-        # self.update()
-
-    def on_clear_plan_form_click(self, e):
-        self.plan_name_input.value = ""
-        self.plan_duration_input.value = ""
-        self.current_plan_id_to_update_flet = None
-        self.plan_form_feedback_text.value = "Ready to add a new plan."
-        self.plan_form_feedback_text.color = ft.colors.BLACK
-        if self.plan_name_input.page: self.plan_name_input.update()
-        if self.plan_duration_input.page: self.plan_duration_input.update()
-        if self.plan_form_feedback_text.page: self.plan_form_feedback_text.update()
         # self.update()
 
     # populate_plan_dropdowns_flet removed (moved to MembershipTab)
@@ -782,6 +663,10 @@ class FletAppView(ft.Container):
         if self.finance_report_feedback_text.page: self.finance_report_feedback_text.update()
         # self.update()
 
+    def refresh_membership_plan_dropdowns(self):
+        if hasattr(self, 'membership_tab_ref'):
+            self.membership_tab_ref.populate_plan_dropdowns_flet()
+
     def build(self):
         # DatePicker and FilePicker are already initialized in __init__
         # self.date_picker = ft.DatePicker(...) # Removed specific handlers
@@ -792,18 +677,10 @@ class FletAppView(ft.Container):
         self.history_actions_feedback_text = ft.Text("")
 
         # self.delete_member_button_flet = ft.ElevatedButton(...) # Moved
-        self.delete_plan_button_flet = ft.ElevatedButton(text="Delete Selected Plan", on_click=self.on_delete_selected_plan_click_flet)
         self.delete_transaction_button_flet = ft.ElevatedButton(text="Delete Selected Transaction", on_click=self.on_delete_selected_transaction_click_flet)
 
         # Member form controls moved to MembershipTab
-        # Plan form controls remain for Plan Management Tab
-        self.plan_name_input = ft.TextField(label="Plan Name")
-        self.plan_duration_input = ft.TextField(label="Duration (days)")
-        self.save_plan_button = ft.ElevatedButton(text="Save Plan", on_click=self.on_save_plan_click)
-        self.plan_form_feedback_text = ft.Text("Ready to add a new plan.", color=ft.colors.BLACK)
-        self.edit_plan_button = ft.ElevatedButton(text="Edit Selected Plan", on_click=self.on_edit_selected_plan_click)
-        self.clear_plan_form_button = ft.ElevatedButton(text="Clear Form / New Plan", on_click=self.on_clear_plan_form_click)
-        self.toggle_plan_status_button = ft.ElevatedButton(text="Toggle Active/Inactive", on_click=self.on_toggle_plan_status_click, disabled=True)
+        # Plan form controls are now part of PlansTab
 
         # History filter controls remain for Membership History Tab
         self.history_name_filter_input = ft.TextField(label="Filter by Name")
@@ -840,14 +717,7 @@ class FletAppView(ft.Container):
             ],
             rows=[], on_select_changed=self.on_full_history_select_changed
         )
-        # Plans table remains for Plan Management Tab
-        self.plans_table_flet = ft.DataTable(
-            columns=[
-                ft.DataColumn(ft.Text("ID")), ft.DataColumn(ft.Text("Name")),
-                ft.DataColumn(ft.Text("Duration (Days)")), ft.DataColumn(ft.Text("Status")),
-            ],
-            rows=[], on_select_changed=self.on_plan_select_changed
-        )
+        # Plans table is now part of PlansTab
         # Pending renewals table remains for Reporting Tab
         self.pending_renewals_table_flet = ft.DataTable(
             columns=[
@@ -861,6 +731,7 @@ class FletAppView(ft.Container):
         self.membership_tab_ref = MembershipTab(self.controller, self.date_picker)
         # Instantiate SettingsTab
         self.settings_tab_ref = SettingsTab(self.controller)
+        self.plans_tab_ref = PlansTab(self.controller, self)
 
 
         # UI Assembly
@@ -901,29 +772,7 @@ class FletAppView(ft.Container):
                 ),
                 ft.Tab(
                     text="Plan Management",
-                    content=ft.Row(
-                        controls=[
-                            ft.Container(
-                                content=ft.Column(
-                                    controls=[
-                                        ft.Text("Add/Edit Plan", weight=ft.FontWeight.BOLD),
-                                        self.plan_name_input,
-                                        self.plan_duration_input,
-                                        self.save_plan_button,
-                                        self.edit_plan_button,
-                                        self.clear_plan_form_button,
-                                        self.toggle_plan_status_button,
-                                        self.delete_plan_button_flet,
-                                        self.plan_form_feedback_text,
-                                    ]
-                                ), expand=1, bgcolor=ft.colors.AMBER_200, padding=10, alignment=ft.alignment.top_center,
-                            ),
-                            ft.Container(
-                                content=ft.Column(controls=[self.plans_table_flet], scroll=ft.ScrollMode.AUTO, expand=True),
-                                expand=2, bgcolor=ft.colors.AMBER_300, padding=10, alignment=ft.alignment.top_center
-                            ),
-                        ]
-                    )
+                    content=self.plans_tab_ref
                 ),
                 ft.Tab(
                     text="Reporting",
@@ -1129,62 +978,6 @@ if __name__ == "__main__":
         if self.members_table_flet: self.members_table_flet.update() # Update table
         self.update() # General view update
 
-    def on_delete_selected_plan_click_flet(self, e):
-        if self.selected_plan_id_flet is None:
-            self.plan_form_feedback_text.value = "No plan selected to delete."
-            self.plan_form_feedback_text.color = ft.colors.ORANGE
-            self.plan_form_feedback_text.update()
-            return
-
-        plan_name = "Unknown Plan"
-        if self.plans_table_flet and self.plans_table_flet.rows:
-            for row in self.plans_table_flet.rows:
-                if row.cells and len(row.cells) > 1 and isinstance(row.cells[0].content, ft.Text) and isinstance(row.cells[1].content, ft.Text):
-                    try:
-                        if int(row.cells[0].content.value) == self.selected_plan_id_flet:
-                            plan_name = row.cells[1].content.value
-                            break
-                    except ValueError:
-                        continue
-
-        dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Confirm Delete Plan"),
-            content=ft.Text(f"Are you sure you want to PERMANENTLY delete plan '{plan_name}' (ID: {self.selected_plan_id_flet})? This action cannot be undone and might affect historical records if not handled carefully by the backend."),
-            actions=[
-                ft.TextButton("Yes, Delete Plan", on_click=lambda ev: self._perform_delete_plan_action(True, self.selected_plan_id_flet)),
-                ft.TextButton("No, Cancel", on_click=lambda ev: self._perform_delete_plan_action(False, self.selected_plan_id_flet)),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-        if self.page:
-            self.page.dialog = dialog
-            dialog.open = True
-            self.page.update()
-
-    def _perform_delete_plan_action(self, confirmed: bool, plan_id: int):
-        if self.page.dialog:
-            self.page.dialog.open = False
-            self.page.update()
-
-        if confirmed:
-            success, message = self.controller.delete_plan_action(plan_id)
-            self.plan_form_feedback_text.value = message
-            self.plan_form_feedback_text.color = ft.colors.GREEN if success else ft.colors.RED
-            if success:
-                self.selected_plan_id_flet = None
-                # self.plans_table_flet.selected_index = None # As above, no direct property
-                self.display_all_plans_flet() # Refresh plans table
-                self.populate_plan_dropdowns_flet() # Refresh plan dropdowns
-                self.on_clear_plan_form_click(None) # Clear plan form
-        else:
-            self.plan_form_feedback_text.value = "Plan deletion cancelled."
-            self.plan_form_feedback_text.color = ft.colors.ORANGE
-
-        self.plan_form_feedback_text.update()
-        if self.plans_table_flet: self.plans_table_flet.update()
-        self.update()
-
     def on_delete_selected_transaction_click_flet(self, e):
         if self.selected_transaction_id_flet is None:
             self.history_actions_feedback_text.value = "No transaction selected to delete."
@@ -1235,52 +1028,6 @@ if __name__ == "__main__":
 
         self.history_actions_feedback_text.update()
         if self.full_history_table_flet: self.full_history_table_flet.update()
-        self.update()
-
-    def on_toggle_plan_status_click(self, e):
-        """Handles the click event of the 'Toggle Active/Inactive' button."""
-        if self.selected_plan_id_flet is None:
-            self.plan_form_feedback_text.value = "Error: No plan selected to toggle status."
-            self.plan_form_feedback_text.color = ft.colors.RED
-            self.plan_form_feedback_text.update()
-            return
-
-        current_status_str = ""
-        # Find the current status from the table
-        for row in self.plans_table_flet.rows:
-            if row.cells and len(row.cells) > 3 and isinstance(row.cells[0].content, ft.Text):
-                try:
-                    if int(row.cells[0].content.value) == self.selected_plan_id_flet:
-                        if isinstance(row.cells[3].content, ft.Text):
-                            current_status_str = row.cells[3].content.value # "Active" or "Inactive"
-                            break
-                except ValueError:
-                    continue # Should not happen if IDs are integers
-
-        if not current_status_str:
-            self.plan_form_feedback_text.value = "Error: Could not determine current status of the selected plan."
-            self.plan_form_feedback_text.color = ft.colors.RED
-            self.plan_form_feedback_text.update()
-            return
-
-        current_status_bool = True if current_status_str == "Active" else False
-
-        success, message, updated_plans = self.controller.toggle_plan_status_action(
-            self.selected_plan_id_flet, current_status_bool
-        )
-
-        self.plan_form_feedback_text.value = message
-        if success:
-            self.plan_form_feedback_text.color = ft.colors.GREEN
-            if updated_plans is not None:
-                self.display_all_plans_flet(updated_plans)
-            else: # Fallback if controller didn't return plans (should not happen on success)
-                self.display_all_plans_flet()
-            self.populate_plan_dropdowns_flet() # Refresh plan dropdowns
-        else:
-            self.plan_form_feedback_text.color = ft.colors.RED
-
-        self.plan_form_feedback_text.update()
         self.update()
 
 
