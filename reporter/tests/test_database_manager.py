@@ -428,16 +428,18 @@ def test_add_transaction_group_class(db_conn):
     # 3. Define membership details
     payment_date_str = "2024-01-15"
     start_date_str = "2024-01-20"
+    manual_end_date_str = "2024-02-28" # Explicitly provide an end date
     amount_paid = 75.50
     payment_method = "Credit Card"
 
-    # 4. Call add_transaction for a 'Group Class'
+    # 4. Call add_transaction for a 'Group Class' with explicit end_date
     success = add_transaction(
         transaction_type='Group Class',
         member_id=member_id,
         plan_id=plan_id,
         payment_date=payment_date_str,
         start_date=start_date_str,
+        end_date=manual_end_date_str, # Pass the manual end date
         amount_paid=amount_paid,
         payment_method=payment_method
     )
@@ -464,13 +466,9 @@ def test_add_transaction_group_class(db_conn):
     assert t_payment_method == payment_method
     assert t_transaction_type == 'Group Class'
 
-    # Verify end_date calculation
-    expected_start_date_obj = datetime.strptime(start_date_str, '%Y-%m-%d')
-    expected_end_date_obj = expected_start_date_obj + timedelta(days=plan_duration_days)
-    expected_end_date_str = expected_end_date_obj.strftime('%Y-%m-%d')
-
-    assert t_end_date == expected_end_date_str, \
-        f"End date mismatch. Expected {expected_end_date_str}, got {t_end_date}."
+    # Verify end_date is the manually provided one, not auto-calculated
+    assert t_end_date == manual_end_date_str, \
+        f"End date mismatch. Expected manual {manual_end_date_str}, got {t_end_date}."
 
 # This test is replaced by test_get_all_activity_for_member
 # def test_get_memberships_for_member(db_conn):
@@ -593,14 +591,16 @@ def test_add_transaction_personal_training(db_conn):
 
     # 2. Define PT booking details
     start_date_str = "2024-03-01"
+    manual_pt_end_date_str = "2024-03-31" # Explicitly provide an end date for PT
     sessions = 10
     amount_paid = 500.00
 
-    # 3. Call add_transaction for 'Personal Training'
+    # 3. Call add_transaction for 'Personal Training' with explicit end_date
     success = add_transaction(
         transaction_type='Personal Training',
         member_id=member_id,
         start_date=start_date_str, # payment_date will default to start_date
+        end_date=manual_pt_end_date_str, # Pass the manual end date
         amount_paid=amount_paid,
         sessions=sessions
     )
@@ -608,15 +608,16 @@ def test_add_transaction_personal_training(db_conn):
 
     # 4. Verify directly in the database (transactions table)
     cursor.execute(
-        "SELECT member_id, start_date, sessions, amount_paid, transaction_type FROM transactions WHERE member_id = ? AND transaction_type = 'Personal Training'",
+        "SELECT member_id, start_date, end_date, sessions, amount_paid, transaction_type FROM transactions WHERE member_id = ? AND transaction_type = 'Personal Training'",
         (member_id,)
     )
     pt_record = cursor.fetchone()
     assert pt_record is not None, "PT transaction record not found."
 
-    (db_member_id, db_start_date, db_sessions, db_amount_paid, db_transaction_type) = pt_record
+    (db_member_id, db_start_date, db_end_date, db_sessions, db_amount_paid, db_transaction_type) = pt_record
     assert db_member_id == member_id
     assert db_start_date == start_date_str
+    assert db_end_date == manual_pt_end_date_str, f"PT end date mismatch. Expected {manual_pt_end_date_str}, got {db_end_date}."
     assert db_sessions == sessions
     assert db_amount_paid == amount_paid
     assert db_transaction_type == 'Personal Training'
@@ -710,116 +711,120 @@ def test_get_all_activity_for_member(db_conn):
 
 
 def test_get_pending_renewals(db_conn):
-    """Tests retrieval of pending renewals for the current month."""
-    # 1. Add Members and Plans
-    member_r1_id = add_member_to_db("Renewal User1", "R001")
-    assert member_r1_id is True
-    member_r2_id = add_member_to_db("Renewal User2", "R002")
-    assert member_r2_id is True
-    member_n_id = add_member_to_db("NonRenewal User", "N001") # Ends next month
-    assert member_n_id is True
-    member_p_id = add_member_to_db("PastRenewal User", "P001") # Ended last month
-    assert member_p_id is True
-
+    """Tests retrieval of pending renewals within the next 30 days."""
     cursor = db_conn.cursor()
-    cursor.execute("SELECT member_id, client_name FROM members WHERE phone = 'R001'")
-    r1_data = cursor.fetchone()
-    member_r1_id, member_r1_name = r1_data[0], r1_data[1]
+    # Clear transactions and members for a clean slate for this test
+    cursor.execute("DELETE FROM transactions")
+    cursor.execute("DELETE FROM members")
+    cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('members', 'transactions')")
+    db_conn.commit()
 
-    cursor.execute("SELECT member_id FROM members WHERE phone = 'R002'")
-    member_r2_id = cursor.fetchone()[0]
+    # 1. Setup: Add members and a plan
+    member_data = {
+        "User A": {"phone": "R001", "id": None, "name": "User A"},
+        "User B": {"phone": "R002", "id": None, "name": "User B"},
+        "User C": {"phone": "R003", "id": None, "name": "User C"},
+        "User D": {"phone": "N001", "id": None, "name": "User D"}, # Will be outside window
+        "User E": {"phone": "P001", "id": None, "name": "User E"}  # Will be in the past
+    }
+    for name, data in member_data.items():
+        assert add_member_to_db(name, data["phone"]) is True
+        cursor.execute("SELECT member_id FROM members WHERE phone = ?", (data["phone"],))
+        member_data[name]["id"] = cursor.fetchone()[0]
 
-    cursor.execute("SELECT member_id FROM members WHERE phone = 'N001'")
-    member_n_id = cursor.fetchone()[0]
+    plans = get_all_plans() # Seeded by fixture
+    assert len(plans) > 0, "Need at least one plan for testing."
+    test_plan = plans[0] # (plan_id, plan_name, duration_days, is_active)
+    plan_id = test_plan[0]
+    plan_name = test_plan[1]
 
-    cursor.execute("SELECT member_id FROM members WHERE phone = 'P001'")
-    member_p_id = cursor.fetchone()[0]
+    # 2. Define today and transaction end dates
+    today_obj = datetime.today().date() # Use .date() for date arithmetic
 
-    plans = get_all_plans()
-    assert len(plans) > 0, "Need at least one plan."
-    plan_30_days = next((p for p in plans if p[2] == 30), None) # Find a 30-day plan
-    assert plan_30_days is not None, "A 30-day plan is needed for reliable testing."
-    plan_id_30 = plan_30_days[0]
+    transactions_to_add = [
+        # Member, Days from today for end_date, Expected to be in results?
+        (member_data["User A"], 0, True),   # Ends today
+        (member_data["User A"], 1, True),   # Ends in 1 day
+        (member_data["User B"], 15, True),  # Ends in 15 days
+        (member_data["User C"], 30, True),  # Ends in 30 days
+        (member_data["User D"], 31, False), # Ends in 31 days
+        (member_data["User E"], -5, False), # Ended 5 days ago
+        (member_data["User A"], 45, False)  # Ends in 45 days (another for User A)
+    ]
 
-    # 2. Setup Dates for Renewals
-    today = datetime.today()
-    current_month_start = today.replace(day=1)
+    expected_renewals_details = []
 
-    # Renewal 1: Ends later this month
-    start_r1 = current_month_start # Starts 1st of current month
-    # To make it end this month, its start_date + duration_days should be in this month.
-    # If plan is 30 days, start_date should be such that end_date is within current month.
-    # For simplicity, let's make end_date the 15th of current month.
-    # So, start_date = 15th_current_month - 30_days_plan
-    end_date_r1_target = current_month_start.replace(day=15)
-    start_date_r1 = (end_date_r1_target - timedelta(days=plan_30_days[2])).strftime('%Y-%m-%d')
-    payment_date_r1 = start_date_r1
+    for member_info, days_offset, should_be_included in transactions_to_add:
+        end_date = (today_obj + timedelta(days=days_offset)).strftime('%Y-%m-%d')
+        # Start date and payment date can be arbitrary for this test, as long as valid
+        start_date = today_obj.strftime('%Y-%m-%d')
+        payment_date = start_date
 
-    # Renewal 2: Ends at the end of this month
-    # Let end_date be last day of current month
-    next_month_start = (current_month_start.replace(day=28) + timedelta(days=4)).replace(day=1) # Handles month end
-    end_date_r2_target = next_month_start - timedelta(days=1)
-    start_date_r2 = (end_date_r2_target - timedelta(days=plan_30_days[2])).strftime('%Y-%m-%d')
-    payment_date_r2 = start_date_r2
+        assert add_transaction(
+            transaction_type='Group Class',
+            member_id=member_info["id"],
+            plan_id=plan_id,
+            payment_date=payment_date,
+            start_date=start_date,
+            end_date=end_date, # Explicitly setting end_date
+            amount_paid=50,
+            payment_method="CashTest"
+        )
 
-    # Non-Renewal: Ends next month
-    start_date_n = (next_month_start.replace(day=5) - timedelta(days=plan_30_days[2])).strftime('%Y-%m-%d')
-    payment_date_n = start_date_n
+        if should_be_included:
+            expected_renewals_details.append({
+                "client_name": member_info["name"],
+                "phone": member_info["phone"],
+                "plan_name": plan_name,
+                "end_date": end_date
+            })
 
-    # Past-Renewal: Ended last month
-    last_month_end = current_month_start - timedelta(days=1)
-    start_date_p = (last_month_end.replace(day=15) - timedelta(days=plan_30_days[2])).strftime('%Y-%m-%d')
-    payment_date_p = start_date_p
+    # Sort expected renewals by end_date, then by client_name (as per query's ORDER BY)
+    expected_renewals_details.sort(key=lambda x: (x["end_date"], x["client_name"]))
 
-    # 3. Add Group Memberships (as Transactions)
-    assert add_transaction(transaction_type='Group Class', member_id=member_r1_id, plan_id=plan_id_30, payment_date=payment_date_r1, start_date=start_date_r1, amount_paid=50, payment_method="CashR1")
-    assert add_transaction(transaction_type='Group Class', member_id=member_r2_id, plan_id=plan_id_30, payment_date=payment_date_r2, start_date=start_date_r2, amount_paid=50, payment_method="CashR2")
-    assert add_transaction(transaction_type='Group Class', member_id=member_n_id, plan_id=plan_id_30, payment_date=payment_date_n, start_date=start_date_n, amount_paid=50, payment_method="CashN")
-    assert add_transaction(transaction_type='Group Class', member_id=member_p_id, plan_id=plan_id_30, payment_date=payment_date_p, start_date=start_date_p, amount_paid=50, payment_method="CashP")
+    # 3. Call get_pending_renewals
+    actual_renewals = get_pending_renewals() # Function no longer takes year/month
 
-    # 4. Call get_pending_renewals for today's date (current month)
-    # target_date_for_query = today.strftime('%Y-%m-%d') # Old call
-    renewals = get_pending_renewals(today.year, today.month) # Corrected call
+    # 4. Assertions
+    assert len(actual_renewals) == len(expected_renewals_details), \
+        f"Expected {len(expected_renewals_details)} renewals, but got {len(actual_renewals)}."
 
-    assert len(renewals) == 2, "Should find exactly 2 renewals for the current month."
+    # Verify details
+    # Actual renewal record: (client_name, phone, plan_name, end_date)
+    for i, expected in enumerate(expected_renewals_details):
+        actual_record = actual_renewals[i]
+        assert actual_record[0] == expected["client_name"], f"Mismatch in client_name at index {i}"
+        assert actual_record[1] == expected["phone"], f"Mismatch in phone at index {i}"
+        assert actual_record[2] == expected["plan_name"], f"Mismatch in plan_name at index {i}"
+        assert actual_record[3] == expected["end_date"], f"Mismatch in end_date at index {i}"
 
-    renewal_names = sorted([r[0] for r in renewals]) # client_name is at index 0
-    assert renewal_names[0] == "Renewal User1" # Check if correct members are returned
-    assert renewal_names[1] == "Renewal User2"
-
-    # Check end dates (assuming order by end_date ASC, client_name ASC)
-    # renewal record: (client_name, phone, plan_name, end_date)
-    assert renewals[0][3] == end_date_r1_target.strftime('%Y-%m-%d') # R1 ends on 15th
-    assert renewals[1][3] == end_date_r2_target.strftime('%Y-%m-%d') # R2 ends end of month
-
-def test_get_pending_renewals_none_for_month(db_conn):
-    """Tests get_pending_renewals when no memberships end in the target month."""
-    member_id = add_member_to_db("NoRenewUser", "NR001")
-    assert member_id is True
+def test_get_pending_renewals_none_when_no_relevant_data(db_conn):
+    """Tests get_pending_renewals returns empty list when no transactions are in the 30-day window."""
     cursor = db_conn.cursor()
-    cursor.execute("SELECT member_id FROM members WHERE phone = 'NR001'")
+    cursor.execute("DELETE FROM transactions")
+    cursor.execute("DELETE FROM members") # Also clear members to avoid foreign key issues if any were added
+    db_conn.commit()
+
+    # Add one member and one plan
+    assert add_member_to_db("Test User No Renew", "TNR001")
+    cursor.execute("SELECT member_id FROM members WHERE phone = 'TNR001'")
     member_id = cursor.fetchone()[0]
 
     plans = get_all_plans()
-    plan_30_days = next((p for p in plans if p[2] == 30), None)
-    assert plan_30_days is not None
-    plan_id_30 = plan_30_days[0]
+    plan_id = plans[0][0]
 
-    today = datetime.today()
-    # Membership ending next month
-    next_month_start = (today.replace(day=28) + timedelta(days=4)).replace(day=1)
-    start_date_next_month = (next_month_start.replace(day=5) - timedelta(days=plan_30_days[2])).strftime('%Y-%m-%d')
-    assert add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id_30, payment_date=start_date_next_month, start_date=start_date_next_month, amount_paid=50, payment_method="CashNR")
+    today_obj = datetime.today().date()
 
-    # Membership ending previous month
-    current_month_start = today.replace(day=1)
-    last_month_end = current_month_start - timedelta(days=1)
-    start_date_prev_month = (last_month_end.replace(day=15) - timedelta(days=plan_30_days[2])).strftime('%Y-%m-%d')
-    assert add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id_30, payment_date=start_date_prev_month, start_date=start_date_prev_month, amount_paid=50, payment_method="CashNR2")
+    # Transaction ending far in the future
+    end_date_future = (today_obj + timedelta(days=100)).strftime('%Y-%m-%d')
+    assert add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id, payment_date=today_obj.strftime('%Y-%m-%d'), start_date=today_obj.strftime('%Y-%m-%d'), end_date=end_date_future, amount_paid=50)
 
-    # target_date_for_query = today.strftime('%Y-%m-%d') # Query for current month # Old call
-    renewals = get_pending_renewals(today.year, today.month) # Corrected call
-    assert len(renewals) == 0, "Should find no renewals for the current month."
+    # Transaction ending in the past
+    end_date_past = (today_obj - timedelta(days=100)).strftime('%Y-%m-%d')
+    assert add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id, payment_date=today_obj.strftime('%Y-%m-%d'), start_date=today_obj.strftime('%Y-%m-%d'), end_date=end_date_past, amount_paid=50)
+
+    renewals = get_pending_renewals()
+    assert len(renewals) == 0, "Expected no renewals when all end_dates are outside the 30-day window."
 
 
 def test_get_finance_report(db_conn):

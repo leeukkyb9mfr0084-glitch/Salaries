@@ -1,7 +1,7 @@
 import csv
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Make sure the main database file is initialized
 from reporter.database import create_database
@@ -81,32 +81,60 @@ def process_gc_data():
             try:
                 name = row.get('Client Name', '').strip()
                 phone = row.get('Phone', '').strip()
-                plan_start_date_raw = row.get('Plan Start Date', '').strip()
                 payment_date_raw = row.get('Payment Date', '').strip()
-                plan_end_date_raw = row.get('Plan End Date', '').strip() # Read Plan End Date
 
-                # If 'Plan Start Date' is missing, skip the row.
-                if not plan_start_date_raw:
-                    print(f"Skipping row due to missing Plan Start Date: {row}")
+                # New logic for start and end dates
+                plan_start_date_str = row.get('Plan Start Date', '').strip()
+                duration_days = 0
+                try:
+                    duration_days_str = row.get('Plan Duration', '0').strip()
+                    if duration_days_str: # Ensure it's not empty before int conversion
+                        duration_days = int(duration_days_str)
+                except ValueError:
+                    print(f"Warning: Could not parse Plan Duration '{row.get('Plan Duration', '')}' to int for row: {row}. Skipping.")
                     continue
 
-                if not all([name, phone, payment_date_raw]): # Plan End Date can be missing
+                if not plan_start_date_str or duration_days <= 0:
+                    print(f"Skipping row due to missing Plan Start Date or invalid/zero Plan Duration: {row}")
+                    continue
+
+                if not all([name, phone, payment_date_raw]):
                     print(f"Skipping row due to missing essential data (Name, Phone, or Payment Date): {row}")
                     continue
 
-                plan_start_date = parse_date(plan_start_date_raw)
                 payment_date = parse_date(payment_date_raw)
-
-                if not plan_start_date or not payment_date: # Check essential dates
-                    print(f"Skipping row due to unparsable Plan Start Date or Payment Date: {row}")
+                if not payment_date: # Check essential payment_date
+                    print(f"Skipping row due to unparsable Payment Date: {row}")
                     continue
+
+                try:
+                    # Convert plan_start_date_str to a datetime object:
+                    # Assuming plan_start_date_str is in '%d/%m/%y' format as per issue context
+                    # If it could be '%d/%m/%Y' as well, more robust parsing is needed here
+                    # For now, sticking to the issue's direct implication.
+                    start_dt = datetime.strptime(plan_start_date_str, '%d/%m/%y')
+                except ValueError:
+                    try:
+                        # Fallback to '%d/%m/%Y' if '%d/%m/%y' fails
+                        start_dt = datetime.strptime(plan_start_date_str, '%d/%m/%Y')
+                    except ValueError:
+                        print(f"Skipping row due to unparsable Plan Start Date '{plan_start_date_str}': {row}")
+                        continue
+
+                # Calculate end_dt
+                end_dt = start_dt + timedelta(days=duration_days)
+
+                # Format dates for DB
+                plan_start_date_db = start_dt.strftime('%Y-%m-%d')
+                plan_end_date_db = end_dt.strftime('%Y-%m-%d')
 
                 member_info = get_member_by_phone(phone)
                 if member_info:
                     member_id = member_info[0]
                 else:
-                    member_id = add_member_with_join_date(name, phone, plan_start_date)
-                    if not member_id: # If creation failed (maybe due to case), try fetching again
+                    # Use plan_start_date_db for join date if creating a new member
+                    member_id = add_member_with_join_date(name, phone, plan_start_date_db)
+                    if not member_id: # If creation failed, try fetching again
                         member_info = get_member_by_phone(phone)
                         if member_info:
                             member_id = member_info[0]
@@ -114,104 +142,33 @@ def process_gc_data():
                             print(f"Could not create or find member: {name} ({phone})")
                             continue
                     else:
-                        print(f"Created new member: {name}")
+                        print(f"Created new member: {name} with join date {plan_start_date_db}")
 
-                plan_name = row['Plan Type'].strip()
-                plan_end_date_for_db = None
-                duration_days = None
-
-                if plan_end_date_raw:
-                    # plan_start_date is already a 'YYYY-MM-DD' string from its parse_date call earlier.
-                    # plan_end_date_str will also be 'YYYY-MM-DD' string or None.
-                    plan_end_date_str = parse_date(plan_end_date_raw)
-                    if plan_end_date_str:
-                        try:
-                            # Convert date strings to datetime objects for calculation
-                            start_dt = datetime.strptime(plan_start_date, '%Y-%m-%d')
-                            end_dt = datetime.strptime(plan_end_date_str, '%Y-%m-%d')
-
-                            if end_dt < start_dt:
-                                print(f"Warning: Plan End Date '{plan_end_date_str}' is before Plan Start Date '{plan_start_date}'. Row: {row}. Falling back to Plan Duration.")
-                                # Fallback to duration months
-                                duration_months_str = row.get('Plan Duration', '').strip()
-                                if duration_months_str:
-                                    duration_months = int(duration_months_str) # Assuming valid int
-                                    duration_days = duration_months * 30
-                                    plan_end_date_for_db = None # Reset as end date is invalid relative to start date
-                                else:
-                                    print(f"Skipping row due to missing Plan Duration (and invalid end date relative to start date): {row}")
-                                    continue
-                            else:
-                                delta = end_dt - start_dt
-                                duration_days = delta.days
-                                plan_end_date_for_db = plan_end_date_str # Already in YYYY-MM-DD string format
-                        except ValueError as e:
-                            print(f"Error converting parsed date strings ('{plan_start_date}', '{plan_end_date_str}') to datetime objects: {e}. Row: {row}. Falling back to Plan Duration.")
-                            # Fallback to duration months if date string to datetime conversion fails
-                            duration_months_str = row.get('Plan Duration', '').strip()
-                            if duration_months_str:
-                                try:
-                                    duration_months = int(duration_months_str)
-                                    duration_days = duration_months * 30
-                                    plan_end_date_for_db = None # Reset as end date processing failed
-                                except ValueError:
-                                    print(f"Skipping row due to invalid Plan Duration '{duration_months_str}': {row}")
-                                    continue
-                            else:
-                                print(f"Skipping row due to missing Plan Duration (and date conversion error): {row}")
-                                continue
-                    else:
-                        # Fallback if 'Plan End Date' parsing by parse_date fails
-                        print(f"Warning: Could not parse Plan End Date '{plan_end_date_raw}'. Falling back to Plan Duration for row: {row}")
-                        duration_months_str = row.get('Plan Duration', '').strip()
-                        if duration_months_str:
-                            try:
-                                duration_months = int(duration_months_str)
-                                duration_days = duration_months * 30
-                            except ValueError:
-                                print(f"Skipping row due to invalid Plan Duration '{duration_months_str}': {row}")
-                                continue
-                        else:
-                            print(f"Skipping row due to missing Plan Duration (and unparsable Plan End Date): {row}")
-                            continue
-                else:
-                    # Fallback if 'Plan End Date' is not present
-                    duration_months_str = row.get('Plan Duration', '').strip()
-                    if duration_months_str:
-                        try:
-                            duration_months = int(duration_months_str)
-                            duration_days = duration_months * 30
-                        except ValueError:
-                            print(f"Skipping row due to invalid Plan Duration '{duration_months_str}': {row}")
-                            continue
-                    else:
-                        # This case should ideally not happen if data is clean or handled by essential checks,
-                        # but as a safeguard:
-                        print(f"Skipping row due to missing Plan End Date and Plan Duration: {row}")
-                        continue
-
-                if duration_days is None or duration_days < 0:
-                    print(f"Skipping row due to invalid calculated duration_days ({duration_days}): {row}")
+                plan_name = row.get('Plan Type', '').strip()
+                if not plan_name:
+                    print(f"Skipping row due to missing Plan Type: {row}")
                     continue
 
+                # duration_days is already calculated and validated
                 plan_id = get_or_create_plan_id(plan_name, duration_days)
 
                 if not plan_id:
-                    print(f"Could not create or find plan for row: {row}")
+                    print(f"Could not create or find plan for row: {row}") # Should use plan_name and duration_days
                     continue
 
-                amount = parse_amount(row['Amount'])
+                amount = parse_amount(row.get('Amount','0'))
 
                 add_transaction(
                     transaction_type="Group Class",
                     member_id=member_id,
                     plan_id=plan_id,
-                    payment_date=payment_date,
-                    start_date=plan_start_date,
+                    payment_date=payment_date, # This is YYYY-MM-DD from parse_date
+                    start_date=plan_start_date_db, # This is YYYY-MM-DD
+                    end_date=plan_end_date_db, # This is YYYY-MM-DD
                     amount_paid=amount,
                     payment_method=row.get('Payment Mode', '').strip(),
-                    sessions=None,
-                    end_date_override=plan_end_date_for_db # Pass the prepared end date
+                    sessions=None
+                    # Removed end_date_override as per new logic
                 )
             except (ValueError, KeyError) as e:
                 print(f"Skipping row due to data error ('{e}'): {row}")
