@@ -394,7 +394,11 @@ class GuiController:
             return False, f"An error occurred while deleting the plan: {str(e)}"
 
 
-from .components.membership_tab import MembershipTab # Added import
+from .components.membership_tab import MembershipTab
+from .components.history_tab import HistoryTab
+from .components.plans_tab import PlansTab
+from .components.reporting_tab import ReportingTab
+from .components.settings_tab import SettingsTab
 
 class FletAppView(ft.Container):
     def __init__(self):
@@ -874,6 +878,8 @@ class FletAppView(ft.Container):
 
         # Instantiate MembershipTab
         self.membership_tab_ref = MembershipTab(self.controller, self.date_picker)
+        # Instantiate SettingsTab
+        self.settings_tab_ref = SettingsTab(self.controller)
 
 
         # UI Assembly
@@ -1086,143 +1092,7 @@ if __name__ == "__main__":
 # and then using `if success:`
 # This has been applied.
 
-    # Methods for Book Closing/Opening Dialogs and Actions
-    def _handle_check_book_status_flet(self, e):
-        """Handles checking the book status."""
-        if not self.book_closing_year_input.value or not self.book_closing_month_dropdown.value:
-            self.book_status_display_label.value = "Error: Year and Month must be selected."
-            self.book_status_display_label.color = ft.colors.RED
-            self.book_status_display_label.update()
-            return
-        try:
-            year_int = int(self.book_closing_year_input.value)
-            month_int = int(self.book_closing_month_dropdown.value) # Dropdown value is month number string
-        except ValueError:
-            self.book_status_display_label.value = "Error: Invalid year or month format."
-            self.book_status_display_label.color = ft.colors.RED
-            self.book_status_display_label.update()
-            return
-
-        status_message = self.controller.get_book_status_action(year_int, month_int)
-        self.book_status_display_label.value = status_message
-        # Determine color based on status content
-        if "OPEN" in status_message.upper():
-            self.book_status_display_label.color = ft.colors.GREEN
-        elif "CLOSED" in status_message.upper():
-            self.book_status_display_label.color = ft.colors.ORANGE
-        else:
-            self.book_status_display_label.color = ft.colors.BLUE # Default for other messages
-        self.book_status_display_label.update()
-
-    def _handle_close_books_action_flet(self, e):
-        if not self.book_closing_year_input.value or not self.book_closing_month_dropdown.value:
-            self.book_status_display_label.value = "Error: Year and Month must be selected for closing."
-            self.book_status_display_label.color = ft.colors.RED
-            self.book_status_display_label.update()
-            return
-        try:
-            year_int = int(self.book_closing_year_input.value)
-            month_int = int(self.book_closing_month_dropdown.value)
-            month_name = calendar.month_name[month_int]
-            month_key = f"{year_int:04d}-{month_int:02d}"
-        except ValueError:
-            self.book_status_display_label.value = "Error: Invalid year or month format for closing."
-            self.book_status_display_label.color = ft.colors.RED
-            self.book_status_display_label.update()
-            return
-        except IndexError: # Should not happen if dropdown is correctly populated (1-12)
-            self.book_status_display_label.value = "Error: Invalid month number."
-            self.book_status_display_label.color = ft.colors.RED
-            self.book_status_display_label.update()
-            return
-
-        dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Confirm Close Books"),
-            content=ft.Text(f"Are you sure you want to close the books for {month_name} {year_int} ({month_key})? This will prevent further financial entries for this period."),
-            actions=[
-                ft.TextButton("Yes, Close Books", on_click=lambda ev: self._perform_close_books_action(True, year_int, month_int)),
-                ft.TextButton("No, Cancel", on_click=lambda ev: self._perform_close_books_action(False, year_int, month_int)),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-        self.page.dialog = dialog
-        dialog.open = True
-        self.page.update()
-
-    def _perform_close_books_action(self, confirmed: bool, year_int: int, month_int: int):
-        if self.page.dialog:
-            self.page.dialog.open = False
-            self.page.update()
-
-        if confirmed:
-            success, message = self.controller.close_books_action(year_int, month_int)
-            self.book_status_display_label.value = message
-            self.book_status_display_label.color = ft.colors.GREEN if success else ft.colors.RED
-            if success:
-                self._handle_check_book_status_flet(None) # Refresh status display
-        else:
-            self.book_status_display_label.value = "Book closing cancelled by user."
-            self.book_status_display_label.color = ft.colors.ORANGE
-
-        if hasattr(self.book_status_display_label, 'update'):
-             self.book_status_display_label.update()
-        self.update() # Update the view containing the label
-
-    def _handle_open_books_action_flet(self, e):
-        if not self.book_closing_year_input.value or not self.book_closing_month_dropdown.value:
-            self.book_status_display_label.value = "Error: Year and Month must be selected for re-opening."
-            self.book_status_display_label.color = ft.colors.RED
-            self.book_status_display_label.update()
-            return
-        try:
-            year_int = int(self.book_closing_year_input.value)
-            month_int = int(self.book_closing_month_dropdown.value)
-            month_name = calendar.month_name[month_int]
-            month_key = f"{year_int:04d}-{month_int:02d}"
-        except ValueError:
-            self.book_status_display_label.value = "Error: Invalid year or month format for re-opening."
-            self.book_status_display_label.color = ft.colors.RED
-            self.book_status_display_label.update()
-            return
-        except IndexError:
-            self.book_status_display_label.value = "Error: Invalid month number."
-            self.book_status_display_label.color = ft.colors.RED
-            self.book_status_display_label.update()
-            return
-
-        dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Confirm Re-open Books"),
-            content=ft.Text(f"Are you sure you want to re-open the books for {month_name} {year_int} ({month_key})? This will allow modifications to financial entries for this period."),
-            actions=[
-                ft.TextButton("Yes, Re-open Books", on_click=lambda ev: self._perform_open_books_action(True, year_int, month_int)),
-                ft.TextButton("No, Cancel", on_click=lambda ev: self._perform_open_books_action(False, year_int, month_int)),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-        self.page.dialog = dialog
-        dialog.open = True
-        self.page.update()
-
-    def _perform_open_books_action(self, confirmed: bool, year_int: int, month_int: int):
-        if self.page.dialog:
-            self.page.dialog.open = False
-            self.page.update()
-
-        if confirmed:
-            success, message = self.controller.open_books_action(year_int, month_int)
-            self.book_status_display_label.value = message
-            self.book_status_display_label.color = ft.colors.GREEN if success else ft.colors.RED
-            if success:
-                self._handle_check_book_status_flet(None) # Refresh status display
-        else:
-            self.book_status_display_label.value = "Book re-opening cancelled by user."
-            self.book_status_display_label.color = ft.colors.ORANGE
-
-        if hasattr(self.book_status_display_label, 'update'):
-            self.book_status_display_label.update()
-        self.update()
+    # Methods for Book Closing/Opening Dialogs and Actions MOVED to SettingsTab
 
     # Methods for Deleting Member, Plan, Transaction with Dialogs
     def on_delete_selected_member_click_flet(self, e):
