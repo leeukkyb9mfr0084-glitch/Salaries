@@ -3,20 +3,15 @@ import sqlite3
 import os
 from datetime import datetime
 from reporter.gui import GuiController
-from reporter import database_manager
-from reporter.database import create_database # To create tables
+from reporter import database_manager # Keep for patching globals
+from reporter.database_manager import DatabaseManager # Import the class
 
 # Fixture for setting up an in-memory database for each test
 @pytest.fixture
-def setup_database():
-    # Use an in-memory SQLite database for testing
-    database_manager.DB_FILE = ":memory:"
-
-    # Establish the single in-memory connection for this test
+def book_closing_fixture(): # Renamed fixture
     conn = sqlite3.connect(":memory:")
-    database_manager._TEST_IN_MEMORY_CONNECTION = conn # Key: manager uses this specific conn
 
-    # Create tables directly on this connection
+    # Create tables manually as in the original fixture
     cursor = conn.cursor()
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS members (
@@ -60,19 +55,28 @@ def setup_database():
     """)
     conn.commit()
 
-    controller = GuiController()
+    # This is the DatabaseManager instance tests will use for direct calls
+    db_mngr_instance = DatabaseManager(conn)
 
-    # Yield the controller and connection to the tests
-    yield controller, conn
+    # Patch database_manager globals so GuiController picks up the same in-memory DB
+    original_db_file = database_manager.DB_FILE
+    original_test_conn = getattr(database_manager, '_TEST_IN_MEMORY_CONNECTION', None) # Use getattr for safety
 
-    # Teardown: Close the in-memory database connection
-    if conn:
-        conn.close()
-    database_manager.DB_FILE = 'reporter/data/kranos_data.db' # Reset to default
-    database_manager._TEST_IN_MEMORY_CONNECTION = None # Reset global
+    database_manager.DB_FILE = ":memory:"
+    database_manager._TEST_IN_MEMORY_CONNECTION = conn
 
-def test_close_and_reopen_flow(setup_database):
-    controller, conn = setup_database
+    controller = GuiController() # Controller will now use the in-memory db via patched globals
+
+    yield controller, db_mngr_instance # Tests can use both controller and direct db_manager
+
+    # Teardown
+    conn.close()
+    database_manager.DB_FILE = original_db_file # Restore original globals
+    database_manager._TEST_IN_MEMORY_CONNECTION = original_test_conn
+
+
+def test_close_and_reopen_flow(book_closing_fixture): # Use new fixture
+    controller, db_mngr = book_closing_fixture # Unpack controller and db_manager
     test_year = 2025
     test_month = 7
     month_key = f"{test_year:04d}-{test_month:02d}"
@@ -95,8 +99,8 @@ def test_close_and_reopen_flow(setup_database):
     status_message_open = controller.get_book_status_action(test_year, test_month)
     assert f"Status for {month_key}: OPEN" in status_message_open
 
-def test_add_transaction_to_closed_month(setup_database):
-    controller, conn = setup_database
+def test_add_transaction_to_closed_month(book_closing_fixture): # Use new fixture
+    controller, db_mngr = book_closing_fixture # Unpack
     test_year = 2026
     test_month = 3
     payment_date_str = f"{test_year:04d}-{test_month:02d}-15" # A date within the test month
@@ -105,10 +109,10 @@ def test_add_transaction_to_closed_month(setup_database):
     # 1. Add a dummy member and plan for the transaction to pass initial validations
     member_name = "Test Member for Closed Month"
     member_phone = "123000999"
-    database_manager.add_member_to_db(member_name, member_phone) # Assumes join_date is not critical here
+    db_mngr.add_member_to_db(member_name, member_phone) # Use db_mngr
 
     # Retrieve the added member to get their ID
-    cursor = conn.cursor()
+    cursor = db_mngr.conn.cursor() # Use db_mngr.conn
     cursor.execute("SELECT member_id FROM members WHERE phone = ?", (member_phone,))
     member_result = cursor.fetchone()
     assert member_result is not None, "Test member setup failed"
@@ -116,7 +120,7 @@ def test_add_transaction_to_closed_month(setup_database):
 
     plan_name = "Test Plan for Closed Month"
     plan_duration = 30
-    success_add_plan, message_add_plan, plan_id = database_manager.add_plan(plan_name, plan_duration)
+    success_add_plan, message_add_plan, plan_id = db_mngr.add_plan(plan_name, plan_duration) # Use db_mngr
     assert success_add_plan is True, f"Failed to add plan during test setup: {message_add_plan}"
     assert plan_id is not None, "Test plan setup failed to return a valid plan_id"
 
@@ -162,8 +166,8 @@ def test_add_transaction_to_closed_month(setup_database):
     assert add_success_reopened is True
     assert "membership added successfully" in add_message_reopened.lower()
 
-def test_delete_transaction_from_closed_month(setup_database):
-    controller, conn = setup_database
+def test_delete_transaction_from_closed_month(book_closing_fixture): # Use new fixture
+    controller, db_mngr = book_closing_fixture # Unpack
     test_year = 2027
     test_month = 5
     payment_date_str = f"{test_year:04d}-{test_month:02d}-10"
@@ -172,38 +176,31 @@ def test_delete_transaction_from_closed_month(setup_database):
     # 1. Add a dummy member and plan
     member_name_del = "Delete Test Member"
     member_phone_del = "789012345"
-    # Assuming add_member_to_db now returns (bool, str)
-    success_add_member_del, _ = database_manager.add_member_to_db(member_name_del, member_phone_del)
+    success_add_member_del, _ = db_mngr.add_member_to_db(member_name_del, member_phone_del) # Use db_mngr
     assert success_add_member_del is True, "Failed to add member for delete test setup"
-    cursor = conn.cursor()
+
+    cursor = db_mngr.conn.cursor() # Use db_mngr.conn
     cursor.execute("SELECT member_id FROM members WHERE phone = ?", (member_phone_del,))
     member_id_row = cursor.fetchone()
     assert member_id_row is not None, "Failed to retrieve member_id for delete test setup"
     member_id = member_id_row[0]
 
-    success_add_plan_del, message_add_plan_del, plan_id_del = database_manager.add_plan("Delete Test Plan", 30)
+    success_add_plan_del, message_add_plan_del, plan_id_del = db_mngr.add_plan("Delete Test Plan", 30) # Use db_mngr
     assert success_add_plan_del is True, f"Failed to add plan for delete test setup: {message_add_plan_del}"
     assert plan_id_del is not None, "Test plan setup for delete test failed to return a valid plan_id"
 
-
     # 2. Add a transaction in an open month first
-    # Note: save_membership_action returns tuple (bool, str). add_transaction directly might be simpler here
-    # if we don't want to test the full GuiController stack for this part.
-    # For this test, let's use database_manager.add_transaction directly for setup.
-
-    transaction_id = None
-    add_tx_success, _ = database_manager.add_transaction(
+    add_tx_success, _ = db_mngr.add_transaction( # Use db_mngr
         transaction_type="Group Class",
         member_id=member_id,
         plan_id=plan_id_del,
         payment_date=payment_date_str,
-        start_date=payment_date_str, # For simplicity
+        start_date=payment_date_str,
         amount_paid=50.0,
         payment_method="Card"
     )
     assert add_tx_success is True, "Failed to add initial transaction for deletion test."
 
-    # Get the transaction_id of the added transaction
     cursor.execute("SELECT transaction_id FROM transactions WHERE member_id = ? AND payment_date = ?", (member_id, payment_date_str))
     tx_result = cursor.fetchone()
     assert tx_result is not None, "Could not retrieve transaction_id for test."

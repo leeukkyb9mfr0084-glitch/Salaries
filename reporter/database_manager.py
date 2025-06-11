@@ -399,14 +399,21 @@ class DatabaseManager:
             transaction_info = cursor.fetchone()
             if not transaction_info: return False, f"Transaction with ID {transaction_id} not found."
 
-            member_id_for_log, payment_date_str = transaction_info
+            # Existing code to get transaction_info...
+            payment_date_str = transaction_info[1] # Assuming payment_date is at index 1
+            transaction_month_key = datetime.strptime(payment_date_str, '%Y-%m-%d').strftime('%Y-%m')
+            if self.get_book_status(transaction_month_key) == "closed":
+                return False, f"Cannot delete transaction. Books for {transaction_month_key} are closed."
+
+            member_id_for_log, payment_date_str_log = transaction_info # Renamed payment_date_str to avoid conflict
             book_status_for_log, transaction_month_key_for_log = "open", "N/A"
-            if payment_date_str:
+            if payment_date_str_log:
                 try:
-                    transaction_month_key_for_log = datetime.strptime(payment_date_str, '%Y-%m-%d').strftime('%Y-%m')
+                    transaction_month_key_for_log = datetime.strptime(payment_date_str_log, '%Y-%m-%d').strftime('%Y-%m')
+                    # We already know the status if it was closed, this log is for other cases or if logic changes
                     book_status_for_log = self.get_book_status(transaction_month_key_for_log)
                 except ValueError:
-                    logging.warning(f"Invalid payment_date format '{payment_date_str}' for tx {transaction_id}. Cannot determine book status for logging.")
+                    logging.warning(f"Invalid payment_date format '{payment_date_str_log}' for tx {transaction_id}. Cannot determine book status for logging.")
 
             cursor.execute("DELETE FROM transactions WHERE transaction_id = ?", (transaction_id,))
             self.conn.commit()
