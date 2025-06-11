@@ -199,8 +199,10 @@ class DatabaseManager:
 
             if transaction_type == 'Group Class':
                 if final_end_date:
-                    try: datetime.strptime(final_end_date, '%Y-%m-%d')
-                    except ValueError: final_end_date = None
+                    try:
+                        datetime.strptime(final_end_date, '%Y-%m-%d')
+                    except ValueError:
+                        final_end_date = None
                 if not final_end_date:
                     if not plan_id: return False, "plan_id required for Group Class if end_date not supplied."
                     plan_details = self.get_plan_by_id(plan_id) # Use self.method

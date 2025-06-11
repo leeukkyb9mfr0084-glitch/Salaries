@@ -60,12 +60,13 @@ def main():
 
     print(f"\n--- 1. Fetching Pending Renewals for July 2025 ---")
     # Target date for renewals: any date in July 2025, e.g., 2025-07-01
-    renewals_target_date = "2025-07-01"
-    pending_renewals = database_manager.get_pending_renewals(renewals_target_date)
+    target_year = 2025
+    target_month = 7
+    pending_renewals = database_manager.get_pending_renewals(target_year, target_month)
 
     found_expected_renewal = False
     if pending_renewals:
-        print(f"Found {len(pending_renewals)} pending renewal(s) for month of {renewals_target_date}:")
+        print(f"Found {len(pending_renewals)} pending renewal(s) for month of {target_year}-{target_month:02d}:")
         for renewal in pending_renewals:
             # (client_name, phone, plan_name, end_date)
             print(f"  - Name: {renewal[0]}, Phone: {renewal[1]}, Plan: {renewal[2]}, End Date: {renewal[3]}")
@@ -78,9 +79,9 @@ def main():
         if found_expected_renewal:
             print(f"Success: Expected renewal for '{target_member_name}' (Plan: '{expected_gc_plan_name}', End: {expected_gc_end_date}) found.")
         else:
-            print(f"Error: Expected renewal for '{target_member_name}' not found in July 2025 renewals list.")
+            print(f"Error: Expected renewal for '{target_member_name}' not found in {target_year}-{target_month:02d} renewals list.")
     else:
-        print(f"No pending renewals found for July 2025. Expected at least one for '{target_member_name}'.")
+        print(f"No pending renewals found for {target_year}-{target_month:02d}. Expected at least one for '{target_member_name}'.")
 
     print(f"\n--- 2. Fetching Finance Report for June 2025 ---")
     report_year = 2025

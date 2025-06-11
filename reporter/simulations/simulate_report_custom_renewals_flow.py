@@ -34,13 +34,13 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
     plan_duration_days = 30
 
     # Add plan and member
-    add_member_success, _ = database_manager.add_member_to_db(member_name_renew, member_phone_renew)
+    add_member_success, _ = controller.db_manager.add_member_to_db(member_name_renew, member_phone_renew)
     if not add_member_success:
         print(f"FAILURE: Could not add member '{member_name_renew}'.")
         return
-    member_id_renew = database_manager.get_all_members(phone_filter=member_phone_renew)[0][0]
+    member_id_renew = controller.db_manager.get_all_members(phone_filter=member_phone_renew)[0][0]
 
-    add_plan_success, _, plan_id_renew_val = database_manager.add_plan(plan_name_renew, plan_duration_days, is_active=True)
+    add_plan_success, _, plan_id_renew_val = controller.db_manager.add_plan(plan_name_renew, plan_duration_days, is_active=True)
     if not add_plan_success or plan_id_renew_val is None:
         print(f"FAILURE: Could not add plan '{plan_name_renew}'.")
         return
@@ -65,7 +65,7 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
         'start_date': start_date_for_tx.strftime('%Y-%m-%d'),
         'amount_paid': 120.00, 'payment_method': "SimRenewCash"
     }
-    add_tx_success, _ = database_manager.add_transaction(**tx_details_renew)
+    add_tx_success, _ = controller.db_manager.add_transaction(**tx_details_renew)
     if not add_tx_success:
         print(f"FAILURE: Could not add transaction for member ID {member_id_renew} to set up renewal.")
         return
@@ -118,6 +118,7 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
 
 if __name__ == "__main__":
     original_db_manager_db_file = database_manager.DB_FILE # Store original
+    db_connection = None # Initialize db_connection
 
     try:
         print(f"--- Main: Setting up simulation DB: {SIM_DB_FILE} ---")
@@ -133,7 +134,7 @@ if __name__ == "__main__":
         import sqlite3 # Ensure sqlite3 is imported
         seed_conn = None
         try:
-            seed_conn = sqlite3.connect(SIM_DB_FILE)
+            seed_conn = sqlite3.connect(SIM_DB_FILE) # Connection for seeding
             # Clear specific data for this simulation if needed, AFTER seeding
             # This simulation's logic for adding members/plans with unique names might be sufficient.
             # For safety, let's clear any potentially conflicting data from previous runs.
@@ -154,8 +155,11 @@ if __name__ == "__main__":
             if seed_conn:
                 seed_conn.close()
 
-        controller = GuiController()
-        main_simulation_logic(controller)
+        # Create the main DB connection for the controller
+        db_connection = sqlite3.connect(SIM_DB_FILE, check_same_thread=False)
+        controller = GuiController(db_connection) # Pass connection to controller
+
+        main_simulation_logic(controller) # Pass controller
 
     except Exception as e_outer:
         print(f"--- SIMULATION SCRIPT ERROR: {e_outer} ---", file=sys.stderr)
@@ -163,5 +167,8 @@ if __name__ == "__main__":
         traceback.print_exc()
         sys.exit(1)
     finally:
-        database_manager.DB_FILE = original_db_manager_db_file
+        if db_connection: # Close the main connection
+            db_connection.close()
+            print(f"Closed main DB connection to {SIM_DB_FILE}")
+        database_manager.DB_FILE = original_db_manager_db_file # Restore global if it was used
         print(f"--- Main: Restored database_manager.DB_FILE to: {original_db_manager_db_file} ---")

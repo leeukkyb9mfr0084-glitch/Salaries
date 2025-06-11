@@ -16,10 +16,10 @@ except ModuleNotFoundError as e:
     print("Make sure PYTHONPATH is set up correctly if running from outside the project root.")
     sys.exit(1)
 
-def main_simulation_logic():
+def main_simulation_logic(controller: GuiController): # controller is now passed in
     # This function will contain the actual simulation steps
     # and will be called after DB setup.
-    controller = GuiController() # Instantiate the controller
+    # controller = GuiController() # Instantiate the controller
 
     print("--- Part 1: Valid Data Simulation ---")
     valid_name = "UI Ctrl Test User Valid"
@@ -33,7 +33,7 @@ def main_simulation_logic():
         if success:
             print("SUCCESS (Part 1): controller.save_member_action returned success.")
             # Verify by querying
-            members = database_manager.get_all_members(phone_filter=valid_phone)
+            members = controller.db_manager.get_all_members(phone_filter=valid_phone)
             verified = False
             if members:
                 for member in members:
@@ -47,7 +47,7 @@ def main_simulation_logic():
             print(f"FAILURE (Part 1): controller.save_member_action returned failure. Message: {message}")
             # Optionally, check if it exists if failure was due to duplication (controller should indicate this)
             if "already exist" in message:
-                 members = database_manager.get_all_members(phone_filter=valid_phone)
+                 members = controller.db_manager.get_all_members(phone_filter=valid_phone)
                  if members and members[0][1] == valid_name:
                     print(f"INFO (Part 1): Member '{valid_name}' with phone '{valid_phone}' was already in DB, as indicated by controller.")
 
@@ -76,7 +76,7 @@ def main_simulation_logic():
             # This case should ideally not be reached if controller validation is correct
             print("FAILURE (Part 2): controller.save_member_action did NOT prevent adding member with empty name.")
             # Verify if it was actually added to the DB (it shouldn't be)
-            members = database_manager.get_all_members(phone_filter=valid_phone_for_empty_test)
+            members = controller.db_manager.get_all_members(phone_filter=valid_phone_for_empty_test)
             if members:
                 print(f"FAILURE (Part 2): Member with empty name WAS FOUND in DB with phone '{valid_phone_for_empty_test}'.")
             else:
@@ -87,8 +87,9 @@ def main_simulation_logic():
 
 if __name__ == '__main__':
     SIM_DB_DIR = os.path.join(os.path.dirname(__file__), "sim_data")
-    SIM_DB_FILE = os.path.join(SIM_DB_DIR, "simulation_kranos_data.db")
-    original_db_file_path = database_manager.DB_FILE # Save original DB path
+    SIM_DB_FILE = os.path.join(SIM_DB_DIR, "simulation_kranos_data_add_member.db") # Specific DB
+    original_db_file_path = database_manager.DB_FILE
+    db_connection = None
 
     try:
         print(f"--- Main: Setting up simulation DB: {SIM_DB_FILE} ---")
@@ -103,28 +104,36 @@ if __name__ == '__main__':
         # Create the database tables
         create_database(db_name=SIM_DB_FILE) # This creates and closes for file DBs
 
-        # Reopen to seed plans
+        # Seed initial plans using a direct connection for seeding
         seed_conn = None
         try:
-            seed_conn = sqlite3.connect(SIM_DB_FILE)
+            seed_conn = sqlite3.connect(SIM_DB_FILE) # Connection for seeding
             seed_initial_plans(seed_conn)
             seed_conn.commit()
             print(f"Recreated and seeded simulation DB: {SIM_DB_FILE}")
         except Exception as e_seed:
             print(f"Error seeding simulation DB {SIM_DB_FILE}: {e_seed}", file=sys.stderr)
+            raise
         finally:
             if seed_conn:
                 seed_conn.close()
 
+        # Create the main DB connection for the controller
+        db_connection = sqlite3.connect(SIM_DB_FILE, check_same_thread=False)
+        controller = GuiController(db_connection) # Pass connection to controller
+
         # Run the actual simulation logic
-        main_simulation_logic()
+        main_simulation_logic(controller) # Pass controller
 
     except Exception as e_outer:
         print(f"--- SIMULATION SCRIPT ERROR: {e_outer} ---", file=sys.stderr)
         import traceback
         traceback.print_exc()
-        sys.exit(2) # Indicate script error
+        sys.exit(2)
     finally:
-        # Restore DB_FILE path
+        if db_connection: # Close the main connection
+            db_connection.close()
+            print(f"Closed main DB connection to {SIM_DB_FILE}")
+        # Restore DB_FILE path (if it was globally patched and still relevant)
         database_manager.DB_FILE = original_db_file_path
         print(f"--- Main: Restored DB_FILE to: {database_manager.DB_FILE} ---")

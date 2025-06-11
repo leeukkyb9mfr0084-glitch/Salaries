@@ -34,8 +34,8 @@ def find_plan_in_list_by_name(plans_list, plan_name_to_find):
                 return plan
     return None
 
-def main_simulation_logic(): # Renamed main to main_simulation_logic
-    controller = GuiController() # Instantiate controller
+def main_simulation_logic(controller: GuiController): # controller is now passed in
+    # controller = GuiController() # Instantiate controller
     unique_suffix = f"{int(time.time()) % 10000:04d}"
     test_plan_id = None
 
@@ -61,7 +61,7 @@ def main_simulation_logic(): # Renamed main to main_simulation_logic
             else:
                 print(f"FAILURE (Part 1): Added plan '{plan_name_part1}' not found in list returned by controller.")
                 # As a fallback, query DB directly if needed, though controller should be source of truth
-                all_db_plans = database_manager.get_all_plans_with_inactive()
+                all_db_plans = controller.db_manager.get_all_plans_with_inactive()
                 db_plan = find_plan_in_list_by_name(all_db_plans, plan_name_part1)
                 if db_plan:
                     test_plan_id = db_plan[0]
@@ -105,8 +105,8 @@ def main_simulation_logic(): # Renamed main to main_simulation_logic
     if test_plan_id:
         print(f"Attempting to deactivate Plan ID {test_plan_id}")
         try:
-            # Assuming the plan is currently active (current_status=True to deactivate)
-            success, message, returned_plans = controller.toggle_plan_status_action(plan_id=test_plan_id, current_status=True)
+            # The method now determines current_status internally
+            success, message, returned_plans = controller.toggle_plan_status_action(plan_id=test_plan_id)
             print(f"Controller action message: {message}")
             if success:
                 print(f"SUCCESS (Part 3): controller.toggle_plan_status_action returned success for Plan ID {test_plan_id}.")
@@ -166,9 +166,10 @@ def main_simulation_logic(): # Renamed main to main_simulation_logic
         print(f"ERROR (Part 5): An exception occurred: {e}")
 
 if __name__ == '__main__':
-    original_db_manager_db_file = database_manager.DB_FILE # Store original
-    from reporter.database import create_database, seed_initial_plans # Ensure imports
+    original_db_manager_db_file = database_manager.DB_FILE
+    from reporter.database import create_database, seed_initial_plans
     import sqlite3
+    db_connection = None # Initialize
 
     try:
         print(f"--- Main: Setting up simulation DB: {SIM_DB_FILE} ---")
@@ -180,6 +181,7 @@ if __name__ == '__main__':
         database_manager.DB_FILE = SIM_DB_FILE # Monkeypatch
 
         create_database(db_name=SIM_DB_FILE)
+
         seed_conn = None
         try:
             seed_conn = sqlite3.connect(SIM_DB_FILE)
@@ -193,13 +195,19 @@ if __name__ == '__main__':
             if seed_conn:
                 seed_conn.close()
 
-        main_simulation_logic() # Call the renamed main logic function
+        db_connection = sqlite3.connect(SIM_DB_FILE, check_same_thread=False) # Create connection
+        controller = GuiController(db_connection) # Pass connection
+
+        main_simulation_logic(controller) # Pass controller
 
     except Exception as e_outer:
         print(f"--- SIMULATION SCRIPT ERROR: {e_outer} ---", file=sys.stderr)
         import traceback
         traceback.print_exc()
-        sys.exit(1) # Indicate script error
+        sys.exit(1)
     finally:
+        if db_connection: # Close connection
+            db_connection.close()
+            print(f"Closed main DB connection to {SIM_DB_FILE}")
         database_manager.DB_FILE = original_db_manager_db_file
         print(f"--- Main: Restored database_manager.DB_FILE to: {original_db_manager_db_file} ---")
