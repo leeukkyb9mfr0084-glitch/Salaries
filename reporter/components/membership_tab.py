@@ -285,8 +285,8 @@ class MembershipTab(ft.Row):  # Changed base class
             modal=True, title=ft.Text("Confirm Deactivate"),
             content=ft.Text(f"Deactivate member '{member_name}' (ID: {self.selected_member_id_flet})?"),
             actions=[
-                ft.TextButton("Yes", on_click=lambda ev: self._perform_delete_member_action(True, self.selected_member_id_flet)),
-                ft.TextButton("No", on_click=lambda ev: self._perform_delete_member_action(False, self.selected_member_id_flet)),
+                ft.TextButton("Yes", on_click=lambda ev: self._perform_deactivate_member_action(True, self.selected_member_id_flet)),
+                ft.TextButton("No", on_click=lambda ev: self._perform_deactivate_member_action(False, self.selected_member_id_flet)),
             ], actions_alignment=ft.MainAxisAlignment.END,
         )
         if self.page:
@@ -294,7 +294,7 @@ class MembershipTab(ft.Row):  # Changed base class
             dialog.open = True
             self.page.update()
 
-    def _perform_delete_member_action(self, confirmed: bool, member_id: int):
+    def _perform_deactivate_member_action(self, confirmed: bool, member_id: int):
         if self.page.dialog:
             self.page.dialog.open = False
             if self.page: self.page.update()
