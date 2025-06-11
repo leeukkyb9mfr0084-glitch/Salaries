@@ -1,1149 +1,444 @@
 import sys
 import sqlite3
-from datetime import datetime, timedelta, date # Added date for type hinting if needed, and strptime/strftime are part of datetime
-from typing import Tuple, Optional, Union # For type hints
+from datetime import datetime, timedelta, date
+from typing import Tuple, Optional, Union
+import logging
 
+# Basic logging configuration (can be overridden by application's config)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# DB_FILE constant might still be useful for default database path for applications
+# that use this manager, but the DatabaseManager class itself won't use it to create connections.
 DB_FILE = 'reporter/data/kranos_data.db'
-_TEST_IN_MEMORY_CONNECTION = None # Global for test connection
 
-def get_db_connection():
-    global _TEST_IN_MEMORY_CONNECTION
-    if DB_FILE == ":memory:" and _TEST_IN_MEMORY_CONNECTION:
-        return _TEST_IN_MEMORY_CONNECTION
-    """Establishes and returns a connection to the SQLite database."""
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        # conn.row_factory = sqlite3.Row # Optional: to access columns by name
-        return conn
-    except sqlite3.Error as e:
-        print(f"Error connecting to database {DB_FILE}: {e}")
-        raise  # Re-raise the exception if connection fails
+class DatabaseManager:
+    def __init__(self, connection: sqlite3.Connection):
+        self.conn = connection
+        # self.conn.row_factory = sqlite3.Row # Optional: if column access by name is desired
 
-def add_member_to_db(name: str, phone: str, join_date: str = None) -> Tuple[bool, str]:
-    """
-    Adds a new member to the database.
-    Args:
-        name (str): The name of the member.
-        phone (str): The phone number of the member (must be unique).
-        join_date (str, optional): The join date in 'YYYY-MM-DD' format. Defaults to None (inserted as NULL).
-    Returns:
-        Tuple[bool, str]: (True, "Member added successfully.") if successful,
-                          (False, "Error message") otherwise.
-    """
-    if not name or not phone:
-        print("Error: Member name and phone number cannot be empty.", file=sys.stderr)
-        return False, "Error: Member name and phone number cannot be empty."
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        # If join_date is not provided, it will be inserted as NULL,
-        # which is the default behavior for a nullable column if not specified or set to None.
-        cursor.execute(
-            "INSERT INTO members (client_name, phone, join_date) VALUES (?, ?, ?)",
-            (name, phone, join_date)
-        )
-        conn.commit()
-        return True, "Member added successfully."
-    except sqlite3.IntegrityError:
-        # This typically means the phone number already exists due to UNIQUE constraint
-        print(f"Error adding member: Phone number '{phone}' likely already exists.")
-        return False, f"Error adding member: Phone number '{phone}' likely already exists."
-    except sqlite3.Error as e:
-        print(f"Database error while adding member: {e}")
-        return False, f"Database error while adding member: {e}"
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
+    def add_member_to_db(self, name: str, phone: str, join_date: str = None) -> Tuple[bool, str]:
+        if not name or not phone:
+            # Consider logging this instead of printing, or raising an error
+            logging.error("Member name and phone number cannot be empty.")
+            return False, "Error: Member name and phone number cannot be empty."
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "INSERT INTO members (client_name, phone, join_date) VALUES (?, ?, ?)",
+                (name, phone, join_date)
+            )
+            self.conn.commit()
+            return True, "Member added successfully."
+        except sqlite3.IntegrityError:
+            logging.warning(f"Error adding member: Phone number '{phone}' likely already exists.")
+            return False, f"Error adding member: Phone number '{phone}' likely already exists."
+        except sqlite3.Error as e:
+            logging.error(f"Database error while adding member: {e}", exc_info=True)
+            return False, f"Database error while adding member: {e}"
 
-def _update_member_join_date_if_earlier(member_id: int, activity_start_date_str: str, cursor: sqlite3.Cursor):
-    """
-    Updates the member's join_date if the activity_start_date is earlier than the current join_date or if join_date is NULL.
-    Args:
-        member_id (int): The ID of the member.
-        activity_start_date_str (str): The start date of the new activity ('YYYY-MM-DD').
-        cursor (sqlite3.Cursor): The database cursor to use for operations.
-    """
-    try:
-        activity_start_date = datetime.strptime(activity_start_date_str, '%Y-%m-%d').date()
-
-        cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
-        result = cursor.fetchone()
-
-        if result:
-            current_join_date_str = result[0]
-            update_needed = False
-            if current_join_date_str is None:
-                update_needed = True
-            else:
-                current_join_date = datetime.strptime(current_join_date_str, '%Y-%m-%d').date()
-                if activity_start_date < current_join_date:
+    def _update_member_join_date_if_earlier(self, member_id: int, activity_start_date_str: str, cursor: sqlite3.Cursor):
+        try:
+            activity_start_date = datetime.strptime(activity_start_date_str, '%Y-%m-%d').date()
+            cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
+            result = cursor.fetchone()
+            if result:
+                current_join_date_str = result[0]
+                update_needed = False
+                if current_join_date_str is None:
                     update_needed = True
+                else:
+                    current_join_date = datetime.strptime(current_join_date_str, '%Y-%m-%d').date()
+                    if activity_start_date < current_join_date:
+                        update_needed = True
+                if update_needed:
+                    cursor.execute("UPDATE members SET join_date = ? WHERE member_id = ?", (activity_start_date_str, member_id))
+        except sqlite3.Error as e:
+            logging.error(f"Error in _update_member_join_date_if_earlier for member {member_id}: {e}", exc_info=True)
+        except ValueError as ve:
+            logging.error(f"Date parsing error in _update_member_join_date_if_earlier: {ve}", exc_info=True)
 
-            if update_needed:
-                cursor.execute("UPDATE members SET join_date = ? WHERE member_id = ?", (activity_start_date_str, member_id))
-                # print(f"Updated join_date for member {member_id} to {activity_start_date_str}") # For debugging
-    except sqlite3.Error as e:
-        print(f"Error in _update_member_join_date_if_earlier for member {member_id}: {e}")
-    except ValueError as ve: # Catches date parsing errors
-        print(f"Date parsing error in _update_member_join_date_if_earlier: {ve}")
+    def get_all_members(self, name_filter: str = None, phone_filter: str = None) -> list:
+        try:
+            cursor = self.conn.cursor()
+            base_query = "SELECT member_id, client_name, phone, join_date, is_active FROM members"
+            conditions = ["is_active = 1"]
+            params = []
+            if name_filter:
+                conditions.append("client_name LIKE ?")
+                params.append(f"%{name_filter}%")
+            if phone_filter:
+                conditions.append("phone LIKE ?")
+                params.append(f"%{phone_filter}%")
+            if conditions:
+                base_query += " WHERE " + " AND ".join(conditions)
+            base_query += " ORDER BY client_name ASC"
+            cursor.execute(base_query, params)
+            return cursor.fetchall()
+        except sqlite3.Error as e:
+            logging.error(f"Database error while fetching members: {e}", exc_info=True)
+            return []
 
+    def add_plan(self, name: str, duration_days: int, is_active: bool = True) -> Tuple[bool, str, Optional[int]]:
+        if duration_days <= 0:
+            logging.error("Plan duration must be a positive number of days.")
+            return False, "Error: Plan duration must be a positive number of days.", None
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "INSERT INTO plans (plan_name, duration_days, is_active) VALUES (?, ?, ?)",
+                (name, duration_days, is_active)
+            )
+            self.conn.commit()
+            return True, "Plan added successfully.", cursor.lastrowid
+        except sqlite3.IntegrityError:
+            logging.warning(f"Error adding plan: Plan name '{name}' likely already exists.")
+            return False, f"Error adding plan: Plan name '{name}' likely already exists.", None
+        except sqlite3.Error as e:
+            logging.error(f"Database error while adding plan: {e}", exc_info=True)
+            return False, f"Database error while adding plan: {e}", None
 
-def get_all_members(name_filter: str = None, phone_filter: str = None) -> list:
-    """
-    Retrieves all active members from the database, with optional filtering, ordered by client_name.
-    Args:
-        name_filter (str, optional): Filter for client_name (case-insensitive LIKE). Defaults to None.
-        phone_filter (str, optional): Filter for phone number (case-insensitive LIKE). Defaults to None.
-    Returns:
-        list: A list of tuples, where each tuple represents an active member
-              (member_id, client_name, phone, join_date, is_active).
-              Returns an empty list if no members are found or an error occurs.
-    """
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        base_query = "SELECT member_id, client_name, phone, join_date, is_active FROM members"
-        conditions = []
-        params = []
-
-        # Add the is_active check FIRST to the WHERE clause conditions
-        conditions.append("is_active = 1")
-        # No parameters needed for "is_active = 1"
-
-        if name_filter:
-            conditions.append("client_name LIKE ?")
-            params.append(f"%{name_filter}%")
-
-        if phone_filter:
-            conditions.append("phone LIKE ?")
-            params.append(f"%{phone_filter}%")
-
-        if conditions: # This will always be true because "is_active = 1" is always added
-            base_query += " WHERE " + " AND ".join(conditions)
-        # else: # This case is no longer reachable
-            # query = base_query # Should not happen if is_active = 1 is always there
-
-        base_query += " ORDER BY client_name ASC"
-
-        cursor.execute(base_query, params)
-        members = cursor.fetchall()
-        return members
-    except sqlite3.Error as e:
-        print(f"Database error while fetching members: {e}")
-        return []  # Return empty list on error
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
-
-def add_plan(name: str, duration_days: int, is_active: bool = True) -> Tuple[bool, str, Optional[int]]:
-    """
-    Adds a new plan to the database.
-    Args:
-        name (str): The name of the plan.
-        duration_days (int): The duration of the plan in days.
-        is_active (bool): Whether the plan is active. Defaults to True.
-    Returns:
-        Tuple[bool, str, Optional[int]]: (True, "Plan added successfully.", plan_id) if successful,
-                                         (False, "Error message", None) otherwise.
-    """
-    if duration_days <= 0:
-        print("Error: Plan duration must be a positive number of days.", file=sys.stderr)
-        return False, "Error: Plan duration must be a positive number of days.", None
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO plans (plan_name, duration_days, is_active) VALUES (?, ?, ?)",
-            (name, duration_days, is_active)
-        )
-        conn.commit()
-        return True, "Plan added successfully.", cursor.lastrowid
-    except sqlite3.IntegrityError:
-        print(f"Error adding plan: Plan name '{name}' likely already exists.")
-        return False, f"Error adding plan: Plan name '{name}' likely already exists.", None
-    except sqlite3.Error as e:
-        print(f"Database error while adding plan: {e}")
-        return False, f"Database error while adding plan: {e}", None
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
-
-def update_plan(plan_id: int, name: str, duration_days: int) -> Tuple[bool, str]:
-    """
-    Updates an existing plan in the database.
-    Args:
-        plan_id (int): The ID of the plan to update.
-        name (str): The new name of the plan.
-        duration_days (int): The new duration of the plan in days.
-    Returns:
-        Tuple[bool, str]: (True, "Plan updated successfully.") if successful,
-                          (False, "Error message") otherwise.
-    """
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE plans SET plan_name = ?, duration_days = ? WHERE plan_id = ?",
-            (name, duration_days, plan_id)
-        )
-        conn.commit()
-        if cursor.rowcount > 0:
-            return True, "Plan updated successfully."
-        else:
+    def update_plan(self, plan_id: int, name: str, duration_days: int) -> Tuple[bool, str]:
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "UPDATE plans SET plan_name = ?, duration_days = ? WHERE plan_id = ?",
+                (name, duration_days, plan_id)
+            )
+            self.conn.commit()
+            if cursor.rowcount > 0:
+                return True, "Plan updated successfully."
             return False, "Failed to update plan. Plan not found or data unchanged."
-    except sqlite3.IntegrityError:
-        print(f"Error updating plan: New plan name '{name}' likely already exists for another plan.")
-        return False, f"Error updating plan: New plan name '{name}' likely already exists for another plan."
-    except sqlite3.Error as e:
-        print(f"Database error while updating plan {plan_id}: {e}")
-        return False, f"Database error while updating plan {plan_id}: {e}"
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
+        except sqlite3.IntegrityError:
+            logging.warning(f"Error updating plan: New plan name '{name}' likely already exists.")
+            return False, f"Error updating plan: New plan name '{name}' likely already exists for another plan."
+        except sqlite3.Error as e:
+            logging.error(f"Database error while updating plan {plan_id}: {e}", exc_info=True)
+            return False, f"Database error while updating plan {plan_id}: {e}"
 
-def set_plan_active_status(plan_id: int, is_active: bool) -> Tuple[bool, str]:
-    """
-    Sets the active status of a plan.
-    Args:
-        plan_id (int): The ID of the plan.
-        is_active (bool): The new active status (True for active, False for inactive).
-    Returns:
-        Tuple[bool, str]: (True, "Plan status updated successfully.") if successful,
-                          (False, "Error message") otherwise.
-    """
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE plans SET is_active = ? WHERE plan_id = ?",
-            (is_active, plan_id)
-        )
-        conn.commit()
-        if cursor.rowcount > 0:
-            return True, "Plan status updated successfully."
-        else:
+    def set_plan_active_status(self, plan_id: int, is_active: bool) -> Tuple[bool, str]:
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "UPDATE plans SET is_active = ? WHERE plan_id = ?",
+                (is_active, plan_id)
+            )
+            self.conn.commit()
+            if cursor.rowcount > 0:
+                return True, "Plan status updated successfully."
             return False, "Failed to update plan status. Plan not found."
-    except sqlite3.Error as e:
-        print(f"Database error while setting active status for plan {plan_id}: {e}")
-        return False, f"Database error while setting active status for plan {plan_id}: {e}"
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
+        except sqlite3.Error as e:
+            logging.error(f"Database error for plan {plan_id} status update: {e}", exc_info=True)
+            return False, f"Database error while setting active status for plan {plan_id}: {e}"
 
-def get_plan_by_id(plan_id: int) -> Optional[tuple]:
-    """
-    Retrieves a specific plan by its ID.
-    Args:
-        plan_id (int): The ID of the plan.
-    Returns:
-        Optional[tuple]: A tuple representing the plan (plan_id, plan_name, duration_days, is_active),
-                         or None if not found or an error occurs.
-    """
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT plan_id, plan_name, duration_days, is_active FROM plans WHERE plan_id = ?", (plan_id,))
-        plan = cursor.fetchone()
-        return plan
-    except sqlite3.Error as e:
-        print(f"Database error while fetching plan by ID {plan_id}: {e}")
-        return None
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
-
-def get_all_plans() -> list:
-    """
-    Retrieves all active plans from the database.
-    Returns:
-        list: A list of tuples, where each tuple represents an active plan
-              (plan_id, plan_name, duration_days, is_active).
-              Returns an empty list if no active plans are found or an error occurs.
-    """
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT plan_id, plan_name, duration_days, is_active FROM plans WHERE is_active = TRUE ORDER BY plan_name ASC")
-        plans = cursor.fetchall()
-        return plans
-    except sqlite3.Error as e:
-        print(f"Database error while fetching active plans: {e}")
-        return []
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
-
-def get_all_plans_with_inactive() -> list:
-    """
-    Retrieves all plans (including inactive) from the database.
-    Returns:
-        list: A list of tuples, where each tuple represents a plan
-              (plan_id, plan_name, duration_days, is_active).
-              Returns an empty list if no plans are found or an error occurs.
-    """
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        # Assuming the is_active column was added in the previous step
-        cursor.execute("SELECT plan_id, plan_name, duration_days, is_active FROM plans ORDER BY plan_name ASC")
-        plans = cursor.fetchall()
-        return plans
-    except sqlite3.Error as e:
-        print(f"Database error while fetching all plans (including inactive): {e}")
-        return []
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
-
-def get_member_id_from_transaction(transaction_id: int) -> Optional[int]:
-    """
-    Retrieves the member_id for a given transaction_id.
-    Args:
-        transaction_id (int): The ID of the transaction.
-    Returns:
-        Optional[int]: The member_id if found, None otherwise.
-    """
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT member_id FROM transactions WHERE transaction_id = ?", (transaction_id,))
-        result = cursor.fetchone()
-        if result:
-            return result[0]
-        return None
-    except sqlite3.Error as e:
-        print(f"Database error while fetching member_id for transaction {transaction_id}: {e}")
-        return None
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
-
-def add_transaction(transaction_type: str, member_id: int, start_date: str, amount_paid: float,
-                    plan_id: int = None, sessions: int = None, payment_method: str = None,
-                    payment_date: str = None, end_date: str = None) -> Tuple[bool, str]:
-    """
-    Adds a new transaction to the database.
-    For 'Group Class' transactions, if end_date is not provided, it's calculated based on plan_id's duration.
-    Updates member's join_date if the transaction's start_date is earlier.
-    Args:
-        transaction_type (str): Type of transaction (e.g., 'Group Class', 'Personal Training').
-        member_id (int): ID of the member.
-        start_date (str): Transaction start date in 'YYYY-MM-DD' format.
-        amount_paid (float): Amount paid for the transaction.
-        plan_id (int, optional): ID of the plan (required for 'Group Class'). Defaults to None.
-        sessions (int, optional): Number of sessions (for 'Personal Training'). Defaults to None.
-        payment_method (str, optional): Method of payment. Defaults to None.
-        payment_date (str, optional): Payment date in 'YYYY-MM-DD' format. Defaults to start_date if None.
-    Returns:
-        Tuple[bool, str]: (True, "Transaction added successfully.") if successful,
-                          (False, "Error message") otherwise.
-    """
-    # Guard Clause for Book Closing
-    if payment_date: # payment_date is used to determine the book month
+    def get_plan_by_id(self, plan_id: int) -> Optional[tuple]:
         try:
-            transaction_month_key = datetime.strptime(payment_date, '%Y-%m-%d').strftime('%Y-%m')
-            book_status = get_book_status(transaction_month_key)
-            if book_status == "closed":
-                message = f"Failed: Books for month {transaction_month_key} are closed."
-                print(message, file=sys.stderr)
-                return False, f"Cannot add transaction. Books for {transaction_month_key} are closed."
-        except ValueError:
-            # Handle cases where payment_date might not be in the expected format, though it should be.
-            message = f"Failed: Invalid payment_date format '{payment_date}'. Cannot determine book status."
-            print(message, file=sys.stderr)
-            return False, message
-    else: # If payment_date is None, it defaults to start_date. Check start_date for book closing.
-        try:
-            transaction_month_key = datetime.strptime(start_date, '%Y-%m-%d').strftime('%Y-%m')
-            book_status = get_book_status(transaction_month_key)
-            if book_status == "closed":
-                message = f"Failed: Books for month {transaction_month_key} are closed (based on start_date)."
-                print(message, file=sys.stderr)
-                return False, f"Cannot add transaction. Books for {transaction_month_key} are closed (based on start_date)."
-        except ValueError:
-            message = f"Failed: Invalid start_date format '{start_date}'. Cannot determine book status."
-            print(message, file=sys.stderr)
-            return False, message
-
-
-    if amount_paid <= 0:
-        print("Error: Amount paid must be a positive number.", file=sys.stderr)
-        return False, "Amount paid must be a positive number."
-    if transaction_type == 'Personal Training' and sessions is not None and sessions <= 0:
-        print("Error: Number of sessions must be a positive number for Personal Training.", file=sys.stderr)
-        return False, "Number of sessions must be a positive number for Personal Training."
-
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        if payment_date is None:
-            payment_date = start_date
-
-        # Use the provided end_date directly if available.
-        # For 'Group Class', if end_date is not provided or invalid, calculate it.
-        final_end_date = end_date
-
-        if transaction_type == 'Group Class':
-            if final_end_date:
-                try:
-                    datetime.strptime(final_end_date, '%Y-%m-%d') # Validate format
-                except ValueError:
-                    print(f"Warning: Invalid supplied end_date format '{final_end_date}'. Will attempt to calculate from plan.")
-                    final_end_date = None # Invalidate to trigger calculation
-
-            if not final_end_date: # If not supplied or was invalid
-                if not plan_id:
-                    message = "Error: plan_id is required for Group Class transactions when end_date is not supplied or invalid."
-                    print(message, file=sys.stderr)
-                    return False, message
-
-                cursor.execute("SELECT duration_days FROM plans WHERE plan_id = ?", (plan_id,))
-                plan_duration_row = cursor.fetchone()
-                if not plan_duration_row:
-                    message = f"Error: Plan with ID {plan_id} not found."
-                    print(message, file=sys.stderr)
-                    return False, message
-
-                duration_days = plan_duration_row[0]
-                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
-                end_date_obj = start_date_obj + timedelta(days=duration_days)
-                final_end_date = end_date_obj.strftime('%Y-%m-%d')
-
-        # For 'Personal Training', if an end_date was supplied, it's used. Otherwise, final_end_date remains None.
-        # For other types, final_end_date will be what was passed in (None or a value).
-
-        cursor.execute(
-            """
-            INSERT INTO transactions
-            (member_id, transaction_type, plan_id, payment_date, start_date, end_date, amount_paid, payment_method, sessions)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (member_id, transaction_type, plan_id, payment_date, start_date, final_end_date, amount_paid, payment_method, sessions)
-        )
-
-        _update_member_join_date_if_earlier(member_id, start_date, cursor)
-
-        conn.commit()
-        return True, "Transaction added successfully."
-    except ValueError as ve:
-        print(f"Data validation or date parsing error: {ve}", file=sys.stderr)
-        return False, f"Data validation or date parsing error: {ve}"
-    except sqlite3.Error as e:
-        print(f"Database error while adding transaction: {e}", file=sys.stderr)
-        return False, f"Database error while adding transaction: {e}"
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
-
-def get_all_activity_for_member(member_id: int) -> list:
-    """
-    Retrieves all transactions for a given member.
-    Args:
-        member_id (int): The ID of the member.
-    Returns:
-        list: A list of tuples, each representing a transaction.
-              Structure: (transaction_type, name_or_description, payment_date, start_date, end_date, amount_paid, payment_method_or_sessions, transaction_id)
-              Ordered by start_date descending. Returns empty list on error or if no transactions.
-    """
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        query = """
-            SELECT
-                t.transaction_type,
-                CASE
-                    WHEN t.transaction_type = 'Group Class' THEN p.plan_name
-                    ELSE 'PT Session'
-                END AS name_or_description,
-                t.payment_date,
-                t.start_date,
-                t.end_date,
-                t.amount_paid,
-                CASE
-                    WHEN t.transaction_type = 'Group Class' THEN t.payment_method
-                    ELSE CAST(t.sessions AS TEXT) || ' sessions'
-                END AS payment_method_or_sessions,
-                t.transaction_id AS activity_id
-            FROM transactions t
-            LEFT JOIN plans p ON t.plan_id = p.plan_id
-            WHERE t.member_id = ?
-            ORDER BY t.start_date DESC;
-        """
-        cursor.execute(query, (member_id,))
-        activities = cursor.fetchall()
-        return activities
-    except sqlite3.Error as e:
-        print(f"Database error while fetching all activity for member {member_id}: {e}")
-        return []
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
-
-def get_pending_renewals(year: int, month: int) -> list:
-    """
-    Retrieves 'Group Class' transactions ending in the specified year and month for active members.
-    Args:
-        year (int): The target year.
-        month (int): The target month (1-12).
-    Returns:
-        list: A list of tuples, where each tuple contains:
-              (client_name, phone, plan_name, end_date)
-              Ordered by end_date, then client_name. Returns empty list on error or if none found.
-    """
-    conn = None
-    try:
-        if not (1 <= month <= 12):
-            print("Error: Month must be between 1 and 12.", file=sys.stderr)
-            return [] # Return empty list for invalid month
-
-        year_month_str = f"{year:04d}-{month:02d}"
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        query = """
-            SELECT m.client_name, m.phone, p.plan_name, t.end_date
-            FROM transactions t
-            JOIN members m ON t.member_id = m.member_id
-            JOIN plans p ON t.plan_id = p.plan_id
-            WHERE strftime('%Y-%m', t.end_date) = ?
-              AND m.is_active = 1
-              AND t.transaction_type = 'Group Class'
-            ORDER BY t.end_date ASC, m.client_name ASC;
-        """
-        cursor.execute(query, (year_month_str,))
-        renewals = cursor.fetchall()
-        return renewals
-    except sqlite3.Error as e:
-        print(f"Database error while fetching pending renewals for {year}-{month}: {e}", file=sys.stderr)
-        return []
-    except ValueError as ve: # Catch potential errors from strptime if used, though not directly here now
-        print(f"Date processing error for {year}-{month}: {ve}", file=sys.stderr)
-        return []
-    except Exception as e: # Catch any other unexpected errors
-        print(f"An unexpected error occurred in get_pending_renewals for {year}-{month}: {e}", file=sys.stderr)
-        return []
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
-
-def get_finance_report(year: int, month: int) -> float | None:
-    """
-    Calculates the total amount_paid from all transactions for a given year and month, based on payment_date.
-    Args:
-        year (int): The target year.
-        month (int): The target month (1-12).
-    Returns:
-        float | None: The total sum of amount_paid, or 0.0 if no transactions, or None if an error occurs.
-    """
-    conn = None
-    try:
-        if not (1 <= month <= 12):
-            print("Error: Month must be between 1 and 12.")
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT plan_id, plan_name, duration_days, is_active FROM plans WHERE plan_id = ?", (plan_id,))
+            return cursor.fetchone()
+        except sqlite3.Error as e:
+            logging.error(f"Database error fetching plan by ID {plan_id}: {e}", exc_info=True)
             return None
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
+    def get_all_plans(self) -> list: # Fetches active plans
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT plan_id, plan_name, duration_days, is_active FROM plans WHERE is_active = TRUE ORDER BY plan_name ASC")
+            return cursor.fetchall()
+        except sqlite3.Error as e:
+            logging.error(f"Database error fetching active plans: {e}", exc_info=True)
+            return []
 
-        year_month_str = f"{year:04d}-{month:02d}"
+    def get_all_plans_with_inactive(self) -> list: # Fetches all plans
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT plan_id, plan_name, duration_days, is_active FROM plans ORDER BY plan_name ASC")
+            return cursor.fetchall()
+        except sqlite3.Error as e:
+            logging.error(f"Database error fetching all plans: {e}", exc_info=True)
+            return []
 
-        query = """
-            SELECT SUM(amount_paid)
-            FROM transactions
-            WHERE strftime('%Y-%m', payment_date) = ?;
-        """
-        cursor.execute(query, (year_month_str,))
-        result = cursor.fetchone()
+    def get_member_id_from_transaction(self, transaction_id: int) -> Optional[int]:
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT member_id FROM transactions WHERE transaction_id = ?", (transaction_id,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+        except sqlite3.Error as e:
+            logging.error(f"Database error fetching member_id for transaction {transaction_id}: {e}", exc_info=True)
+            return None
 
-        if result and result[0] is not None:
-            return float(result[0])
-        else:
-            return 0.0  # No transactions found or sum is NULL
+    def add_transaction(self, transaction_type: str, member_id: int, start_date: str, amount_paid: float,
+                        plan_id: int = None, sessions: int = None, payment_method: str = None,
+                        payment_date: str = None, end_date: str = None) -> Tuple[bool, str]:
+        # Determine book month and status
+        effective_date_for_booking = payment_date if payment_date else start_date
+        transaction_month_key = "N/A"
+        book_status = "open"
+        try:
+            transaction_month_key = datetime.strptime(effective_date_for_booking, '%Y-%m-%d').strftime('%Y-%m')
+            book_status = self.get_book_status(transaction_month_key) # Use self.method
+        except ValueError:
+            msg = f"Invalid date format '{effective_date_for_booking}'. Cannot determine book status."
+            logging.error(msg)
+            return False, msg
 
-    except sqlite3.Error as e:
-        print(f"Database error while generating finance report for {year}-{month:02d}: {e}")
-        return None
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
+        if book_status == "closed":
+            msg = f"Cannot add transaction. Books for {transaction_month_key} are closed."
+            logging.warning(msg)
+            return False, msg
 
-def get_member_by_phone(phone: str) -> tuple | None:
-    """Retrieves an active member's ID and name by their phone number."""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT member_id, client_name FROM members WHERE phone = ? AND is_active = 1", (phone,))
-        return cursor.fetchone()
-    except sqlite3.Error as e:
-        print(f"Database error while fetching active member by phone '{phone}': {e}")
-        return None
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
+        if amount_paid <= 0:
+            return False, "Amount paid must be a positive number."
+        if transaction_type == 'Personal Training' and sessions is not None and sessions <= 0:
+            return False, "Number of sessions must be a positive number for Personal Training."
 
-def add_member_with_join_date(name: str, phone: str, join_date: str) -> int | None:
-    """Adds a new member with a specific join date and returns their ID."""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO members (client_name, phone, join_date) VALUES (?, ?, ?)",
-            (name, phone, join_date)
-        )
-        conn.commit()
-        return cursor.lastrowid
-    except sqlite3.IntegrityError:
-        # This means the phone number already exists, which is fine.
-        return None # We'll fetch the ID separately in the migration script.
-    except sqlite3.Error as e:
-        print(f"Database error while adding member '{name}': {e}")
-        return None
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
+        try:
+            cursor = self.conn.cursor()
+            final_payment_date = payment_date if payment_date else start_date
+            final_end_date = end_date
 
-def get_plan_by_name_and_duration(plan_name: str, duration_months: int) -> tuple | None:
-    """
-    Retrieves a plan by its name and duration in months.
-    Converts duration_months to duration_days (assuming 30 days/month) for the query.
-    """
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        # Convert duration_months to duration_days for query
-        duration_days = duration_months * 30 # Consistent with migrate_data change
-        cursor.execute(
-            "SELECT plan_id, plan_name, duration_days, is_active FROM plans WHERE plan_name = ? AND duration_days = ?",
-            (plan_name, duration_days)
-        )
-        return cursor.fetchone()
-    except sqlite3.Error as e:
-        print(f"Database error while fetching plan '{plan_name}' with duration {duration_months} months: {e}")
-        return None
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
+            if transaction_type == 'Group Class':
+                if final_end_date:
+                    try: datetime.strptime(final_end_date, '%Y-%m-%d')
+                    except ValueError: final_end_date = None
+                if not final_end_date:
+                    if not plan_id: return False, "plan_id required for Group Class if end_date not supplied."
+                    plan_details = self.get_plan_by_id(plan_id) # Use self.method
+                    if not plan_details: return False, f"Plan with ID {plan_id} not found."
+                    duration_days = plan_details[2]
+                    final_end_date = (datetime.strptime(start_date, '%Y-%m-%d') + timedelta(days=duration_days)).strftime('%Y-%m-%d')
 
-def get_or_create_plan_id(plan_name: str, duration_days: int) -> int | None:
-    """Retrieves the ID of a plan, creating it if it doesn't exist."""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        # Check if the plan already exists
-        cursor.execute("SELECT plan_id FROM plans WHERE plan_name = ?", (plan_name,))
-        result = cursor.fetchone()
-        if result:
-            return result[0]
-        else:
-            # If not, create it
             cursor.execute(
-                "INSERT INTO plans (plan_name, duration_days) VALUES (?, ?)",
+                "INSERT INTO transactions (member_id, transaction_type, plan_id, payment_date, start_date, end_date, amount_paid, payment_method, sessions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (member_id, transaction_type, plan_id, final_payment_date, start_date, final_end_date, amount_paid, payment_method, sessions)
+            )
+            self._update_member_join_date_if_earlier(member_id, start_date, cursor) # Use self.method
+            self.conn.commit()
+            return True, "Transaction added successfully."
+        except ValueError as ve: # Should be caught by earlier checks mostly
+            logging.error(f"Data validation or date parsing error in add_transaction: {ve}", exc_info=True)
+            return False, f"Data validation or date parsing error: {ve}"
+        except sqlite3.Error as e:
+            logging.error(f"Database error while adding transaction: {e}", exc_info=True)
+            return False, f"Database error while adding transaction: {e}"
+
+    def get_all_activity_for_member(self, member_id: int) -> list:
+        try:
+            cursor = self.conn.cursor()
+            query = """
+                SELECT t.transaction_type,
+                       CASE WHEN t.transaction_type = 'Group Class' THEN p.plan_name ELSE 'PT Session' END,
+                       t.payment_date, t.start_date, t.end_date, t.amount_paid,
+                       CASE WHEN t.transaction_type = 'Group Class' THEN t.payment_method ELSE CAST(t.sessions AS TEXT) || ' sessions' END,
+                       t.transaction_id
+                FROM transactions t LEFT JOIN plans p ON t.plan_id = p.plan_id
+                WHERE t.member_id = ? ORDER BY t.start_date DESC;
+            """
+            cursor.execute(query, (member_id,))
+            return cursor.fetchall()
+        except sqlite3.Error as e:
+            logging.error(f"Database error fetching activity for member {member_id}: {e}", exc_info=True)
+            return []
+
+    def get_pending_renewals(self, year: int, month: int) -> list:
+        if not (1 <= month <= 12): return []
+        year_month_str = f"{year:04d}-{month:02d}"
+        try:
+            cursor = self.conn.cursor()
+            query = """
+                SELECT m.client_name, m.phone, p.plan_name, t.end_date
+                FROM transactions t
+                JOIN members m ON t.member_id = m.member_id JOIN plans p ON t.plan_id = p.plan_id
+                WHERE strftime('%Y-%m', t.end_date) = ? AND m.is_active = 1 AND t.transaction_type = 'Group Class'
+                ORDER BY t.end_date ASC, m.client_name ASC;
+            """
+            cursor.execute(query, (year_month_str,))
+            return cursor.fetchall()
+        except sqlite3.Error as e:
+            logging.error(f"Database error fetching pending renewals for {year_month_str}: {e}", exc_info=True)
+            return []
+
+    def get_finance_report(self, year: int, month: int) -> float | None:
+        if not (1 <= month <= 12): return None
+        year_month_str = f"{year:04d}-{month:02d}"
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT SUM(amount_paid) FROM transactions WHERE strftime('%Y-%m', payment_date) = ?", (year_month_str,))
+            result = cursor.fetchone()
+            return float(result[0]) if result and result[0] is not None else 0.0
+        except sqlite3.Error as e:
+            logging.error(f"Database error for finance report {year_month_str}: {e}", exc_info=True)
+            return None
+
+    def get_member_by_phone(self, phone: str) -> tuple | None:
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT member_id, client_name FROM members WHERE phone = ? AND is_active = 1", (phone,))
+            return cursor.fetchone()
+        except sqlite3.Error as e:
+            logging.error(f"Database error fetching member by phone '{phone}': {e}", exc_info=True)
+            return None
+
+    def add_member_with_join_date(self, name: str, phone: str, join_date: str) -> int | None:
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("INSERT INTO members (client_name, phone, join_date) VALUES (?, ?, ?)", (name, phone, join_date))
+            self.conn.commit()
+            return cursor.lastrowid
+        except sqlite3.IntegrityError: # Phone likely exists
+            return None
+        except sqlite3.Error as e:
+            logging.error(f"Database error adding member '{name}' with join date: {e}", exc_info=True)
+            return None
+
+    def get_plan_by_name_and_duration(self, plan_name: str, duration_months: int) -> tuple | None:
+        duration_days = duration_months * 30
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "SELECT plan_id, plan_name, duration_days, is_active FROM plans WHERE plan_name = ? AND duration_days = ?",
                 (plan_name, duration_days)
             )
-            conn.commit()
-            print(f"Created new plan: {plan_name}")
+            return cursor.fetchone()
+        except sqlite3.Error as e:
+            logging.error(f"DB error fetching plan '{plan_name}' dur {duration_months}mo: {e}", exc_info=True)
+            return None
+
+    def get_or_create_plan_id(self, plan_name: str, duration_days: int) -> int | None:
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT plan_id FROM plans WHERE plan_name = ?", (plan_name,))
+            result = cursor.fetchone()
+            if result: return result[0]
+            cursor.execute("INSERT INTO plans (plan_name, duration_days) VALUES (?, ?)", (plan_name, duration_days))
+            self.conn.commit()
+            logging.info(f"Created new plan via get_or_create: {plan_name}, {duration_days} days")
             return cursor.lastrowid
-    except sqlite3.Error as e:
-        print(f"Database error with plan '{plan_name}': {e}")
-        return None
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
+        except sqlite3.Error as e:
+            logging.error(f"DB error in get_or_create_plan_id for '{plan_name}': {e}", exc_info=True)
+            return None
 
-def get_transactions_with_member_details(name_filter: str = None, phone_filter: str = None, join_date_filter: str = None) -> list:
-    """
-    Retrieves all transactions joined with member details, with optional filters.
-    Args:
-        name_filter (str, optional): Filter for client_name (case-insensitive LIKE).
-        phone_filter (str, optional): Filter for phone number (case-insensitive LIKE).
-        join_date_filter (str, optional): Filter for join_date (exact match 'YYYY-MM-DD').
-    Returns:
-        list: A list of tuples, where each tuple represents a transaction joined with member details.
-              The columns from 'transactions' table come first, then 'client_name', 'phone', 'join_date'.
-              Returns an empty list if no transactions are found or an error occurs.
-    """
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+    def get_transactions_with_member_details(self, name_filter: str = None, phone_filter: str = None, join_date_filter: str = None) -> list:
+        try:
+            cursor = self.conn.cursor()
+            query_params = []
+            sql = """
+                SELECT t.transaction_id, t.member_id, t.transaction_type, t.plan_id, t.payment_date, t.start_date, t.end_date,
+                       t.amount_paid, t.payment_method, t.sessions, m.client_name, m.phone, m.join_date, p.plan_name
+                FROM transactions t JOIN members m ON t.member_id = m.member_id LEFT JOIN plans p ON t.plan_id = p.plan_id
+            """
+            conditions = []
+            if name_filter: conditions.append("m.client_name LIKE ?"); query_params.append(f"%{name_filter}%")
+            if phone_filter: conditions.append("m.phone LIKE ?"); query_params.append(f"%{phone_filter}%")
+            if join_date_filter:
+                try: datetime.strptime(join_date_filter, '%Y-%m-%d'); conditions.append("m.join_date = ?"); query_params.append(join_date_filter)
+                except ValueError: logging.warning(f"Invalid join_date_filter format '{join_date_filter}'. Filter ignored.")
+            if conditions: sql += " WHERE " + " AND ".join(conditions)
+            sql += " ORDER BY t.transaction_id DESC"
+            cursor.execute(sql, query_params)
+            return cursor.fetchall()
+        except sqlite3.Error as e:
+            logging.error(f"DB error fetching transactions with member details: {e}", exc_info=True)
+            return []
 
-        query_params = []
-        sql = """
-            SELECT
-                t.transaction_id, t.member_id, t.transaction_type, t.plan_id,
-                t.payment_date, t.start_date, t.end_date,
-                t.amount_paid, t.payment_method, t.sessions,
-                m.client_name, m.phone, m.join_date,
-                p.plan_name
-            FROM transactions t
-            JOIN members m ON t.member_id = m.member_id
-            LEFT JOIN plans p ON t.plan_id = p.plan_id
-        """
+    def get_transactions_for_month(self, year: int, month: int) -> list:
+        if not (1 <= month <= 12): return []
+        year_str, month_str = str(year), f"{month:02d}"
+        try:
+            cursor = self.conn.cursor()
+            query = """
+                SELECT t.transaction_id, m.client_name, t.payment_date, t.start_date, t.end_date, t.amount_paid, t.transaction_type,
+                       CASE WHEN t.transaction_type = 'Group Class' THEN p.plan_name
+                            WHEN t.transaction_type = 'Personal Training' THEN CAST(t.sessions AS TEXT) || ' sessions'
+                            ELSE NULL END,
+                       t.payment_method
+                FROM transactions t JOIN members m ON t.member_id = m.member_id LEFT JOIN plans p ON t.plan_id = p.plan_id
+                WHERE strftime('%Y', t.payment_date) = ? AND strftime('%m', t.payment_date) = ?
+                ORDER BY t.payment_date ASC, t.transaction_id ASC;
+            """
+            cursor.execute(query, (year_str, month_str))
+            return cursor.fetchall()
+        except sqlite3.Error as e:
+            logging.error(f"DB error in get_transactions_for_month for {year_str}-{month_str}: {e}", exc_info=True)
+            return []
 
-        conditions = []
-        if name_filter:
-            conditions.append("m.client_name LIKE ?")
-            query_params.append(f"%{name_filter}%")
-        if phone_filter:
-            conditions.append("m.phone LIKE ?")
-            query_params.append(f"%{phone_filter}%")
-        if join_date_filter:
-            # Ensure date is in correct format before querying, or handle potential ValueError
-            try:
-                datetime.strptime(join_date_filter, '%Y-%m-%d') # Validate date format
-                conditions.append("m.join_date = ?")
-                query_params.append(join_date_filter)
-            except ValueError:
-                print(f"Warning: Invalid join_date_filter format '{join_date_filter}'. Should be YYYY-MM-DD. Filter ignored.")
-                # Optionally, you could choose to return an empty list or raise an error here
-                # For now, the filter is just ignored if the format is wrong.
+    def get_book_status(self, month_key: str) -> str: # YYYY-MM
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT status FROM monthly_book_status WHERE month_key = ?", (month_key,))
+            result = cursor.fetchone()
+            return "closed" if result and result[0] == "closed" else "open"
+        except sqlite3.Error as e:
+            logging.error(f"DB error fetching book status for {month_key}: {e}", exc_info=True)
+            return "open" # Default to open on error
 
-        if conditions:
-            sql += " WHERE " + " AND ".join(conditions)
+    def set_book_status(self, month_key: str, status: str) -> bool: # YYYY-MM
+        if status not in ["open", "closed"]: return False
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("INSERT OR REPLACE INTO monthly_book_status (month_key, status) VALUES (?, ?)", (month_key, status))
+            self.conn.commit()
+            return True
+        except sqlite3.Error as e:
+            logging.error(f"DB error setting book status for {month_key} to {status}: {e}", exc_info=True)
+            return False
 
-        sql += " ORDER BY t.transaction_id DESC" # Or t.payment_date DESC, t.start_date DESC, etc.
-
-        cursor.execute(sql, query_params)
-        transactions = cursor.fetchall()
-        return transactions
-    except sqlite3.Error as e:
-        print(f"Database error while fetching transactions with member details: {e}")
-        return []
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
-
-def get_transactions_for_month(year: int, month: int) -> list:
-    """
-    Retrieves all transactions for a specific month and year, based on payment_date.
-    Args:
-        year (int): The target year.
-        month (int): The target month (1-12).
-    Returns:
-        list: A list of tuples, each representing a transaction with details.
-              Example tuple structure:
-              (transaction_id, client_name, payment_date, start_date, end_date,
-               amount_paid, transaction_type, plan_name_or_session_details, payment_method)
-              Returns an empty list on error or if no transactions are found.
-    """
-    if not (1 <= month <= 12):
-        print(f"Error: Invalid month '{month}'. Must be between 1 and 12.", file=sys.stderr)
-        return []
-
-    year_str = str(year)
-    month_str = f"{month:02d}"
-
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        query = """
-            SELECT
-                t.transaction_id,
-                m.client_name,
-                t.payment_date,
-                t.start_date,
-                t.end_date,
-                t.amount_paid,
-                t.transaction_type,
-                CASE
-                    WHEN t.transaction_type = 'Group Class' THEN p.plan_name
-                    WHEN t.transaction_type = 'Personal Training' THEN CAST(t.sessions AS TEXT) || ' sessions'
-                    ELSE NULL
-                END AS plan_or_session_details,
-                t.payment_method
-            FROM transactions t
-            JOIN members m ON t.member_id = m.member_id
-            LEFT JOIN plans p ON t.plan_id = p.plan_id
-            WHERE strftime('%Y', t.payment_date) = ?
-              AND strftime('%m', t.payment_date) = ?
-            ORDER BY t.payment_date ASC, t.transaction_id ASC;
-        """
-
-        cursor.execute(query, (year_str, month_str))
-        transactions = cursor.fetchall()
-        return transactions
-
-    except sqlite3.Error as e:
-        print(f"Database error in get_transactions_for_month for {year_str}-{month_str}: {e}", file=sys.stderr)
-        return []
-    except Exception as e: # General catch for unexpected issues
-        print(f"Unexpected error in get_transactions_for_month for {year_str}-{month_str}: {e}", file=sys.stderr)
-        return []
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
-
-def get_book_status(month_key: str) -> str:
-    """
-    Checks the status of the books for a given month.
-    Args:
-        month_key (str): The month key in "YYYY-MM" format.
-    Returns:
-        str: "closed" if the book for the month is closed, "open" otherwise.
-    """
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT status FROM monthly_book_status WHERE month_key = ?", (month_key,))
-        result = cursor.fetchone()
-        if result and result[0] == "closed":
-            return "closed"
-        return "open"
-    except sqlite3.Error as e:
-        print(f"Database error while fetching book status for {month_key}: {e}", file=sys.stderr)
-        return "open" # Default to open on error to prevent accidental locking
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
-
-def set_book_status(month_key: str, status: str) -> bool:
-    """
-    Sets the status of the books for a given month.
-    Args:
-        month_key (str): The month key in "YYYY-MM" format.
-        status (str): The status to set ("open" or "closed").
-    Returns:
-        bool: True if successful, False otherwise.
-    """
-    if status not in ["open", "closed"]:
-        print(f"Error: Invalid status '{status}'. Must be 'open' or 'closed'.", file=sys.stderr)
-        return False
-
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT OR REPLACE INTO monthly_book_status (month_key, status) VALUES (?, ?)",
-            (month_key, status)
-        )
-        conn.commit()
-        return True
-    except sqlite3.Error as e:
-        print(f"Database error while setting book status for {month_key} to {status}: {e}", file=sys.stderr)
-        return False
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
-
-# def get_group_memberships_by_member_id(member_id: int) -> list:
-#     """Retrieves all group memberships for a given member ID."""
-#     conn = None
-#     try:
-#         conn = get_db_connection()
-#         cursor = conn.cursor()
-#         cursor.execute(
-#             """
-#             SELECT membership_id, member_id, plan_id, payment_date, start_date, end_date, amount_paid, payment_method
-#             FROM group_memberships
-#             WHERE member_id = ?
-#             ORDER BY start_date DESC
-#             """,
-#             (member_id,)
-#         )
-#         return cursor.fetchall()
-#     except sqlite3.Error as e:
-#         print(f"Database error while fetching group memberships for member {member_id}: {e}")
-#         return []
-#     finally:
-#         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-#             conn.close()
-
-# def add_pt_booking(member_id: int, start_date: str, sessions: int, amount_paid: float) -> bool:
-#     """Adds a personal training booking to the database."""
-#     conn = None
-#     try:
-#         conn = get_db_connection()
-#         cursor = conn.cursor()
-#         cursor.execute(
-#             """
-#             INSERT INTO pt_bookings (member_id, start_date, sessions, amount_paid)
-#             VALUES (?, ?, ?, ?)
-#             """,
-#             (member_id, start_date, sessions, amount_paid)
-#         )
-
-#         # Update member's join date if this booking's start date is earlier
-#         _update_member_join_date_if_earlier(member_id, start_date, cursor)
-
-#         conn.commit()
-#         return True
-#     except sqlite3.Error as e:
-#         print(f"Database error while adding PT booking for member {member_id}: {e}")
-#         return False
-#     finally:
-#         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-#             conn.close()
-
-# def get_pt_bookings_by_member_id(member_id: int) -> list:
-#     """Retrieves all PT bookings for a given member ID."""
-#     conn = None
-#     try:
-#         conn = get_db_connection()
-#         cursor = conn.cursor()
-#         cursor.execute(
-#             """
-#             SELECT pt_booking_id, member_id, start_date, sessions, amount_paid
-#             FROM pt_bookings
-#             WHERE member_id = ?
-#             ORDER BY start_date DESC
-#             """,
-#             (member_id,)
-#         )
-#         return cursor.fetchall()
-#     except sqlite3.Error as e:
-#         print(f"Database error while fetching PT bookings for member {member_id}: {e}")
-#         return []
-#     finally:
-#         if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-#             conn.close()
-
-# if __name__ == '__main__':
-#     # Example Usage (and for basic testing)
-#     print("Attempting to initialize DB (if not already done by database.py main)")
-#     # We need tables to be there, so ensure database.py's main block has run or run its functions
-#     from reporter.database import create_database, seed_initial_plans
-
-#     # Ensure data directory exists (if running this directly before database.py's main)
-#     import os
-#     data_dir = os.path.dirname(DB_FILE)
-#     if not os.path.exists(data_dir):
-#         os.makedirs(data_dir)
-#         print(f"Created directory: {data_dir}")
-
-#     create_database(DB_FILE) # Create tables if they don't exist
-
-#     # Seeding plans is not directly related to member management but good for full setup
-#     temp_conn_for_seed = get_db_connection()
-#     try:
-#         seed_initial_plans(temp_conn_for_seed)
-#     finally:
-#         if temp_conn_for_seed:
-#             temp_conn_for_seed.close()
-
-#     print("\n--- Testing add_member_to_db ---")
-#     success1 = add_member_to_db("John Doe", "1234567890")
-#     print(f"Added 'John Doe': {success1}")
-#     success2 = add_member_to_db("Jane Smith", "0987654321")
-#     print(f"Added 'Jane Smith': {success2}")
-#     success_dup = add_member_to_db("John Again", "1234567890") # Duplicate phone
-#     print(f"Added 'John Again' (duplicate phone): {success_dup}")
-
-#     print("\n--- Testing get_all_members ---")
-#     all_members = get_all_members()
-#     if all_members:
-#         for member in all_members:
-#             print(member)
-#     else:
-#         print("No members found or error occurred.")
-
-#     print("\n--- Testing get_all_plans ---")
-#     all_plans = get_all_plans()
-#     if all_plans:
-#         for plan in all_plans:
-#             print(plan)
-#     else:
-#         print("No plans found or error occurred.")
-
-#     print("\n--- Testing add_transaction ---") # Updated from add_group_membership
-#     if all_members and all_plans:
-#         test_member_id = all_members[0][0] # Get ID of first member
-#         test_plan_id = all_plans[0][0]     # Get ID of first plan
-#         today_str = datetime.now().strftime('%Y-%m-%d')
-
-#         # Example: Add a Group Class transaction
-#         gc_success = add_transaction(
-#             transaction_type='Group Class',
-#             member_id=test_member_id,
-#             plan_id=test_plan_id,
-#             payment_date=today_str,
-#             start_date=today_str,
-#             amount_paid=50.00,
-#             payment_method="Cash"
-#         )
-#         print(f"Added Group Class transaction for {all_members[0][1]}: {gc_success}")
-
-#         # Example: Add a Personal Training transaction
-#         pt_success = add_transaction(
-#             transaction_type='Personal Training',
-#             member_id=test_member_id,
-#             start_date=today_str, # Payment date will default to start_date
-#             amount_paid=75.00,
-#             sessions=5
-#         )
-#         print(f"Added Personal Training transaction for {all_members[0][1]}: {pt_success}")
-
-
-#         print("\n--- Testing get_all_activity_for_member ---")
-#         if gc_success or pt_success: # Check if at least one transaction was added
-#             member_history = get_all_activity_for_member(test_member_id)
-#             if member_history:
-#                 print(f"Activity history for member ID {test_member_id}:")
-#                 for record in member_history:
-#                     print(record)
-#             else:
-#                 print(f"No activity history found for member ID {test_member_id}, or an error occurred.")
-#         else:
-#             print("Skipping get_all_activity_for_member test as prerequisite transaction add failed.")
-#     else:
-#         print("Skipping add_transaction and get_history tests as no members or plans are available.")
-
-#     print("\n--- Testing get_pending_renewals ---")
-#     # This test in main is a bit limited as it depends on when it's run.
-#     # For more robust testing, specific end_dates need to be in the DB.
-#     today_for_renewal_test = datetime.now().strftime('%Y-%m-%d')
-#     pending_renewals_today = get_pending_renewals(today_for_renewal_test) # This would fail with new signature
-#     if pending_renewals_today:
-#         print(f"Pending renewals for {datetime.strptime(today_for_renewal_test, '%Y-%m-%d').strftime('%B %Y')}:")
-#         for renewal in pending_renewals_today:
-#             print(renewal)
-#     else:
-#         print(f"No pending renewals found for {datetime.strptime(today_for_renewal_test, '%Y-%m-%d').strftime('%B %Y')}, or an error occurred.")
-
-#     print("\n--- Testing get_finance_report ---")
-#     import calendar
-#     # This test in main is also limited. More robust testing in test_database_manager.py
-#     current_year = datetime.now().year
-#     current_month = datetime.now().month
-#     total_revenue_current_month = get_finance_report(current_year, current_month)
-#     if total_revenue_current_month is not None:
-#         print(f"Total revenue for {calendar.month_name[current_month]} {current_year}: ${total_revenue_current_month:.2f}")
-#     else:
-#         print(f"Could not retrieve finance report for {calendar.month_name[current_month]} {current_year}.")
-
-
-def deactivate_member(member_id: int) -> Tuple[bool, str]:
-    """
-    Deactivates a member in the database by setting is_active to 0.
-    Args:
-        member_id (int): The ID of the member to deactivate.
-    Returns:
-        Tuple[bool, str]: (True, "Member deactivated successfully.") if successful,
-                          (False, "Error message") otherwise.
-    """
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        # Set is_active to 0 for the member
-        cursor.execute("UPDATE members SET is_active = 0 WHERE member_id = ?", (member_id,))
-        conn.commit()
-        if cursor.rowcount > 0:
-            return True, "Member deactivated successfully."
-        else:
+    def deactivate_member(self, member_id: int) -> Tuple[bool, str]:
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("UPDATE members SET is_active = 0 WHERE member_id = ?", (member_id,))
+            self.conn.commit()
+            if cursor.rowcount > 0: return True, "Member deactivated successfully."
             return False, "Failed to deactivate member. Member not found."
-    except sqlite3.Error as e:
-        print(f"Database error while deactivating member {member_id}: {e}", file=sys.stderr)
-        return False, f"Database error while deactivating member {member_id}: {e}"
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
+        except sqlite3.Error as e:
+            logging.error(f"DB error deactivating member {member_id}: {e}", exc_info=True)
+            return False, f"Database error while deactivating member {member_id}: {e}"
 
-def delete_transaction(transaction_id: int) -> Tuple[bool, str]:
-    """
-    Deletes a specific transaction from the database.
-    Args:
-        transaction_id (int): The ID of the transaction to delete.
-    Returns:
-        Tuple[bool, str]: (True, "Transaction deleted successfully.") if successful,
-                          (False, "Error message") otherwise.
-    """
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+    def delete_transaction(self, transaction_id: int) -> Tuple[bool, str]:
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT member_id, payment_date FROM transactions WHERE transaction_id = ?", (transaction_id,))
+            transaction_info = cursor.fetchone()
+            if not transaction_info: return False, f"Transaction with ID {transaction_id} not found."
 
-        # Get payment_date to check book status
-        cursor.execute("SELECT payment_date FROM transactions WHERE transaction_id = ?", (transaction_id,))
-        transaction_data = cursor.fetchone()
+            member_id_for_log, payment_date_str = transaction_info
+            book_status_for_log, transaction_month_key_for_log = "open", "N/A"
+            if payment_date_str:
+                try:
+                    transaction_month_key_for_log = datetime.strptime(payment_date_str, '%Y-%m-%d').strftime('%Y-%m')
+                    book_status_for_log = self.get_book_status(transaction_month_key_for_log)
+                except ValueError:
+                    logging.warning(f"Invalid payment_date format '{payment_date_str}' for tx {transaction_id}. Cannot determine book status for logging.")
 
-        if not transaction_data:
-            return False, f"Transaction with ID {transaction_id} not found."
+            cursor.execute("DELETE FROM transactions WHERE transaction_id = ?", (transaction_id,))
+            self.conn.commit()
 
-        payment_date_str = transaction_data[0]
-        if payment_date_str: # It's possible payment_date could be NULL, though unlikely for most transactions
-            try:
-                transaction_month_key = datetime.strptime(payment_date_str, '%Y-%m-%d').strftime('%Y-%m')
-                book_status = get_book_status(transaction_month_key)
-                if book_status == "closed":
-                    message = f"Failed: Books for month {transaction_month_key} are closed."
-                    print(message, file=sys.stderr)
-                    return False, f"Cannot delete transaction. Books for {transaction_month_key} are closed."
-            except ValueError:
-                # This case might occur if payment_date has an unexpected format.
-                message = f"Failed: Invalid payment_date format '{payment_date_str}' for transaction {transaction_id}. Cannot determine book status."
-                print(message, file=sys.stderr)
-                # Depending on policy, you might allow deletion or block it. For safety, block it.
-                return False, message
+            if cursor.rowcount > 0:
+                if book_status_for_log == "closed" and payment_date_str:
+                    logging.info(f"Transaction {transaction_id} (member_id: {member_id_for_log}) deleted from a closed period: {transaction_month_key_for_log}")
+                return True, "Transaction deleted successfully."
+            return False, f"Transaction with ID {transaction_id} not found or already deleted (zero rows affected)."
+        except sqlite3.Error as e:
+            logging.error(f"Database error deleting transaction {transaction_id}: {e}", exc_info=True)
+            return False, f"Database error while deleting transaction {transaction_id}: {e}"
 
-        # Proceed with deletion if books are not closed or payment_date is not set (e.g. old data)
-        cursor.execute("DELETE FROM transactions WHERE transaction_id = ?", (transaction_id,))
-        conn.commit()
-        if cursor.rowcount > 0:
-            return True, "Transaction deleted successfully."
-        else:
-            # This case should ideally be caught by the "transaction_data not found" check earlier,
-            # but included for robustness.
-            return False, f"Transaction with ID {transaction_id} not found or already deleted."
+    def delete_plan(self, plan_id: int) -> tuple[bool, str]:
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT 1 FROM transactions WHERE plan_id = ? LIMIT 1", (plan_id,))
+            if cursor.fetchone(): return False, "Plan is in use and cannot be deleted."
 
-    except sqlite3.Error as e:
-        print(f"Database error while deleting transaction {transaction_id}: {e}", file=sys.stderr)
-        return False, f"Database error while deleting transaction {transaction_id}: {e}"
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
+            cursor.execute("DELETE FROM plans WHERE plan_id = ?", (plan_id,))
+            self.conn.commit()
+            if cursor.rowcount > 0: return True, "Plan deleted successfully."
+            return False, "Error deleting plan or plan not found."
+        except sqlite3.Error as e:
+            logging.error(f"Database error deleting plan {plan_id}: {e}", exc_info=True)
+            return False, f"Database error while deleting plan {plan_id}: {e}"
 
-def delete_plan(plan_id: int) -> tuple[bool, str]:
-    """
-    Deletes a plan from the database if it's not in use by any transactions.
-    Args:
-        plan_id (int): The ID of the plan to delete.
-    Returns:
-        tuple[bool, str]: (True, "Plan deleted successfully.") if successful.
-                          (False, "Plan is in use and cannot be deleted.") if plan is in use.
-                          (False, "Error deleting plan or plan not found.") for other errors or if plan not found.
-    """
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # Check if any transaction references the plan
-        cursor.execute("SELECT 1 FROM transactions WHERE plan_id = ? LIMIT 1", (plan_id,))
-        if cursor.fetchone():
-            return False, "Plan is in use and cannot be deleted."
-
-        # If no transaction references the plan, delete it
-        cursor.execute("DELETE FROM plans WHERE plan_id = ?", (plan_id,))
-        conn.commit()
-
-        if cursor.rowcount > 0:
-            return True, "Plan deleted successfully."
-        else:
-            return False, "Error deleting plan or plan not found." # Could be plan_id didn't exist
-
-    except sqlite3.Error as e:
-        print(f"Database error while deleting plan {plan_id}: {e}", file=sys.stderr)
-        return False, f"Database error while deleting plan {plan_id}: {e}"
-    finally:
-        if conn and conn != _TEST_IN_MEMORY_CONNECTION:
-            conn.close()
+# Removed module-level get_db_connection and _TEST_IN_MEMORY_CONNECTION as connection is now managed externally.
+# The DB_FILE constant is kept as it might be used by the application to know the default DB path.
+# Helper functions like _update_member_join_date_if_earlier are now private methods.
+# All database operations now use self.conn.
+# Removed conn.close() from individual methods.
+# Print statements for errors/warnings replaced with logging.

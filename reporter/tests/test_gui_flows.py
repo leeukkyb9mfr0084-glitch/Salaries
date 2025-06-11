@@ -24,6 +24,41 @@ patch('customtkinter.CTk', MagicMock()).start()
 # This patch should now work as customtkinter.filedialog is a MagicMock
 patch('customtkinter.filedialog.asksaveasfilename', MagicMock()).start()
 
+# Mock flet and its components used by MembershipTab, before FletAppView or MembershipTab is imported
+sys.modules['flet'] = MagicMock()
+sys.modules['flet_core'] = MagicMock()
+sys.modules['flet_core.control'] = MagicMock()
+sys.modules['flet_core.event_handler'] = MagicMock()
+sys.modules['flet_core.page'] = MagicMock()
+
+import flet as ft # ft can now be used as a MagicMock namespace
+# Set up specific flet components that might be referenced as classes
+ft.Row = MagicMock()
+ft.Column = MagicMock()
+ft.Container = MagicMock()
+ft.Text = MagicMock()
+ft.TextField = MagicMock()
+ft.ElevatedButton = MagicMock()
+ft.Dropdown = MagicMock()
+ft.dropdown = MagicMock() # For ft.dropdown.Option
+ft.dropdown.Option = MagicMock()
+ft.DatePicker = MagicMock()
+ft.FilePicker = MagicMock()
+ft.Tabs = MagicMock()
+ft.Tab = MagicMock()
+# ft.DataTable will be patched specifically in the test using it
+ft.DataColumn = MagicMock()
+ft.DataRow = MagicMock()
+ft.DataCell = MagicMock()
+ft.AlertDialog = MagicMock()
+ft.TextButton = MagicMock()
+ft.FontWeight = MagicMock()
+ft.ScrollMode = MagicMock()
+ft.CrossAxisAlignment = MagicMock()
+ft.MainAxisAlignment = MagicMock()
+ft.colors = MagicMock()
+ft.alignment = MagicMock()
+
 
 # Add project root to sys.path to allow importing reporter modules
 # This assumes the test is run from the project root directory
@@ -512,3 +547,48 @@ def test_generate_finance_report_excel_action_flow(mock_asksaveasfilename, contr
     # More accurately, ensure no *new* file is created with an empty name if asksaveasfilename returns ""
     if os.path.exists(""): # Check if a file with empty name was created
         os.remove("")
+
+
+# --- Test for MembershipTab Initialization ---
+from reporter.components.membership_tab import MembershipTab # Import globally for @patch target
+from unittest.mock import MagicMock, patch # Import MagicMock and patch
+# GuiController is already imported
+
+@patch('reporter.components.membership_tab.ft.DataTable', new_callable=MagicMock)
+def test_membership_tab_initialization(mock_datatable_in_membership_tab, controller_instance):
+    """
+    Tests that MembershipTab initializes correctly, ensuring ft.DataTable (as used by MembershipTab) is called.
+    """
+    controller = controller_instance
+    mock_date_picker = MagicMock(spec=ft.DatePicker)
+
+    mock_datatable_in_membership_tab.reset_mock()
+
+    try:
+        # MembershipTab will be instantiated using the mock provided by @patch
+        tab = MembershipTab(controller=controller, date_picker_ref=mock_date_picker)
+
+        # Check call count on the mock that was specifically injected into MembershipTab's namespace
+        assert mock_datatable_in_membership_tab.call_count >= 1, "DataTable in MembershipTab was not called."
+        assert mock_datatable_in_membership_tab.call_count == 2, f"Expected DataTable in MembershipTab to be called 2 times, but was {mock_datatable_in_membership_tab.call_count}."
+
+    except Exception as e:
+        pytest.fail(f"MembershipTab instantiation or DataTable call check failed: {e}")
+
+    assert tab.members_table_flet is not None, "members_table_flet should be initialized."
+
+    # The call_count assertion already confirms that mocked_flet_datatable was used.
+    # tab.members_table_flet will be the instance returned by the first call.
+    # The problematic assertion `tab.members_table_flet == mock_datatable_in_membership_tab.mock_calls[0].return_value`
+    # is removed as mock_calls[0] doesn't directly provide the return value instance in a simple way.
+    # The critical checks are that the mock was called, and that on_select_changed is correctly assigned.
+
+    assert tab.members_table_flet.on_select_changed is not None, \
+        "on_select_changed should be set on members_table_flet."
+
+    assert tab.members_table_flet.on_select_changed == tab.on_member_select_changed, \
+        "members_table_flet.on_select_changed is not assigned to tab.on_member_select_changed."
+
+    # Check other initializations if they were problematic
+    assert tab.controller == controller
+    assert tab.date_picker_ref == mock_date_picker

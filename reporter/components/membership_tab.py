@@ -54,8 +54,9 @@ class MembershipTab(ft.Row):  # Changed base class
                 ft.DataColumn(ft.Text("ID")), ft.DataColumn(ft.Text("Name")),
                 ft.DataColumn(ft.Text("Phone")), ft.DataColumn(ft.Text("Join Date")),
             ],
-            rows=[], on_select_changed=self.on_member_select_changed
+            rows=[]
         )
+        self.members_table_flet.on_select_changed = self.on_member_select_changed
         self.member_specific_history_table_flet = ft.DataTable(
             columns=[
                 ft.DataColumn(ft.Text("Type")), ft.DataColumn(ft.Text("Plan/Details")),
@@ -87,7 +88,7 @@ class MembershipTab(ft.Row):  # Changed base class
                     self.save_membership_button, self.membership_form_feedback_text,
                 ], scroll=ft.ScrollMode.AUTO, spacing=10
             ),
-            expand=1, bgcolor=ft.colors.BLUE_GREY_200, padding=10, alignment=ft.alignment.top_center,
+            expand=1, bgcolor=ft.Colors.BLUE_GREY_200, padding=10, alignment=ft.alignment.top_center,
         )
 
         table_area_container = ft.Container(
@@ -101,7 +102,7 @@ class MembershipTab(ft.Row):  # Changed base class
                     self.delete_member_button_flet, self.member_actions_feedback_text,
                 ], scroll=ft.ScrollMode.AUTO, expand=True, spacing=10
             ),
-            expand=2, bgcolor=ft.colors.BLUE_GREY_300, padding=10, alignment=ft.alignment.top_center
+            expand=2, bgcolor=ft.Colors.BLUE_GREY_300, padding=10, alignment=ft.alignment.top_center
         )
 
         # Assign controls and properties to self (the Row)

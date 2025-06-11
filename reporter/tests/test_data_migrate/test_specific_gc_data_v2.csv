@@ -1,0 +1,9 @@
+Client Name,Phone,Plan Type,Plan Duration,Plan Start Date,Plan End Date,Payment Date,Amount,Payment Mode
+Alice,111,Monthly A,30,01/01/24,,01/01/24,100,Cash
+Bob,222,Quarterly B,90,15/03/2024,,15/03/24,250,Card
+Eve,333,2-Month E,60,01/02/2024,,01/02/24,150,Online
+SkipCharlie,444,Monthly C,30,,,01/02/24,100,Cash
+SkipDavid,555,Monthly D,0,01/02/24,,01/02/24,100,Cash
+SkipFrank,666,Monthly F,30,INVALID_DATE,,01/03/24,100,Cash
+SkipGrace,777,Monthly G,INVALID_DUR,01/03/24,,01/03/24,100,Cash
+Harry,888,Monthly H,1,01/04/24,,01/04/24,100,Cash
