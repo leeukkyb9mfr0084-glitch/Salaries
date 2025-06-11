@@ -1,4 +1,4 @@
-flet
-pandas
-openpyxl
-pytest
+flet==0.28.3
+pandas==2.3.0
+openpyxl==3.1.5
+pytest==8.4.0
