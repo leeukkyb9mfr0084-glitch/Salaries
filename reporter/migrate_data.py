@@ -74,111 +74,121 @@ def process_gc_data():
 
             for row_list in reader:
                 row = dict(zip(header, row_list))
-                try:
-                    name = row.get('Client Name', '').strip()
-                    phone = row.get('Phone', '').strip()
-                    payment_date_raw = row.get('Payment Date', '').strip()
-
-                    # New logic for start and end dates
-                    plan_start_date_str = row.get('Plan Start Date', '').strip()
-                    duration_days = 0
-                    duration_days_str = row.get('Plan Duration', '0').strip()
-                    if duration_days_str:
-                        duration_days = int(duration_days_str)
-                    else:
-                        duration_days = 0 # Or handle as error if empty is not allowed
-
-                    if not plan_start_date_str or duration_days <= 0:
-                        print(f"Skipping row due to missing Plan Start Date or invalid/zero Plan Duration (days): {row}")
-                        continue
-
-                    if not all([name, phone, payment_date_raw]):
-                        print(f"Skipping row due to missing essential data (Name, Phone, or Payment Date): {row}")
-                        continue
-                except Exception as e: # This is the new block
-                    print(f"Error during initial row parsing: {e} for row: {row}")
-                    continue
-
-                payment_date = parse_date(payment_date_raw)
-                if not payment_date: # Check essential payment_date
-                    print(f"Skipping row due to unparsable Payment Date: {row}")
-                    continue
-
-                try:
-                    # Convert plan_start_date_str to a datetime object:
-                    # Assuming plan_start_date_str is in '%d/%m/%y' format as per issue context
-                    # If it could be '%d/%m/%Y' as well, more robust parsing is needed here
-                    # For now, sticking to the issue's direct implication.
-                    start_dt = datetime.strptime(plan_start_date_str, '%d/%m/%y')
-                except ValueError:
-                    try:
-                        # Fallback to '%d/%m/%Y' if '%d/%m/%y' fails
-                        start_dt = datetime.strptime(plan_start_date_str, '%d/%m/%Y')
-                    except ValueError:
-                        print(f"Skipping row due to unparsable Plan Start Date '{plan_start_date_str}': {row}")
-                        continue
-
-                # Calculate end_dt
-                end_dt = start_dt + timedelta(days=duration_days)
-
-                # Format dates for DB
-                plan_start_date_db = start_dt.strftime('%Y-%m-%d')
-                plan_end_date_db = end_dt.strftime('%Y-%m-%d')
-
-                member_info = db_manager.get_member_by_phone(phone)
-                if member_info:
-                    member_id = member_info[0]
-                else:
-                    # Use plan_start_date_db for join date if creating a new member
-                    member_id = db_manager.add_member_with_join_date(name, phone, plan_start_date_db)
-                    if not member_id: # If creation failed, try fetching again
-                        member_info = db_manager.get_member_by_phone(phone)
-                        if member_info:
-                            member_id = member_info[0]
-                        else:
-                            print(f"Could not create or find member: {name} ({phone})")
-                            continue
-                    else:
-                        print(f"Created new member: {name} with join date {plan_start_date_db}")
-
-                plan_name = row.get('Plan Type', '').strip()
-                if not plan_name:
-                    print(f"Skipping row due to missing Plan Type: {row}")
-                    continue
-
-                # duration_days is now directly read from CSV and validated
-                plan_id = db_manager.get_or_create_plan_id(plan_name, duration_days)
-
-                if not plan_id:
-                    print(f"Could not create or find plan for {plan_name} with duration {duration_days} days for row: {row}")
-                    continue
-
-                amount = parse_amount(row.get('Amount','0'))
-
-                db_manager.add_transaction(
-                    transaction_type="Group Class",
-                    member_id=member_id,
-                    plan_id=plan_id,
-                    payment_date=payment_date, # This is YYYY-MM-DD from parse_date
-                    start_date=plan_start_date_db, # This is YYYY-MM-DD
-                    end_date=plan_end_date_db, # This is YYYY-MM-DD
-                    amount_paid=amount,
-                    payment_method=row.get('Payment Mode', '').strip(),
-                    sessions=None
-                )
-                # These except blocks are for the try starting at line 65
-            except (ValueError, KeyError) as e:
-                print(f"Skipping row due to data error ('{e}'): {row}")
-                continue # continue the for loop
-            except Exception as e:
-                print(f"An unexpected error occurred on row {row}: {e}")
-                continue # continue the for loop
+                _process_gc_row(row, db_manager)
     # This is the except for the outer try (line 52)
     except sqlite3.Error as e:
         print(f"Database error during GC data processing: {e}")
     finally:
         if conn:
             conn.close() # Close the single connection at the end
+
+
+def _process_gc_row(row, db_manager):
+    """Processes a single row from the Group Class CSV."""
+    try:
+        name = row.get('Client Name', '').strip()
+        phone = row.get('Phone', '').strip()
+        payment_date_raw = row.get('Payment Date', '').strip()
+
+        # New logic for start and end dates
+        plan_start_date_str = row.get('Plan Start Date', '').strip()
+        plan_duration_str = row.get('Plan Duration', '0').strip()
+        plan_duration = 0
+        if plan_duration_str:
+            plan_duration = int(plan_duration_str)
+        else:
+            plan_duration = 0 # Or handle as error if empty is not allowed
+
+        # This check uses the parsed integer plan_duration
+        if not plan_start_date_str or plan_duration <= 0:
+            print(f"Skipping row due to missing Plan Start Date or invalid/zero Plan Duration: {row}")
+            return
+
+        if not all([name, phone, payment_date_raw]):
+            print(f"Skipping row due to missing essential data (Name, Phone, or Payment Date): {row}")
+            return
+    except Exception as e: # This is the new block
+        print(f"Error during initial row parsing: {e} for row: {row}")
+        return
+
+    payment_date = parse_date(payment_date_raw)
+    if not payment_date: # Check essential payment_date
+        print(f"Skipping row due to unparsable Payment Date: {row}")
+        return
+
+    # This is the main try-catch for the rest of the processing for this row
+    try:
+        # Attempt to parse plan_start_date_str (with fallbacks)
+        try:
+            start_dt = datetime.strptime(plan_start_date_str, '%d/%m/%y')
+        except ValueError:
+            try:
+                # Fallback to '%d/%m/%Y' if '%d/%m/%y' fails
+                start_dt = datetime.strptime(plan_start_date_str, '%d/%m/%Y')
+            except ValueError:
+                print(f"Skipping row due to unparsable Plan Start Date '{plan_start_date_str}': {row}")
+                return # Important: return here if date is unparsable
+
+        # New end date logic using plan_duration
+        if plan_duration <= 24: # Assumes durations like 1, 3, 6, 12, 24 are months
+            end_dt = start_dt + relativedelta(months=plan_duration)
+            duration_for_db_days = plan_duration * 30 # For consistency in the 'plans' table
+        else: # Assumes longer durations are specified in days
+            end_dt = start_dt + timedelta(days=plan_duration)
+            duration_for_db_days = plan_duration
+
+        plan_end_date_db = end_dt.strftime('%Y-%m-%d')
+
+        # Format start date for DB (already available as start_dt)
+        plan_start_date_db = start_dt.strftime('%Y-%m-%d')
+
+        member_info = db_manager.get_member_by_phone(phone)
+        if member_info:
+            member_id = member_info[0]
+        else:
+            # Use plan_start_date_db for join date if creating a new member
+            member_id = db_manager.add_member_with_join_date(name, phone, plan_start_date_db)
+            if not member_id: # If creation failed, try fetching again
+                member_info = db_manager.get_member_by_phone(phone)
+                if member_info:
+                    member_id = member_info[0]
+                else:
+                    print(f"Could not create or find member: {name} ({phone})")
+                    return
+            else:
+                print(f"Created new member: {name} with join date {plan_start_date_db}")
+
+        plan_name = row.get('Plan Type', '').strip()
+        if not plan_name:
+            print(f"Skipping row due to missing Plan Type: {row}")
+            return
+
+        # Use duration_for_db_days for plan ID retrieval
+        plan_id = db_manager.get_or_create_plan_id(plan_name, duration_for_db_days)
+
+        if not plan_id:
+            print(f"Could not create or find plan for {plan_name} with duration {duration_for_db_days} days for row: {row}")
+            return
+
+        amount = parse_amount(row.get('Amount','0'))
+
+        db_manager.add_transaction(
+            transaction_type="Group Class",
+            member_id=member_id,
+            plan_id=plan_id,
+            payment_date=payment_date, # This is YYYY-MM-DD from parse_date
+            start_date=plan_start_date_db, # This is YYYY-MM-DD
+            end_date=plan_end_date_db, # This is YYYY-MM-DD
+            amount_paid=amount,
+            payment_method=row.get('Payment Mode', '').strip(),
+            sessions=None
+        )
+    except (ValueError, KeyError) as e: # Catches data-related errors from the main block
+        print(f"Skipping row due to data error ('{e}'): {row}")
+        return
+    except Exception as e: # Catches any other unexpected errors from the main block
+        print(f"An unexpected error occurred on row {row}: {e}")
+        return
 
 
 def process_pt_data():
@@ -198,6 +208,7 @@ def process_pt_data():
 
             for row_list in reader:
                 row = dict(zip(header, row_list))
+                # All indentation from here uses 4 spaces per level
                 try:
                     name = row.get('Client Name', '').strip()
                     phone = row.get('Phone', '').strip()
@@ -223,22 +234,23 @@ def process_pt_data():
                             continue
 
                     amount_paid = parse_amount(row.get('Amount Paid', '0'))
-                    sessions_count = int(row.get('Session Count', 0)) if row.get('Session Count') else 0
+                    sessions_str = row.get('Session Count', '0').strip()
+                    sessions_count = int(sessions_str) if sessions_str else 0
 
                     db_manager.add_transaction(
                         transaction_type="Personal Training",
                         member_id=member_id,
                         start_date=start_date,
-                    amount_paid=amount_paid,
-                    sessions=sessions_count,
-                    plan_id=None,
-                    payment_method=None, # PT bookings didn't have this before
-                    payment_date=start_date # Explicitly set payment_date as start_date for PT
-                )
-            except (ValueError, KeyError) as e:
-                print(f"Skipping PT row due to data error ('{e}'): {row}")
-            except Exception as e:
-                print(f"An unexpected error occurred on PT row {row}: {e}")
+                        amount_paid=amount_paid,
+                        sessions=sessions_count,
+                        plan_id=None,
+                        payment_method=None,
+                        payment_date=start_date
+                    )
+                except (ValueError, KeyError) as e:
+                    print(f"Skipping PT row due to data error ('{e}'): {row}")
+                except Exception as e:
+                    print(f"An unexpected error occurred on PT row {row}: {e}")
     except sqlite3.Error as e:
         print(f"Database error during PT data processing: {e}")
     finally:
