@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 import os
 import sys
+import sqlite3
 from unittest.mock import patch, MagicMock # Ensure MagicMock is imported
 import os # Ensure os is imported
 from datetime import date, timedelta, datetime
@@ -86,7 +87,7 @@ def controller_instance(monkeypatch):
     database.seed_initial_plans(db_mngr.conn)
 
 
-    controller = GuiController() # GuiController will use the patched DB_FILE
+    controller = GuiController(conn) # GuiController will now use the conn
 
     yield controller, db_mngr # Yield both controller and db_manager
 
@@ -150,7 +151,7 @@ def test_plan_management_flow(controller_instance):
 
     # Toggling plan status (deactivate)
     success_deactivate, message_deactivate, plans_deactivate = controller.toggle_plan_status_action(
-        plan_id=new_plan_id, current_status=True
+        plan_id=new_plan_id
     )
     assert success_deactivate is True
     assert message_deactivate == "Plan status updated successfully."
@@ -164,7 +165,7 @@ def test_plan_management_flow(controller_instance):
 
     # Toggling plan status again (activate)
     success_activate, message_activate, plans_activate = controller.toggle_plan_status_action(
-        plan_id=new_plan_id, current_status=False
+        plan_id=new_plan_id
     )
     assert success_activate is True
     assert message_activate == "Plan status updated successfully."

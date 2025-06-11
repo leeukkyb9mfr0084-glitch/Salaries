@@ -58,21 +58,12 @@ def book_closing_fixture(): # Renamed fixture
     # This is the DatabaseManager instance tests will use for direct calls
     db_mngr_instance = DatabaseManager(conn)
 
-    # Patch database_manager globals so GuiController picks up the same in-memory DB
-    original_db_file = database_manager.DB_FILE
-    original_test_conn = getattr(database_manager, '_TEST_IN_MEMORY_CONNECTION', None) # Use getattr for safety
-
-    database_manager.DB_FILE = ":memory:"
-    database_manager._TEST_IN_MEMORY_CONNECTION = conn
-
-    controller = GuiController() # Controller will now use the in-memory db via patched globals
+    controller = GuiController(conn) # Controller will now use the in-memory db via conn
 
     yield controller, db_mngr_instance # Tests can use both controller and direct db_manager
 
     # Teardown
     conn.close()
-    database_manager.DB_FILE = original_db_file # Restore original globals
-    database_manager._TEST_IN_MEMORY_CONNECTION = original_test_conn
 
 
 def test_close_and_reopen_flow(book_closing_fixture): # Use new fixture
