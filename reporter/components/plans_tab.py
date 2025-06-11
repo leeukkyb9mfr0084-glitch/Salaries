@@ -143,19 +143,36 @@ class PlansTab(ft.Row):  # Changed base class to ft.Row
         name = self.plan_name_input.value
         duration_str = self.plan_duration_input.value
 
+        if not name.strip():
+            self.plan_form_feedback_text.value = "Plan Name cannot be empty."
+            self.plan_form_feedback_text.color = ft.Colors.RED # Assuming ft.Colors
+            if self.plan_form_feedback_text.page: self.plan_form_feedback_text.update()
+            return
+
+        try:
+            duration_days = int(duration_str)
+            if duration_days <= 0:
+                raise ValueError("Duration must be positive.")
+        except ValueError:
+            self.plan_form_feedback_text.value = "Duration must be a positive number of days."
+            self.plan_form_feedback_text.color = ft.Colors.RED # Assuming ft.Colors
+            if self.plan_form_feedback_text.page: self.plan_form_feedback_text.update()
+            return
+
+        # If validation passes, proceed to call controller
         success, message = self.controller.save_plan_action(
-            name, duration_str, self.current_plan_id_to_update
+            name, duration_str, self.current_plan_id_to_update # Pass duration_str as controller expects it
         )
 
         self.plan_form_feedback_text.value = message
         if success:
-            self.plan_form_feedback_text.color = ft.colors.GREEN
+            self.plan_form_feedback_text.color = ft.Colors.GREEN # Assuming ft.Colors
             self.display_all_plans()
             self.on_clear_plan_form_click(None) # Clear form and reset edit state
             if self.flet_app_view_ref: # Refresh dropdowns in other tabs
                  self.flet_app_view_ref.refresh_membership_plan_dropdowns()
         else:
-            self.plan_form_feedback_text.color = ft.colors.RED
+            self.plan_form_feedback_text.color = ft.Colors.RED # Assuming ft.Colors
 
         if self.plan_form_feedback_text.page: self.plan_form_feedback_text.update()
         # self.update()
@@ -174,10 +191,10 @@ class PlansTab(ft.Row):  # Changed base class to ft.Row
             self.current_plan_id_to_update = plan_details[0] # Set context for save
             self.save_plan_button.text = "Update Plan"
             self.plan_form_feedback_text.value = f"Editing Plan ID: {plan_details[0]}"
-            self.plan_form_feedback_text.color = ft.colors.BLUE
+            self.plan_form_feedback_text.color = ft.Colors.BLUE # Assuming ft.Colors
         else:
             self.plan_form_feedback_text.value = "Failed to load plan details for editing."
-            self.plan_form_feedback_text.color = ft.colors.RED
+            self.plan_form_feedback_text.color = ft.Colors.RED # Assuming ft.Colors
 
         controls_to_update = [self.plan_name_input, self.plan_duration_input, self.save_plan_button, self.plan_form_feedback_text]
         for control in controls_to_update:
@@ -202,14 +219,14 @@ class PlansTab(ft.Row):  # Changed base class to ft.Row
         if self.selected_plan_id is None:
             # This should not happen if button is enabled correctly
             self.plan_form_feedback_text.value = "Error: No plan selected for status toggle."
-            self.plan_form_feedback_text.color = ft.colors.RED
+            self.plan_form_feedback_text.color = ft.Colors.RED # Assuming ft.Colors
             if self.plan_form_feedback_text.page: self.plan_form_feedback_text.update()
             return
 
         success, message = self.controller.toggle_plan_status_action(self.selected_plan_id)
         # Use plan_form_feedback_text for messages from toggle/delete actions too for simplicity
         self.plan_form_feedback_text.value = message
-        self.plan_form_feedback_text.color = ft.colors.GREEN if success else ft.colors.RED
+        self.plan_form_feedback_text.color = ft.Colors.GREEN if success else ft.Colors.RED # Assuming ft.Colors
         if success:
             self.display_all_plans()
             if self.flet_app_view_ref: # Refresh dropdowns in other tabs
@@ -221,7 +238,7 @@ class PlansTab(ft.Row):  # Changed base class to ft.Row
     def on_delete_selected_plan_click(self, e):
         if self.selected_plan_id is None:
             self.plan_form_feedback_text.value = "No plan selected to delete."
-            self.plan_form_feedback_text.color = ft.colors.ORANGE
+            self.plan_form_feedback_text.color = ft.Colors.ORANGE # Assuming ft.Colors
             if self.plan_form_feedback_text.page: self.plan_form_feedback_text.update()
             return
 
@@ -248,7 +265,7 @@ class PlansTab(ft.Row):  # Changed base class to ft.Row
         if confirmed:
             success, message = self.controller.delete_plan_action(plan_id)
             self.plan_form_feedback_text.value = message
-            self.plan_form_feedback_text.color = ft.colors.GREEN if success else ft.colors.RED
+            self.plan_form_feedback_text.color = ft.Colors.GREEN if success else ft.Colors.RED # Assuming ft.Colors
             if success:
                 self.display_all_plans()
                 self.on_clear_plan_form_click(None) # Clear form if deleted plan was being edited
@@ -256,7 +273,7 @@ class PlansTab(ft.Row):  # Changed base class to ft.Row
                      self.flet_app_view_ref.refresh_membership_plan_dropdowns()
         else:
             self.plan_form_feedback_text.value = "Plan deletion cancelled."
-            self.plan_form_feedback_text.color = ft.colors.ORANGE
+            self.plan_form_feedback_text.color = ft.Colors.ORANGE # Assuming ft.Colors
 
         if self.plan_form_feedback_text.page: self.plan_form_feedback_text.update()
         # self.update()

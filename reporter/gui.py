@@ -1,17 +1,22 @@
 import flet as ft
 from typing import Optional, List
 from datetime import datetime, date
-from reporter import database_manager # This might need adjustment if database_manager path changes
+import sqlite3 # Added for database connection
+from reporter.database_manager import DatabaseManager, DB_FILE as DATABASE_FILE # Import DatabaseManager and DB_FILE
 import pandas as pd
 from openpyxl.styles import Font, Border, Side, Alignment, PatternFill
 from openpyxl.utils import get_column_letter
 import calendar
+import logging # Added for logging
 
 # GuiController class remains unchanged for now
 # Ensure 'Optional' is imported if not already present at the top level
 # from typing import Optional, List # This is already present
 
 class GuiController:
+    def __init__(self, db_connection: sqlite3.Connection):
+        self.db_manager = DatabaseManager(db_connection)
+
     def save_member_action(self, name: str, phone: str) -> tuple[bool, str]:
         """Handles the save member action with input validation."""
         # --- Input Validation ---
@@ -26,7 +31,7 @@ class GuiController:
 
         try:
             # database_manager.add_member_to_db now returns -> Tuple[bool, str]
-            success, message = database_manager.add_member_to_db(name, phone)
+            success, message = self.db_manager.add_member_to_db(name, phone)
             # Use the returned success and message directly
             return success, message
         except Exception as e:
@@ -54,39 +59,39 @@ class GuiController:
             if plan_id_to_update:  # Editing existing plan
                 plan_id = int(plan_id_to_update)
                 # database_manager.update_plan now returns -> Tuple[bool, str]
-                db_success, db_message = database_manager.update_plan(plan_id, plan_name, duration_days)
+                db_success, db_message = self.db_manager.update_plan(plan_id, plan_name, duration_days)
                 success = db_success
                 message = db_message
             else:  # Adding new plan
                 # database_manager.add_plan now returns -> Tuple[bool, str, Optional[int]]
-                db_success, db_message, returned_plan_id = database_manager.add_plan(plan_name, duration_days)
+                db_success, db_message, returned_plan_id = self.db_manager.add_plan(plan_name, duration_days)
                 success = db_success
                 message = db_message
                 # returned_plan_id is available if needed, e.g., for logging or immediate use,
                 # but current logic just relies on success status.
 
             if success:
-                updated_plans = database_manager.get_all_plans_with_inactive()
+                updated_plans = self.db_manager.get_all_plans_with_inactive()
             return success, message, updated_plans
         except Exception as e:
             # Catch unexpected errors during the controller logic (e.g., int conversion if not validated)
             return False, f"An unexpected error occurred in save_plan_action: {str(e)}", None
 
-    def toggle_plan_status_action(self, plan_id: int, current_status: bool) -> tuple[bool, str, list | None]:
+    def toggle_plan_status_action(self, plan_id: int) -> tuple[bool, str, list | None]:
         """Activates or deactivates a plan."""
-        new_status = not current_status
-        # database_manager.set_plan_active_status now returns -> Tuple[bool, str]
-        db_success, db_message = database_manager.set_plan_active_status(plan_id, new_status)
-        success = db_success
-        message = db_message # Use the message from the database manager
-        updated_plans = None
+        plan_details = self.db_manager.get_plan_by_id(plan_id)
+        if not plan_details:
+            return False, "Error: Plan not found.", None
 
+        current_status = plan_details[3] # is_active is at index 3
+        new_status = not current_status
+
+        db_success, db_message = self.db_manager.set_plan_active_status(plan_id, new_status)
+        success = db_success
+        message = db_message
+        updated_plans = None
         if success:
-            # Optionally, you could still use a custom success message or augment db_message
-            # For now, directly using db_message. If a custom success message is preferred:
-            # message = f"Plan status changed to {'Active' if new_status else 'Inactive'}."
-            updated_plans = database_manager.get_all_plans_with_inactive()
-        # If not successful, db_message already contains the error.
+            updated_plans = self.db_manager.get_all_plans_with_inactive()
         return success, message, updated_plans
 
     def save_membership_action(self, membership_type: str, member_id: int | None,
@@ -130,7 +135,7 @@ class GuiController:
                 if not payment_method: # Ensure payment_method is not None or empty
                     return False, "Error: Payment Method cannot be empty for Group Class."
 
-                success, db_message = database_manager.add_transaction( # Expecting (bool, str)
+                success, db_message = self.db_manager.add_transaction( # Expecting (bool, str)
                     transaction_type="Group Class",
                     member_id=member_id,
                     plan_id=selected_plan_id,
@@ -154,7 +159,7 @@ class GuiController:
                 except ValueError:
                     return False, "Error: Number of Sessions must be an integer."
 
-                success, db_message = database_manager.add_transaction( # Expecting (bool, str)
+                success, db_message = self.db_manager.add_transaction( # Expecting (bool, str)
                     transaction_type="Personal Training",
                     member_id=member_id,
                     plan_id=None, # No plan_id for PT
@@ -180,7 +185,7 @@ class GuiController:
         import calendar # For month name in message
 
         try:
-            renewals = database_manager.get_pending_renewals(year, month)
+            renewals = self.db_manager.get_pending_renewals(year, month)
             month_name = calendar.month_name[month]
 
             if renewals:
@@ -206,7 +211,7 @@ class GuiController:
         month_name = calendar.month_name[current_month]
 
         try:
-            renewals = database_manager.get_pending_renewals(year=current_year, month=current_month)
+            renewals = self.db_manager.get_pending_renewals(year=current_year, month=current_month)
             if renewals:
                 return True, f"Found {len(renewals)} pending renewals for {month_name} {current_year}.", renewals
             else:
@@ -221,7 +226,7 @@ class GuiController:
         Applies styling to the report.
         """
         try:
-            transactions_data = database_manager.get_transactions_for_month(year, month)
+            transactions_data = self.db_manager.get_transactions_for_month(year, month)
             month_name_str = calendar.month_name[month]
 
             if not transactions_data:
@@ -309,7 +314,7 @@ class GuiController:
         """
         try:
             month_key = f"{year:04d}-{month:02d}"
-            status = database_manager.get_book_status(month_key)
+            status = self.db_manager.get_book_status(month_key)
             return f"Status for {month_key}: {status.upper()}"
         except Exception as e:
             return f"Error getting book status: {str(e)}"
@@ -320,7 +325,7 @@ class GuiController:
         """
         try:
             month_key = f"{year:04d}-{month:02d}"
-            success = database_manager.set_book_status(month_key, "closed")
+            success = self.db_manager.set_book_status(month_key, "closed")
             if success:
                 return True, f"Books for {month_key} closed successfully."
             else:
@@ -334,7 +339,7 @@ class GuiController:
         """
         try:
             month_key = f"{year:04d}-{month:02d}"
-            success = database_manager.set_book_status(month_key, "open")
+            success = self.db_manager.set_book_status(month_key, "open")
             if success:
                 return True, f"Books for {month_key} re-opened successfully."
             else:
@@ -344,11 +349,11 @@ class GuiController:
 
     def get_filtered_members(self, name_filter: Optional[str], phone_filter: Optional[str]) -> list:
         """Fetches members based on name and/or phone filters."""
-        return database_manager.get_all_members(name_filter=name_filter, phone_filter=phone_filter)
+        return self.db_manager.get_all_members(name_filter=name_filter, phone_filter=phone_filter)
 
     def get_filtered_transaction_history(self, name_filter: Optional[str], phone_filter: Optional[str], join_date_filter: Optional[str]) -> list:
         """Fetches transaction history based on name, phone, and/or join date filters."""
-        return database_manager.get_transactions_with_member_details(
+        return self.db_manager.get_transactions_with_member_details(
             name_filter=name_filter,
             phone_filter=phone_filter,
             join_date_filter=join_date_filter
@@ -356,28 +361,29 @@ class GuiController:
 
     def get_active_plans(self) -> list:
         """Fetches all active plans."""
-        return database_manager.get_all_plans()
+        return self.db_manager.get_all_plans()
 
     def get_all_plans_with_inactive(self) -> list:
         """Fetches all plans, including inactive ones."""
-        return database_manager.get_all_plans_with_inactive()
+        return self.db_manager.get_all_plans_with_inactive()
 
     def get_all_activity_for_member(self, member_id: int) -> list:
         """Fetches all activity records for a given member_id."""
-        return database_manager.get_all_activity_for_member(member_id)
+        return self.db_manager.get_all_activity_for_member(member_id)
 
     def deactivate_member_action(self, member_id: int) -> tuple[bool, str]:
         """Handles the action of deactivating a member."""
         try:
-            success, message = database_manager.deactivate_member(member_id)
+            success, message = self.db_manager.deactivate_member(member_id)
             return success, message
         except Exception as e:
+            logging.error(f"Unexpected error in deactivate_member_action: {e}", exc_info=True)
             return False, f"An unexpected error occurred while deactivating the member: {str(e)}"
 
     def delete_transaction_action(self, transaction_id: int) -> tuple[bool, str]:
         """Calls database_manager.delete_transaction and returns status."""
         try:
-            success, message = database_manager.delete_transaction(transaction_id)
+            success, message = self.db_manager.delete_transaction(transaction_id)
             if success: # delete_transaction returns (bool, str)
                 return True, "Transaction deleted successfully." # Standardize success message
             else:
@@ -388,18 +394,19 @@ class GuiController:
     def delete_plan_action(self, plan_id: int) -> tuple[bool, str]:
         """Calls database_manager.delete_plan and returns its result or an error status."""
         try:
-            success, message = database_manager.delete_plan(plan_id)
+            success, message = self.db_manager.delete_plan(plan_id)
             return success, message
         except Exception as e:
+            logging.error(f"Unexpected error in delete_plan_action: {e}", exc_info=True)
             return False, f"An error occurred while deleting the plan: {str(e)}"
 
     def get_plan_details(self, plan_id: int) -> Optional[tuple]:
         """Fetches plan details by plan_id."""
-        return database_manager.get_plan_by_id(plan_id)
+        return self.db_manager.get_plan_by_id(plan_id)
 
     def get_member_id_for_transaction(self, transaction_id: int) -> Optional[int]:
         """Fetches member_id for a given transaction_id."""
-        return database_manager.get_member_id_from_transaction(transaction_id)
+        return self.db_manager.get_member_id_from_transaction(transaction_id)
 
 
 from .components.membership_tab import MembershipTab
@@ -410,8 +417,32 @@ from .components.settings_tab import SettingsTab
 
 class FletAppView(ft.Container):
     def __init__(self):
-        super().__init__() # Calls ft.Container.__init__
-        self.controller = GuiController()
+        super().__init__()
+        try:
+            # Ensure DATABASE_FILE is defined (e.g., imported from database_manager or defined here)
+            self.db_connection = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
+            logging.info(f"Successfully connected to database: {DATABASE_FILE}")
+        except sqlite3.Error as e:
+            logging.critical(f"Failed to connect to database {DATABASE_FILE}: {e}", exc_info=True)
+            self.db_connection = None # Ensure db_connection is None if connection fails
+
+        if self.db_connection:
+            self.controller = GuiController(self.db_connection)
+        else:
+            # Fallback controller or raise an error to prevent app from running in a broken state
+            class ErrorController:
+                def __getattr__(self, name):
+                    def method(*args, **kwargs):
+                        logging.error(f"ErrorController: Database connection failed. Method {name} called.")
+                        if name.endswith("_action"): return False, "Database connection failed."
+                        if name.startswith("get_"): return []
+                        return None # Or raise an exception
+                    return method
+            self.controller = ErrorController()
+            # Optionally, display an error message in the UI itself
+            # For example, by replacing all tabs with a single error message Text control.
+            # This would require self.controls to be assigned here.
+
         # self.selected_member_id_flet: Optional[int] = None # Moved to MembershipTab
         # self.selected_start_date_flet: Optional[date] = None # Managed by MembershipTab locally
         # self.selected_payment_date_flet: Optional[date] = None # Managed by MembershipTab locally
@@ -566,6 +597,15 @@ class FletAppView(ft.Container):
                 self.page.overlay.append(self.file_picker)
             self.page.update()
 
+    # Add method to close DB connection
+    def close_db_connection(self):
+        if hasattr(self, 'db_connection') and self.db_connection:
+            try:
+                self.db_connection.close()
+                logging.info("Database connection closed successfully from FletAppView.")
+            except sqlite3.Error as e:
+                logging.error(f"Error closing database connection from FletAppView: {e}", exc_info=True)
+
 def main(page: ft.Page):
     page.title = "Kranos MMA Reporter"
     page.theme_mode = ft.ThemeMode.DARK
@@ -574,19 +614,17 @@ def main(page: ft.Page):
     app_view = FletAppView()
     page.add(app_view) # For a container, this adds it. Content was set in __init__. Overlay logic in did_mount.
 
-    # Overlay components are added in did_mount, so no need to do it here explicitly
-    # if app_view.date_picker not in page.overlay:
-    #     page.overlay.append(app_view.date_picker)
-    # if app_view.file_picker not in page.overlay: # Ensure FilePicker is added
-    #     page.overlay.append(app_view.file_picker)
-    # page.update() # page.add will trigger an update
+    # Setup window_destroy handler to close DB connection
+    if hasattr(app_view, 'close_db_connection'):
+        page.window_destroy = lambda _: app_view.close_db_connection()
+
+    page.update() # Ensure page updates, including window_destroy if applicable
 
 if __name__ == "__main__":
-    # Ensure database is initialized
-    # This might be better placed in a dedicated startup script or within FletAppView.__init__
-    # if it's safe to call multiple times or if FletAppView is guaranteed to be a singleton.
-    # For now, keeping it simple here.
-    database_manager.initialize_database() # Assuming this function exists and sets up the DB
+    # Removed database_manager.initialize_database()
+    # Database schema (CREATE TABLE etc.) should be managed by database.create_database(),
+    # typically called from main.py or a one-off setup.
+    # sqlite3.connect() in FletAppView will open an existing DB or create an empty one if not found.
     ft.app(target=main)
 
 # Note:

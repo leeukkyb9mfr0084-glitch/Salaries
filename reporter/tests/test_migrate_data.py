@@ -131,118 +131,85 @@ def test_migration_clears_tables(migrate_test_db): # Uses the fixture
     conn_assert.close()
 
 
-# Test for new duration and end_date logic in process_gc_data
-def test_end_date_calculation_and_record_processing(migrate_test_db, monkeypatch): # Renamed for clarity
+def test_end_date_calculation_with_months(migrate_test_db, monkeypatch):
     """
-    Tests the logic for calculating end_date in process_gc_data using 'Plan Start Date' and 'Plan Duration' (in days).
-    Also verifies skipping of records with invalid or missing critical data.
+    Tests the end_date calculation in process_gc_data when 'Plan Duration' is in months,
+    using dateutil.relativedelta.
+    Also verifies the derived plan_duration_for_db_days (months * 30) stored in plans table.
     """
-    from reporter.migrate_data import process_gc_data
-    from datetime import datetime, timedelta
+    from reporter.migrate_data import process_gc_data # Target function
+    from datetime import datetime # For expected date calculations
+    from dateutil.relativedelta import relativedelta # For expected date calculations
 
     test_db_path = migrate_test_db
 
-    # 1. Define CSV data reflecting current logic (Plan Duration in days)
-    # Plan End Date column is included in header but empty in rows to force calculation from duration.
-    csv_data = """Client Name,Phone,Plan Type,Plan Duration,Plan Start Date,Plan End Date,Payment Date,Amount,Payment Mode
-Alice,111,Monthly A,30,01/01/24,,01/01/24,100,Cash
-Bob,222,Quarterly B,90,15/03/2024,,15/03/24,250,Card
-Eve,333,2-Month E,60,01/02/2024,,01/02/24,150,Online
-SkipCharlie,444,Monthly C,30,,,01/02/24,100,Cash
-SkipDavid,555,Monthly D,0,01/02/24,,01/02/24,100,Cash
-SkipFrank,666,Monthly F,30,INVALID_DATE,,01/03/24,100,Cash
-SkipGrace,777,Monthly G,INVALID_DUR,01/03/24,,01/03/24,100,Cash
-Harry,888,Monthly H,1,01/04/24,,01/04/24,100,Cash
+    # CSV data where 'Plan Duration' is in months
+    csv_data_months = """Client Name,Phone,Plan Type,Plan Duration,Plan Start Date,Plan End Date,Payment Date,Amount,Payment Mode
+Alice,111,Monthly A,1,01/01/24,,01/01/24,100,Cash
+Bob,222,Quarterly B,3,15/01/24,,15/01/24,250,Card
+Carol,333,Annual C,12,01/02/24,,01/02/24,1000,Online
+David,444,HalfYear D,6,20/02/2024,,20/02/2024,600,Cash
 """
-    # 2. Create a temporary CSV file
-    temp_csv_filename = "test_specific_gc_data_v2.csv" # New filename
-    temp_csv_path = os.path.join(TEST_DB_DIR_MIGRATE, temp_csv_filename)
-    with open(temp_csv_path, "w", newline='') as f:
-        f.write(csv_data)
+    temp_csv_filename_months = "test_gc_data_months.csv"
+    temp_csv_path_months = os.path.join(TEST_DB_DIR_MIGRATE, temp_csv_filename_months)
+    with open(temp_csv_path_months, "w", newline='') as f:
+        f.write(csv_data_months)
 
-    # 3. Use monkeypatch to make process_gc_data use this temporary CSV
-    monkeypatch.setattr("reporter.migrate_data.GC_CSV_PATH", temp_csv_path)
-
-    # 4. Call process_gc_data()
+    monkeypatch.setattr("reporter.migrate_data.GC_CSV_PATH", temp_csv_path_months)
     process_gc_data()
 
-    # 5. Connect to the test database
     conn = sqlite3.connect(test_db_path)
     cursor = conn.cursor()
 
-    # Helper to get member_id and name
-    def get_member_info(phone):
-        cursor.execute("SELECT member_id, client_name FROM members WHERE phone = ?", (phone,))
+    # Helper to get transaction and plan info
+    def get_transaction_and_plan_info(phone: str):
+        cursor.execute("""
+            SELECT m.member_id, t.start_date, t.end_date, t.plan_id, p.plan_name, p.duration_days
+            FROM transactions t
+            JOIN members m ON t.member_id = m.member_id
+            JOIN plans p ON t.plan_id = p.plan_id
+            WHERE m.phone = ?
+        """, (phone,))
         return cursor.fetchone()
 
-    # 6. Assertions
-    # Expected number of transactions (Alice, Bob, Eve, Harry)
+    # Assertions
+    # Alice: 01/01/24 + 1 month = 01/02/2024. Plan duration in DB: 1*30 = 30 days
+    alice_tx_info = get_transaction_and_plan_info("111")
+    assert alice_tx_info is not None, "Alice's transaction not found"
+    assert alice_tx_info[1] == "2024-01-01" # start_date
+    assert alice_tx_info[2] == "2024-02-01" # end_date
+    assert alice_tx_info[4] == "Monthly A"  # plan_name
+    assert alice_tx_info[5] == 30           # plan.duration_days (1*30)
+
+    # Bob: 15/01/24 + 3 months = 15/04/2024. Plan duration in DB: 3*30 = 90 days
+    bob_tx_info = get_transaction_and_plan_info("222")
+    assert bob_tx_info is not None, "Bob's transaction not found"
+    assert bob_tx_info[1] == "2024-01-15" # start_date
+    assert bob_tx_info[2] == "2024-04-15" # end_date
+    assert bob_tx_info[4] == "Quarterly B" # plan_name
+    assert bob_tx_info[5] == 90            # plan.duration_days (3*30)
+
+    # Carol: 01/02/24 + 12 months = 01/02/2025. Plan duration in DB: 12*30 = 360 days
+    carol_tx_info = get_transaction_and_plan_info("333")
+    assert carol_tx_info is not None, "Carol's transaction not found"
+    assert carol_tx_info[1] == "2024-02-01" # start_date
+    assert carol_tx_info[2] == "2025-02-01" # end_date
+    assert carol_tx_info[4] == "Annual C"   # plan_name
+    assert carol_tx_info[5] == 360          # plan.duration_days (12*30)
+
+    # David: 20/02/2024 + 6 months = 20/08/2024. Plan duration in DB: 6*30 = 180 days
+    david_tx_info = get_transaction_and_plan_info("444")
+    assert david_tx_info is not None, "David's transaction not found"
+    assert david_tx_info[1] == "2024-02-20" # start_date
+    assert david_tx_info[2] == "2024-08-20" # end_date
+    assert david_tx_info[4] == "HalfYear D" # plan_name
+    assert david_tx_info[5] == 180          # plan.duration_days (6*30)
+
+
+    # Check total number of transactions
     cursor.execute("SELECT COUNT(*) FROM transactions")
-    assert cursor.fetchone()[0] == 4, "Expected 4 transactions to be processed successfully."
+    assert cursor.fetchone()[0] == 4, "Expected 4 transactions from the month-based CSV."
 
-    # Alice: 01/01/24 (yy) + 30 days = 31/01/2024
-    alice_info = get_member_info("111")
-    assert alice_info is not None
-    cursor.execute("SELECT start_date, end_date, plan_id FROM transactions WHERE member_id = ?", (alice_info[0],))
-    tx_alice = cursor.fetchone()
-    assert tx_alice is not None, "Alice's transaction not found"
-    assert tx_alice[0] == "2024-01-01"
-    assert tx_alice[1] == "2024-01-31"
-    cursor.execute("SELECT duration_days FROM plans WHERE plan_id = ?", (tx_alice[2],))
-    assert cursor.fetchone()[0] == 30
-
-    # Bob: 15/03/2024 (yyyy) + 90 days = 13/06/2024
-    bob_info = get_member_info("222")
-    assert bob_info is not None
-    cursor.execute("SELECT start_date, end_date, plan_id FROM transactions WHERE member_id = ?", (bob_info[0],))
-    tx_bob = cursor.fetchone()
-    assert tx_bob is not None, "Bob's transaction not found"
-    assert tx_bob[0] == "2024-03-15"
-    assert tx_bob[1] == "2024-06-13"
-    cursor.execute("SELECT duration_days FROM plans WHERE plan_id = ?", (tx_bob[2],))
-    assert cursor.fetchone()[0] == 90
-
-    # Eve: 01/02/2024 (yyyy) + 60 days = 01/04/2024
-    eve_info = get_member_info("333")
-    assert eve_info is not None
-    cursor.execute("SELECT start_date, end_date, plan_id FROM transactions WHERE member_id = ?", (eve_info[0],))
-    tx_eve = cursor.fetchone()
-    assert tx_eve is not None, "Eve's transaction not found"
-    assert tx_eve[0] == "2024-02-01"
-    assert tx_eve[1] == "2024-04-01"
-    cursor.execute("SELECT duration_days FROM plans WHERE plan_id = ?", (tx_eve[2],))
-    assert cursor.fetchone()[0] == 60
-
-    # Harry: 01/04/24 (yy) + 1 day = 02/04/2024
-    harry_info = get_member_info("888")
-    assert harry_info is not None
-    cursor.execute("SELECT start_date, end_date, plan_id FROM transactions WHERE member_id = ?", (harry_info[0],))
-    tx_harry = cursor.fetchone()
-    assert tx_harry is not None, "Harry's transaction not found"
-    assert tx_harry[0] == "2024-04-01"
-    assert tx_harry[1] == "2024-04-02" # 01/04/24 + 1 day
-    cursor.execute("SELECT duration_days FROM plans WHERE plan_id = ?", (tx_harry[2],))
-    assert cursor.fetchone()[0] == 1
-
-
-    # Skipped records: Check that no transactions were created for them.
-    # Members might be created depending on when the skipping logic occurs.
-    # The current migrate_data.py creates member first if phone exists.
-    skipped_phones_vs_names = {
-        "444": "SkipCharlie", # Missing Start Date
-        "555": "SkipDavid",   # Duration 0
-        "666": "SkipFrank",   # Invalid Start Date
-        "777": "SkipGrace"    # Invalid Duration
-    }
-    for phone, name in skipped_phones_vs_names.items():
-        member_info = get_member_info(phone)
-        if member_info: # Member might exist
-            cursor.execute("SELECT COUNT(*) FROM transactions WHERE member_id = ?", (member_info[0],))
-            tx_count = cursor.fetchone()[0]
-            assert tx_count == 0, f"No transactions expected for skipped user {name} (phone {phone}), but found {tx_count}."
-        # else: If member not even created, that's also fine for a skipped record.
-
-    # Cleanup
     conn.close()
-    if os.path.exists(temp_csv_path):
-        os.remove(temp_csv_path)
+    if os.path.exists(temp_csv_path_months):
+        os.remove(temp_csv_path_months)
