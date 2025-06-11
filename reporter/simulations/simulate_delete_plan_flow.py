@@ -19,8 +19,8 @@ SIM_DB_FILE = os.path.join(SIM_DB_DIR, "simulation_kranos_data_delete_plan.db")
 
 # original_db_file is captured in __main__ block
 
-def main_simulation_logic(): # Renamed main to main_simulation_logic
-    controller = GuiController()
+def main_simulation_logic(controller: GuiController): # controller is now passed in
+    # controller = GuiController() # Controller is now passed in
     print("\n--- Starting Simulation: Delete Plan Flow ---")
 
     # --- Scenario 1: Delete unused plan ---
@@ -31,7 +31,7 @@ def main_simulation_logic(): # Renamed main to main_simulation_logic
     # Add plan using database_manager directly for more control in simulation script
     # controller.save_plan_action might be interactive or return different things.
     # For simulation, direct db calls for setup are often clearer.
-    add_unused_success, _, unused_plan_id_val = database_manager.add_plan(plan_name_unused, 10, is_active=True)
+    add_unused_success, _, unused_plan_id_val = controller.db_manager.add_plan(plan_name_unused, 10, is_active=True)
     if not add_unused_success or unused_plan_id_val is None:
         print(f"FAILURE (S1): Could not add unused plan '{plan_name_unused}'.")
         # cleanup_simulation_environment() # cleanup is in finally block of main
@@ -45,7 +45,7 @@ def main_simulation_logic(): # Renamed main to main_simulation_logic
     print(f"Controller action message (S1): '{delete_message_s1}' (Success: {delete_success_s1})")
 
     print("\nStep 1.3: Verifying unused plan is deleted...")
-    plans_after_delete_s1 = database_manager.get_all_plans_with_inactive()
+    plans_after_delete_s1 = controller.db_manager.get_all_plans_with_inactive()
     plan_found_s1 = any(p[0] == unused_plan_id_val for p in plans_after_delete_s1)
     if not plan_found_s1 and delete_success_s1:
         print(f"SUCCESS (S1): Unused plan ID {unused_plan_id_val} correctly deleted.")
@@ -58,7 +58,7 @@ def main_simulation_logic(): # Renamed main to main_simulation_logic
     print("\n--- Scenario 2: Attempt to Delete Used Plan ---")
     plan_name_used = f"SimDelPlan_Used_{int(time.time())%1000}"
     print(f"Step 2.1: Adding a plan to be used: Name='{plan_name_used}', Duration=30 days")
-    add_used_success, _, used_plan_id_val = database_manager.add_plan(plan_name_used, 30, is_active=True)
+    add_used_success, _, used_plan_id_val = controller.db_manager.add_plan(plan_name_used, 30, is_active=True)
     if not add_used_success or used_plan_id_val is None:
         print(f"FAILURE (S2): Could not add plan '{plan_name_used}' for use.")
         # cleanup_simulation_environment()
@@ -69,12 +69,12 @@ def main_simulation_logic(): # Renamed main to main_simulation_logic
     member_name = f"PlanUser_{int(time.time())%1000}"
     member_phone = f"PU{int(time.time())%100000}"
     print(f"\nStep 2.2: Adding member '{member_name}' and transaction using plan ID {used_plan_id_val}")
-    add_member_success, _ = database_manager.add_member_to_db(member_name, member_phone)
+    add_member_success, _ = controller.db_manager.add_member_to_db(member_name, member_phone)
     if not add_member_success:
         print(f"FAILURE (S2): Could not add member '{member_name}'.")
         # cleanup_simulation_environment()
         return
-    member_id_s2 = database_manager.get_all_members(phone_filter=member_phone)[0][0]
+    member_id_s2 = controller.db_manager.get_all_members(phone_filter=member_phone)[0][0]
 
     tx_details_s2 = {
         'transaction_type': 'Group Class', 'member_id': member_id_s2, 'plan_id': used_plan_id_val,
@@ -82,7 +82,7 @@ def main_simulation_logic(): # Renamed main to main_simulation_logic
         'start_date': datetime.now().strftime('%Y-%m-%d'),
         'amount_paid': 70.00, 'payment_method': "SimUsedPlan"
     }
-    add_tx_success, _ = database_manager.add_transaction(**tx_details_s2)
+    add_tx_success, _ = controller.db_manager.add_transaction(**tx_details_s2)
     if not add_tx_success:
         print(f"FAILURE (S2): Could not add transaction using plan ID {used_plan_id_val}.")
         # cleanup_simulation_environment()
@@ -94,7 +94,7 @@ def main_simulation_logic(): # Renamed main to main_simulation_logic
     print(f"Controller action message (S2): '{delete_message_s2}' (Success: {delete_success_s2})")
 
     print("\nStep 2.4: Verifying used plan is NOT deleted...")
-    plans_after_delete_s2 = database_manager.get_all_plans_with_inactive()
+    plans_after_delete_s2 = controller.db_manager.get_all_plans_with_inactive()
     plan_found_s2 = any(p[0] == used_plan_id_val for p in plans_after_delete_s2)
 
     expected_message_s2 = "Plan is in use and cannot be deleted." # From database_manager
@@ -113,14 +113,15 @@ def main_simulation_logic(): # Renamed main to main_simulation_logic
     print("\n--- Simulation: Delete Plan Flow Complete ---")
     # Cleanup is handled in the __main__ block's finally clause
 
-def cleanup_simulation_environment():
+# def cleanup_simulation_environment(): # This function is not used and can be removed
     # This function is not strictly needed if the main script's finally block handles DB restoration.
     # However, if there were other resources, they could be cleaned here.
     # For now, it's a placeholder or can be removed if main's finally is sufficient.
-    pass
+    # pass
 
 if __name__ == "__main__":
     original_db_manager_db_file = database_manager.DB_FILE # Store original
+    db_connection = None # Initialize db_connection
 
     try:
         print(f"--- Main: Setting up simulation DB: {SIM_DB_FILE} ---")
@@ -139,7 +140,7 @@ if __name__ == "__main__":
         import sqlite3 # Ensure sqlite3 is imported for direct connection
         seed_conn = None
         try:
-            seed_conn = sqlite3.connect(SIM_DB_FILE)
+            seed_conn = sqlite3.connect(SIM_DB_FILE) # Connection for seeding
             seed_initial_plans(seed_conn)
             seed_conn.commit()
             print(f"Recreated and seeded simulation DB: {SIM_DB_FILE}")
@@ -150,8 +151,12 @@ if __name__ == "__main__":
             if seed_conn:
                 seed_conn.close()
 
+        # Create the main DB connection for the controller
+        db_connection = sqlite3.connect(SIM_DB_FILE, check_same_thread=False)
+        controller = GuiController(db_connection) # Pass connection to controller
+
         # Run the actual simulation logic
-        main_simulation_logic()
+        main_simulation_logic(controller) # Pass controller
 
     except Exception as e_outer:
         print(f"--- SIMULATION SCRIPT ERROR: {e_outer} ---", file=sys.stderr)
@@ -159,6 +164,9 @@ if __name__ == "__main__":
         traceback.print_exc()
         sys.exit(1) # Indicate script error
     finally:
+        if db_connection: # Close the main connection
+            db_connection.close()
+            print(f"Closed main DB connection to {SIM_DB_FILE}")
         # Restore the original DB_FILE in database_manager
         database_manager.DB_FILE = original_db_manager_db_file
         print(f"--- Main: Restored database_manager.DB_FILE to: {original_db_manager_db_file} ---")

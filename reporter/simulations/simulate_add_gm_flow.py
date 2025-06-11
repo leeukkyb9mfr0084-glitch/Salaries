@@ -21,7 +21,7 @@ SIM_DB_FILE = os.path.join(SIM_DB_DIR, "simulation_kranos_data_add_gm.db") # Spe
 
 # --- Helper to find member by name or add ---
 def get_member_by_name_or_add(controller: GuiController, name_to_find: str, new_phone_if_adding: str) -> int | None:
-    members = database_manager.get_all_members(name_filter=name_to_find)
+    members = controller.db_manager.get_all_members(name_filter=name_to_find)
     if members:
         for member in members:
             if member[1] == name_to_find:
@@ -32,7 +32,7 @@ def get_member_by_name_or_add(controller: GuiController, name_to_find: str, new_
     success, message = controller.save_member_action(name_to_find, new_phone_if_adding)
     print(f"Prerequisite controller (add member) message: {message}")
     if success:
-        members_after_add = database_manager.get_all_members(phone_filter=new_phone_if_adding)
+        members_after_add = controller.db_manager.get_all_members(phone_filter=new_phone_if_adding)
         if members_after_add:
             print(f"Prerequisite: Added and using new member '{name_to_find}' with ID {members_after_add[0][0]}.")
             return members_after_add[0][0]
@@ -41,7 +41,7 @@ def get_member_by_name_or_add(controller: GuiController, name_to_find: str, new_
 
 # --- Helper to find plan by name or add ---
 def get_plan_by_name_or_add(controller: GuiController, name_to_find: str, duration_if_adding: int) -> int | None:
-    all_plans = database_manager.get_all_plans_with_inactive()
+    all_plans = controller.db_manager.get_all_plans_with_inactive()
     for plan_data in all_plans: # Renamed plan to plan_data to avoid conflict with date object
         if plan_data[1] == name_to_find:
             plan_id = plan_data[0]
@@ -65,7 +65,7 @@ def get_plan_by_name_or_add(controller: GuiController, name_to_find: str, durati
     if add_success:
         # Query again to get the ID, as save_plan_action doesn't return it directly
         # This assumes the plan name is unique.
-        plans_after_add = database_manager.get_all_plans_with_inactive()
+        plans_after_add = controller.db_manager.get_all_plans_with_inactive()
         for new_plan_data in plans_after_add:
             if new_plan_data[1] == name_to_find:
                 print(f"Prerequisite: Added and using new plan '{name_to_find}' with ID {new_plan_data[0]}.")
@@ -88,7 +88,7 @@ def main_simulation_logic(controller: GuiController): # controller is now passed
         sys.exit(1)
 
     # Fetch plan duration for end_date calculation
-    current_plans = database_manager.get_all_plans_with_inactive()
+    current_plans = controller.db_manager.get_all_plans_with_inactive()
     plan_duration_days = 30 # default
     for p_data in current_plans: # Renamed p to p_data
         if p_data[0] == plan_id_for_test:
@@ -121,7 +121,7 @@ def main_simulation_logic(controller: GuiController): # controller is now passed
 
         if success:
             print("SUCCESS (Part 1): controller.save_membership_action returned success.")
-            activities = database_manager.get_all_activity_for_member(member_id_for_test)
+            activities = controller.db_manager.get_all_activity_for_member(member_id_for_test)
             verified = False
             if activities:
                 for activity in activities:
@@ -173,6 +173,7 @@ def main_simulation_logic(controller: GuiController): # controller is now passed
 
 if __name__ == '__main__':
     original_db_file_path = database_manager.DB_FILE # Save original DB path
+    db_connection = None # Initialize db_connection
 
     try:
         print(f"--- Main: Setting up simulation DB: {SIM_DB_FILE} ---")
@@ -182,27 +183,31 @@ if __name__ == '__main__':
             print(f"Deleted existing simulation DB: {SIM_DB_FILE}")
 
         # Patch DB_FILE for the duration of the simulation
+        # This might be redundant if GuiController and its components strictly use the passed connection.
+        # However, other direct calls to database_manager functions in this script might still rely on it.
         database_manager.DB_FILE = SIM_DB_FILE
 
         # Create the database tables
         create_database(db_name=SIM_DB_FILE)
 
-        # Reopen to seed plans
+        # Seed initial plans using a direct connection for seeding
         seed_conn = None
         try:
-            seed_conn = sqlite3.connect(SIM_DB_FILE)
+            seed_conn = sqlite3.connect(SIM_DB_FILE) # Connection for seeding
             seed_initial_plans(seed_conn)
             seed_conn.commit()
             print(f"Recreated and seeded simulation DB: {SIM_DB_FILE}")
         except Exception as e_seed:
             print(f"Error seeding simulation DB {SIM_DB_FILE}: {e_seed}", file=sys.stderr)
-            raise # Re-raise if seeding fails, as it's critical for this sim
+            raise
         finally:
             if seed_conn:
                 seed_conn.close()
 
-        # Instantiate controller after DB is patched and set up
-        controller = GuiController()
+        # Create the main DB connection for the controller
+        db_connection = sqlite3.connect(SIM_DB_FILE, check_same_thread=False)
+        controller = GuiController(db_connection) # Pass connection to controller
+
         # Run the actual simulation logic
         main_simulation_logic(controller)
 
@@ -212,6 +217,9 @@ if __name__ == '__main__':
         traceback.print_exc()
         sys.exit(1) # Indicate script error
     finally:
-        # Restore DB_FILE path
+        if db_connection: # Close the main connection
+            db_connection.close()
+            print(f"Closed main DB connection to {SIM_DB_FILE}")
+        # Restore DB_FILE path (if it was globally patched and still relevant)
         database_manager.DB_FILE = original_db_file_path
         print(f"--- Main: Restored DB_FILE to: {database_manager.DB_FILE} ---")

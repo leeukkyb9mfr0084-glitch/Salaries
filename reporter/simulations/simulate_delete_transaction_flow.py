@@ -29,25 +29,26 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
     member_name = f"TxDeleteUser_{int(time.time())%1000}"
     member_phone = f"TDEL{int(time.time())%100000}"
     print(f"\nStep 1: Adding test member: Name='{member_name}', Phone='{member_phone}'")
-    if not database_manager.add_member_to_db(member_name, member_phone):
+    add_success, _ = controller.db_manager.add_member_to_db(member_name, member_phone)
+    if not add_success: # Check the success flag from the tuple
         print(f"FAILURE: Could not add member '{member_name}'.")
-        cleanup_simulation_environment()
+        # cleanup_simulation_environment() # Cleanup is in __main__
         return
 
-    member_db_info = database_manager.get_all_members(phone_filter=member_phone)
+    member_db_info = controller.db_manager.get_all_members(phone_filter=member_phone)
     if not member_db_info:
         print(f"FAILURE: Member '{member_name}' not found after adding.")
-        cleanup_simulation_environment()
+        # cleanup_simulation_environment() # Cleanup is in __main__
         return
     member_id = member_db_info[0][0]
     print(f"Member added successfully. ID: {member_id}")
 
     # 2. Add two transactions for the member
     print(f"\nStep 2: Adding two transactions for member ID {member_id}")
-    plans = database_manager.get_all_plans()
+    plans = controller.db_manager.get_all_plans()
     if len(plans) < 1: # Need at least one plan
         print("FAILURE: Not enough plans found. Seeding might have failed.")
-        cleanup_simulation_environment()
+        # cleanup_simulation_environment() # Cleanup is in __main__
         return
     plan_id1 = plans[0][0]
 
@@ -65,23 +66,25 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
         'payment_method': "SimCardPT" # PT can have payment_method
     }
 
-    if not database_manager.add_transaction(**tx1_details):
+    tx1_success, _ = controller.db_manager.add_transaction(**tx1_details)
+    if not tx1_success:
         print(f"FAILURE: Could not add transaction 1 for member ID {member_id}.")
-        cleanup_simulation_environment()
+        # cleanup_simulation_environment() # Cleanup is in __main__
         return
     print("Transaction 1 added.")
 
-    if not database_manager.add_transaction(**tx2_details):
+    tx2_success, _ = controller.db_manager.add_transaction(**tx2_details)
+    if not tx2_success:
         print(f"FAILURE: Could not add transaction 2 for member ID {member_id}.")
-        cleanup_simulation_environment()
+        # cleanup_simulation_environment() # Cleanup is in __main__
         return
     print("Transaction 2 added.")
 
     # Get IDs of the transactions
-    activity = database_manager.get_all_activity_for_member(member_id)
+    activity = controller.db_manager.get_all_activity_for_member(member_id)
     if len(activity) != 2:
         print(f"FAILURE: Expected 2 transactions for member {member_id}, found {len(activity)}.")
-        cleanup_simulation_environment()
+        # cleanup_simulation_environment() # Cleanup is in __main__
         return
 
     # Assuming order by start_date DESC from get_all_activity_for_member
@@ -98,7 +101,7 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
 
     if not transaction_id_to_delete or not other_transaction_id:
         print(f"FAILURE: Could not reliably identify transaction IDs from activity list: {activity}")
-        cleanup_simulation_environment()
+        # cleanup_simulation_environment() # Cleanup is in __main__
         return
 
     print(f"Transaction to delete ID: {transaction_id_to_delete} (Amount: {tx1_details['amount_paid']})")
@@ -116,7 +119,7 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
 
     # 4. Verify the specific transaction is deleted
     print("\nStep 4: Verifying transaction deletion...")
-    activity_after_delete = database_manager.get_all_activity_for_member(member_id)
+    activity_after_delete = controller.db_manager.get_all_activity_for_member(member_id)
 
     deleted_found = False
     other_tx_found = False
@@ -145,7 +148,7 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
 
     # 6. Verify the member still exists
     print("\nStep 6: Verifying member still exists...")
-    member_after_delete = database_manager.get_all_members(phone_filter=member_phone)
+    member_after_delete = controller.db_manager.get_all_members(phone_filter=member_phone)
     if member_after_delete and member_after_delete[0][0] == member_id:
         print(f"SUCCESS: Member '{member_name}' (ID: {member_id}) still exists.")
     else:
@@ -156,6 +159,7 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
 
 if __name__ == "__main__":
     original_db_manager_db_file = database_manager.DB_FILE # Store original
+    db_connection = None # Initialize db_connection
 
     try:
         print(f"--- Main: Setting up simulation DB: {SIM_DB_FILE} ---")
@@ -171,7 +175,7 @@ if __name__ == "__main__":
         import sqlite3 # Ensure sqlite3 is imported
         seed_conn = None
         try:
-            seed_conn = sqlite3.connect(SIM_DB_FILE)
+            seed_conn = sqlite3.connect(SIM_DB_FILE) # Connection for seeding
             seed_initial_plans(seed_conn)
             seed_conn.commit()
             print(f"Recreated and seeded simulation DB: {SIM_DB_FILE}")
@@ -182,8 +186,11 @@ if __name__ == "__main__":
             if seed_conn:
                 seed_conn.close()
 
-        controller = GuiController()
-        main_simulation_logic(controller)
+        # Create the main DB connection for the controller
+        db_connection = sqlite3.connect(SIM_DB_FILE, check_same_thread=False)
+        controller = GuiController(db_connection) # Pass connection to controller
+
+        main_simulation_logic(controller) # Pass controller
 
     except Exception as e_outer:
         print(f"--- SIMULATION SCRIPT ERROR: {e_outer} ---", file=sys.stderr)
@@ -191,5 +198,8 @@ if __name__ == "__main__":
         traceback.print_exc()
         sys.exit(1)
     finally:
-        database_manager.DB_FILE = original_db_manager_db_file
+        if db_connection: # Close the main connection
+            db_connection.close()
+            print(f"Closed main DB connection to {SIM_DB_FILE}")
+        database_manager.DB_FILE = original_db_manager_db_file # Restore global if it was used
         print(f"--- Main: Restored database_manager.DB_FILE to: {original_db_manager_db_file} ---")

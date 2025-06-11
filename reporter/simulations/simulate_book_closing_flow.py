@@ -8,6 +8,7 @@ from datetime import datetime
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
+import sqlite3 # Import sqlite3
 from reporter.database import create_database
 from reporter.gui import GuiController
 from reporter import database_manager # Import the module itself for monkeypatching
@@ -43,9 +44,9 @@ def setup_simulation_environment():
 
     create_database(SIM_DB_FILE) # This should create tables
     # Seed initial plans as the simulation might depend on them
-    temp_sim_conn = database_manager.get_db_connection()
+    temp_sim_conn = sqlite3.connect(SIM_DB_FILE) # Create connection directly
     try:
-        from reporter.database import seed_initial_plans
+        from reporter.database import seed_initial_plans # Keep this import for now
         seed_initial_plans(temp_sim_conn)
         temp_sim_conn.commit() # Ensure commit if seed_initial_plans doesn't
         print(f"Seeded initial plans into {SIM_DB_FILE}")
@@ -58,28 +59,28 @@ def setup_simulation_environment():
     print(f"Simulation database created, initialized, and seeded at {SIM_DB_FILE}")
     print(f"Database manager is now using: {database_manager.DB_FILE}")
 
-def run_simulation():
+def run_simulation(controller: GuiController): # Accept controller as argument
     """Runs the book closing UI flow simulation."""
     print(f"\n--- Starting Book Closing Flow Simulation ---")
-    controller = GuiController()
+    # controller = GuiController() # Controller is now passed in
 
     print(f"\nStep 1: Adding test member and fetching plan...")
     success, msg = controller.save_member_action(TEST_MEMBER_NAME, TEST_MEMBER_PHONE)
     assert success, f"Failed to add test member '{TEST_MEMBER_NAME}': {msg}"
     print(f"Test member '{TEST_MEMBER_NAME}' added: {msg}")
 
-    member_details = database_manager.get_member_by_phone(TEST_MEMBER_PHONE)
+    member_details = controller.db_manager.get_member_by_phone(TEST_MEMBER_PHONE)
     assert member_details, f"Could not retrieve test member '{TEST_MEMBER_PHONE}' after adding."
     member_id, _ = member_details
     print(f"Test member ID: {member_id}")
 
-    active_plans = controller.get_active_plans()
+    active_plans = controller.get_active_plans() # This uses controller's db_manager implicitly
     assert active_plans, "No active plans found. Cannot proceed with simulation."
     plan_id = active_plans[0][0]
     print(f"Using plan ID: {plan_id}")
 
     print(f"\nStep 2: Adding initial transaction to month {TEST_MONTH_KEY}...")
-    db_setup_success = database_manager.set_book_status(TEST_MONTH_KEY, "open")
+    db_setup_success = controller.db_manager.set_book_status(TEST_MONTH_KEY, "open")
     assert db_setup_success, f"Failed to ensure book status is 'open' for {TEST_MONTH_KEY} at setup."
     print(f"Ensured book status for {TEST_MONTH_KEY} is 'open' before first transaction.")
 
@@ -152,9 +153,15 @@ def cleanup_simulation_environment():
         print(f"Restored database_manager.DB_FILE to: {database_manager.DB_FILE}")
 
 if __name__ == "__main__":
+    db_connection = None # Initialize db_connection
     try:
         setup_simulation_environment()
-        run_simulation()
+
+        # Create the main DB connection for the controller
+        db_connection = sqlite3.connect(SIM_DB_FILE, check_same_thread=False)
+        controller = GuiController(db_connection) # Pass connection to controller
+
+        run_simulation(controller) # Pass controller
     except AssertionError as e:
         print(f"\n--- SIMULATION FAILED: {e} ---", file=sys.stderr)
         sys.exit(1)
@@ -164,5 +171,8 @@ if __name__ == "__main__":
         traceback.print_exc()
         sys.exit(2)
     finally:
+        if db_connection: # Close the main connection
+            db_connection.close()
+            print(f"Closed main DB connection to {SIM_DB_FILE}")
         cleanup_simulation_environment()
         print(f"--- Simulation script finished ---")

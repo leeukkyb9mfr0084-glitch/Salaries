@@ -31,38 +31,40 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
     print(f"\nStep 1: Adding test member: Name='{member_name}', Phone='{member_phone}'")
     # Use database_manager directly as per test requirements
     # Note: controller.save_member_action would also work but this matches spec
-    success_add = database_manager.add_member_to_db(member_name, member_phone)
+    success_add, _ = controller.db_manager.add_member_to_db(member_name, member_phone) # Use controller.db_manager
     if not success_add:
-        print(f"FAILURE: Could not add member '{member_name}' via database_manager.")
-        cleanup_simulation_environment()
+        print(f"FAILURE: Could not add member '{member_name}' via controller.db_manager.")
+        # cleanup_simulation_environment() # Cleanup is in __main__
         return
 
-    members_before = database_manager.get_all_members(phone_filter=member_phone)
+    members_before = controller.db_manager.get_all_members(phone_filter=member_phone) # Use controller.db_manager
     if not members_before or members_before[0][1] != member_name:
         print(f"FAILURE: Member '{member_name}' not found in DB after add operation or details mismatch.")
-        cleanup_simulation_environment()
+        # cleanup_simulation_environment() # Cleanup is in __main__
         return
     member_id_to_delete = members_before[0][0]
     print(f"Member added successfully. ID: {member_id_to_delete}")
 
     # 2. Add a transaction for this member
     print(f"\nStep 2: Adding a transaction for member ID {member_id_to_delete}")
-    plans = database_manager.get_all_plans()
+    plans = controller.db_manager.get_all_plans() # Use controller.db_manager
     if not plans:
         print("FAILURE: No plans found in the database to create a transaction. Seeding might have failed.")
         # Attempt to seed again if needed, or add a default plan
-        conn = database_manager.get_db_connection()
-        seed_initial_plans(conn) # Try seeding again
-        conn.commit()
-        conn.close()
-        plans = database_manager.get_all_plans()
+        # Using controller.db_manager.conn directly for re-seeding if necessary.
+        # This is a bit of a direct access but limited to this recovery scenario.
+        print("Attempting to re-seed plans directly via controller's connection...")
+        seed_initial_plans(controller.db_manager.conn) # Try seeding again
+        controller.db_manager.conn.commit()
+        # No close here as it's the controller's main connection.
+        plans = controller.db_manager.get_all_plans() # Use controller.db_manager
         if not plans:
              print("CRITICAL FAILURE: Still no plans after re-seed attempt. Exiting.")
-             cleanup_simulation_environment()
+             # cleanup_simulation_environment() # Cleanup is in __main__
              return
     plan_id_for_tx = plans[0][0] # Use the first available plan
 
-    tx_success = database_manager.add_transaction(
+    tx_success, _ = controller.db_manager.add_transaction( # Use controller.db_manager
         transaction_type='Group Class',
         member_id=member_id_to_delete,
         plan_id=plan_id_for_tx,
@@ -73,20 +75,20 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
     )
     if not tx_success:
         print(f"FAILURE: Could not add transaction for member ID {member_id_to_delete}.")
-        cleanup_simulation_environment()
+        # cleanup_simulation_environment() # Cleanup is in __main__
         return
     print(f"Transaction added for member ID {member_id_to_delete}.")
 
     # Verify transaction was added
-    conn_setup_check = database_manager.get_db_connection()
-    cursor_setup_check = conn_setup_check.cursor()
+    # Using controller's connection for this check
+    cursor_setup_check = controller.db_manager.conn.cursor()
     cursor_setup_check.execute("SELECT COUNT(*) FROM transactions WHERE member_id = ?", (member_id_to_delete,))
     transactions_count_before = cursor_setup_check.fetchone()[0]
-    conn_setup_check.close()
+    # No close for controller.db_manager.conn here
 
     if transactions_count_before == 0:
         print(f"FAILURE: Transaction for member ID {member_id_to_delete} not found before deactivation attempt.")
-        # cleanup_simulation_environment() # Handled by finally in __main__
+        # cleanup_simulation_environment() # Cleanup is in __main__
         return
     print(f"Found {transactions_count_before} transaction(s) for the member before deactivation.")
 
@@ -107,7 +109,7 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
 
     # 4. Verify member is deactivated
     print("\nStep 4: Verifying member deactivation...")
-    members_after = database_manager.get_all_members(phone_filter=member_phone)
+    members_after = controller.db_manager.get_all_members(phone_filter=member_phone) # Use controller.db_manager
     if not members_after:
         print(f"SUCCESS: Member '{member_name}' (ID: {member_id_to_delete}) correctly marked as inactive (not found by get_all_members).")
     else:
@@ -121,11 +123,11 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
     # If the member is deleted, this function might not return their transactions anyway
     # because the join condition on member_id would fail.
     # A more direct check on the transactions table is better.
-    conn_check = database_manager.get_db_connection()
-    cursor_check = conn_check.cursor()
+    # Using controller's connection for this check
+    cursor_check = controller.db_manager.conn.cursor()
     cursor_check.execute("SELECT * FROM transactions WHERE member_id = ?", (member_id_to_delete,))
     transactions_after = cursor_check.fetchall()
-    conn_check.close()
+    # No close for controller.db_manager.conn here
 
     if len(transactions_after) == transactions_count_before:
         print(f"SUCCESS: Transactions for member ID {member_id_to_delete} correctly persisted after deactivation ({len(transactions_after)} found).")
@@ -137,6 +139,7 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
 
 if __name__ == "__main__":
     original_db_manager_db_file = database_manager.DB_FILE # Store original
+    db_connection = None # Initialize db_connection
 
     try:
         print(f"--- Main: Setting up simulation DB: {SIM_DB_FILE} ---")
@@ -152,7 +155,7 @@ if __name__ == "__main__":
         import sqlite3 # Ensure sqlite3 is imported
         seed_conn = None
         try:
-            seed_conn = sqlite3.connect(SIM_DB_FILE)
+            seed_conn = sqlite3.connect(SIM_DB_FILE) # Connection for seeding
             seed_initial_plans(seed_conn)
             seed_conn.commit()
             print(f"Recreated and seeded simulation DB: {SIM_DB_FILE}")
@@ -163,8 +166,11 @@ if __name__ == "__main__":
             if seed_conn:
                 seed_conn.close()
 
-        controller = GuiController()
-        main_simulation_logic(controller)
+        # Create the main DB connection for the controller
+        db_connection = sqlite3.connect(SIM_DB_FILE, check_same_thread=False)
+        controller = GuiController(db_connection) # Pass connection to controller
+
+        main_simulation_logic(controller) # Pass controller
 
     except Exception as e_outer:
         print(f"--- SIMULATION SCRIPT ERROR: {e_outer} ---", file=sys.stderr)
@@ -172,5 +178,8 @@ if __name__ == "__main__":
         traceback.print_exc()
         sys.exit(1)
     finally:
-        database_manager.DB_FILE = original_db_manager_db_file
+        if db_connection: # Close the main connection
+            db_connection.close()
+            print(f"Closed main DB connection to {SIM_DB_FILE}")
+        database_manager.DB_FILE = original_db_manager_db_file # Restore global if it was used
         print(f"--- Main: Restored database_manager.DB_FILE to: {original_db_manager_db_file} ---")

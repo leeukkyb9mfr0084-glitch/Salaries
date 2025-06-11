@@ -18,3 +18,4 @@ htmlcov/
 .coverage
 *.sqlite3
 *.db-journal # SQLite journal files
+reporter/simulations/sim_data/

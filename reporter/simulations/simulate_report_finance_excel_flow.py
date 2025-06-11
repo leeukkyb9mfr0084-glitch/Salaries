@@ -52,24 +52,24 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
     # Member 1
     member_name1 = f"SimFinUser1_{int(time.time())%1000}"
     member_phone1 = f"SFU1{int(time.time())%100000}"
-    database_manager.add_member_to_db(member_name1, member_phone1)
-    m1_id = database_manager.get_all_members(phone_filter=member_phone1)[0][0]
+    controller.db_manager.add_member_to_db(member_name1, member_phone1)
+    m1_id = controller.db_manager.get_all_members(phone_filter=member_phone1)[0][0]
 
     # Member 2
     member_name2 = f"SimFinUser2_{int(time.time())%1000}"
     member_phone2 = f"SFU2{int(time.time())%100000}"
-    database_manager.add_member_to_db(member_name2, member_phone2)
-    m2_id = database_manager.get_all_members(phone_filter=member_phone2)[0][0]
+    controller.db_manager.add_member_to_db(member_name2, member_phone2)
+    m2_id = controller.db_manager.get_all_members(phone_filter=member_phone2)[0][0]
 
-    plans = database_manager.get_all_plans()
+    plans = controller.db_manager.get_all_plans()
     if not plans:
         print("CRITICAL FAILURE: No plans available. Exiting.")
-        cleanup_simulation_environment()
+        # cleanup_simulation_environment() # Cleanup is in __main__
         return
     plan_id = plans[0][0]
 
     # Transaction 1 (in target month)
-    database_manager.add_transaction(
+    controller.db_manager.add_transaction(
         transaction_type='Group Class',
         member_id=m1_id,
         plan_id=plan_id,
@@ -79,7 +79,7 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
         payment_method="SimFinance_Card"
     )
     # Transaction 2 (in target month - PT)
-    database_manager.add_transaction(
+    controller.db_manager.add_transaction(
         transaction_type='Personal Training',
         member_id=m2_id,
         start_date=target_payment_date,
@@ -89,7 +89,7 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
         payment_method="SimFinance_CashPT"
     )
     # Transaction 3 (different month - should not be in this report)
-    database_manager.add_transaction(
+    controller.db_manager.add_transaction(
         transaction_type='Group Class',
         member_id=m1_id,
         plan_id=plan_id,
@@ -153,6 +153,7 @@ def main_simulation_logic(controller: GuiController): # Renamed and controller p
 
 if __name__ == "__main__":
     original_db_manager_db_file = database_manager.DB_FILE # Store original
+    db_connection = None # Initialize db_connection
 
     try:
         print(f"--- Main: Setting up simulation DB: {SIM_DB_FILE} ---")
@@ -171,7 +172,7 @@ if __name__ == "__main__":
         import sqlite3 # Ensure sqlite3 is imported
         seed_conn = None
         try:
-            seed_conn = sqlite3.connect(SIM_DB_FILE)
+            seed_conn = sqlite3.connect(SIM_DB_FILE) # Connection for seeding
             # Clear any previous sim-specific data if necessary, then seed
             cursor = seed_conn.cursor()
             cursor.execute("DELETE FROM transactions WHERE payment_method LIKE 'SimFinance_%'")
@@ -188,8 +189,11 @@ if __name__ == "__main__":
             if seed_conn:
                 seed_conn.close()
 
-        controller = GuiController()
-        main_simulation_logic(controller)
+        # Create the main DB connection for the controller
+        db_connection = sqlite3.connect(SIM_DB_FILE, check_same_thread=False)
+        controller = GuiController(db_connection) # Pass connection to controller
+
+        main_simulation_logic(controller) # Pass controller
 
     except Exception as e_outer:
         print(f"--- SIMULATION SCRIPT ERROR: {e_outer} ---", file=sys.stderr)
@@ -197,5 +201,8 @@ if __name__ == "__main__":
         traceback.print_exc()
         sys.exit(1)
     finally:
-        database_manager.DB_FILE = original_db_manager_db_file
+        if db_connection: # Close the main connection
+            db_connection.close()
+            print(f"Closed main DB connection to {SIM_DB_FILE}")
+        database_manager.DB_FILE = original_db_manager_db_file # Restore global if it was used
         print(f"--- Main: Restored database_manager.DB_FILE to: {original_db_manager_db_file} ---")
