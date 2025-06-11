@@ -93,7 +93,10 @@ def process_gc_data():
                         continue
 
                     if not all([name, phone, payment_date_raw]):
-                    print(f"Skipping row due to missing essential data (Name, Phone, or Payment Date): {row}")
+                        print(f"Skipping row due to missing essential data (Name, Phone, or Payment Date): {row}")
+                        continue
+                except Exception as e: # This is the new block
+                    print(f"Error during initial row parsing: {e} for row: {row}")
                     continue
 
                 payment_date = parse_date(payment_date_raw)
@@ -163,10 +166,14 @@ def process_gc_data():
                     payment_method=row.get('Payment Mode', '').strip(),
                     sessions=None
                 )
+                # These except blocks are for the try starting at line 65
             except (ValueError, KeyError) as e:
                 print(f"Skipping row due to data error ('{e}'): {row}")
+                continue # continue the for loop
             except Exception as e:
                 print(f"An unexpected error occurred on row {row}: {e}")
+                continue # continue the for loop
+    # This is the except for the outer try (line 52)
     except sqlite3.Error as e:
         print(f"Database error during GC data processing: {e}")
     finally:

@@ -68,7 +68,7 @@ class SettingsTab(ft.Column):  # Changed base class to ft.Column
     def _handle_check_book_status_click(self, e):
         if not self.book_closing_year_input.value or not self.book_closing_month_dropdown.value:
             self.book_status_display_label.value = "Error: Year and Month must be selected."
-            self.book_status_display_label.color = ft.colors.RED
+            self.book_status_display_label.color = ft.Colors.RED
             if self.page: self.book_status_display_label.update()
             return
         try:
@@ -76,7 +76,7 @@ class SettingsTab(ft.Column):  # Changed base class to ft.Column
             month_int = int(self.book_closing_month_dropdown.value)
         except ValueError:
             self.book_status_display_label.value = "Error: Invalid year or month format."
-            self.book_status_display_label.color = ft.colors.RED
+            self.book_status_display_label.color = ft.Colors.RED
             if self.page: self.book_status_display_label.update()
             return
 
@@ -84,18 +84,18 @@ class SettingsTab(ft.Column):  # Changed base class to ft.Column
         self.book_status_display_label.value = status_message
 
         if "OPEN" in status_message.upper():
-            self.book_status_display_label.color = ft.colors.GREEN
+            self.book_status_display_label.color = ft.Colors.GREEN
         elif "CLOSED" in status_message.upper():
-            self.book_status_display_label.color = ft.colors.ORANGE
+            self.book_status_display_label.color = ft.Colors.ORANGE
         else:
-            self.book_status_display_label.color = ft.colors.BLUE
+            self.book_status_display_label.color = ft.Colors.BLUE
         if self.page: self.book_status_display_label.update()
 
     def _handle_close_books_action_click(self, e):
         if not self.book_closing_year_input.value or not self.book_closing_month_dropdown.value:
             self.book_status_display_label.value = "Error: Year and Month must be selected for closing."
             # ... (rest of the error handling as before)
-            self.book_status_display_label.color = ft.colors.RED
+            self.book_status_display_label.color = ft.Colors.RED
             if self.page: self.book_status_display_label.update()
             return
         try:
@@ -105,7 +105,7 @@ class SettingsTab(ft.Column):  # Changed base class to ft.Column
             month_key = f"{year_int:04d}-{month_int:02d}"
         except (ValueError, IndexError): # Combined exception handling
             self.book_status_display_label.value = "Error: Invalid year or month."
-            self.book_status_display_label.color = ft.colors.RED
+            self.book_status_display_label.color = ft.Colors.RED
             if self.page: self.book_status_display_label.update()
             return
 
@@ -132,12 +132,12 @@ class SettingsTab(ft.Column):  # Changed base class to ft.Column
         if confirmed:
             success, message = self.controller.close_books_action(year_int, month_int)
             self.book_status_display_label.value = message
-            self.book_status_display_label.color = ft.colors.GREEN if success else ft.colors.RED
+            self.book_status_display_label.color = ft.Colors.GREEN if success else ft.Colors.RED
             if success:
                 self._handle_check_book_status_click(None) # Refresh status
         else:
             self.book_status_display_label.value = "Book closing cancelled by user."
-            self.book_status_display_label.color = ft.colors.ORANGE
+            self.book_status_display_label.color = ft.Colors.ORANGE
 
         if self.page:
             self.book_status_display_label.update()
@@ -147,7 +147,7 @@ class SettingsTab(ft.Column):  # Changed base class to ft.Column
         if not self.book_closing_year_input.value or not self.book_closing_month_dropdown.value:
             self.book_status_display_label.value = "Error: Year and Month must be selected for re-opening."
             # ... (rest of the error handling as before)
-            self.book_status_display_label.color = ft.colors.RED
+            self.book_status_display_label.color = ft.Colors.RED
             if self.page: self.book_status_display_label.update()
             return
         try:
@@ -157,7 +157,7 @@ class SettingsTab(ft.Column):  # Changed base class to ft.Column
             month_key = f"{year_int:04d}-{month_int:02d}"
         except (ValueError, IndexError):
             self.book_status_display_label.value = "Error: Invalid year or month."
-            self.book_status_display_label.color = ft.colors.RED
+            self.book_status_display_label.color = ft.Colors.RED
             if self.page: self.book_status_display_label.update()
             return
 
@@ -183,12 +183,12 @@ class SettingsTab(ft.Column):  # Changed base class to ft.Column
         if confirmed:
             success, message = self.controller.open_books_action(year_int, month_int)
             self.book_status_display_label.value = message
-            self.book_status_display_label.color = ft.colors.GREEN if success else ft.colors.RED
+            self.book_status_display_label.color = ft.Colors.GREEN if success else ft.Colors.RED
             if success:
                 self._handle_check_book_status_click(None) # Refresh status
         else:
             self.book_status_display_label.value = "Book re-opening cancelled by user."
-            self.book_status_display_label.color = ft.colors.ORANGE
+            self.book_status_display_label.color = ft.Colors.ORANGE
 
         if self.page:
             self.book_status_display_label.update()

@@ -21,7 +21,7 @@ class PlansTab(ft.Row):  # Changed base class to ft.Row
         self.clear_plan_form_button = ft.ElevatedButton(text="Clear Form / Cancel Edit", on_click=self.on_clear_plan_form_click)
 
         self.toggle_plan_status_button = ft.ElevatedButton(text="Toggle Status (Activate/Deactivate)", on_click=self.on_toggle_plan_status_click, disabled=True)
-        self.delete_plan_button = ft.ElevatedButton(text="Delete Selected Plan", on_click=self.on_delete_selected_plan_click, disabled=True, color=ft.colors.RED_ACCENT)
+        self.delete_plan_button = ft.ElevatedButton(text="Delete Selected Plan", on_click=self.on_delete_selected_plan_click, disabled=True, color=ft.Colors.RED_ACCENT)
 
         self.plans_table = ft.DataTable(
             columns=[
@@ -52,7 +52,7 @@ class PlansTab(ft.Row):  # Changed base class to ft.Row
                 alignment=ft.MainAxisAlignment.START,
             ),
             padding=10,
-            bgcolor=ft.colors.BLUE_GREY_200, # Matches MembershipTab form color
+            bgcolor=ft.Colors.BLUE_GREY_200, # Matches MembershipTab form color
             expand=1 # Takes 1 part of the row space
         )
 
@@ -76,7 +76,7 @@ class PlansTab(ft.Row):  # Changed base class to ft.Row
                 expand=True # Ensure this column expands
             ),
             padding=10,
-            bgcolor=ft.colors.BLUE_GREY_300, # Matches MembershipTab table area color
+            bgcolor=ft.Colors.BLUE_GREY_300, # Matches MembershipTab table area color
             expand=2 # Takes 2 parts of the row space
         )
 
@@ -180,7 +180,7 @@ class PlansTab(ft.Row):  # Changed base class to ft.Row
     def on_edit_selected_plan_click(self, e):
         if self.selected_plan_id is None:
             self.plan_form_feedback_text.value = "No plan selected to edit."
-            self.plan_form_feedback_text.color = ft.colors.ORANGE
+            self.plan_form_feedback_text.color = ft.Colors.ORANGE
             if self.plan_form_feedback_text.page: self.plan_form_feedback_text.update()
             return
 

@@ -48,9 +48,9 @@ class HistoryTab(ft.Column):  # Changed base class to ft.Column
                 ft.DataColumn(ft.Text("Status")), # Added Status
             ],
             rows=[],
-            on_select_changed=self.on_full_history_select_changed,
             expand=True # Make table take available vertical space
         )
+        self.full_history_table.on_select_changed = self.on_full_history_select_changed
 
         # --- Layout Definition (as self.controls for ft.Column) ---
         filter_row_1 = ft.Row(
@@ -224,7 +224,7 @@ class HistoryTab(ft.Column):  # Changed base class to ft.Column
     def on_delete_selected_transaction_click(self, e):
         if self.selected_transaction_id is None:
             self.history_actions_feedback_text.value = "No transaction selected to delete."
-            self.history_actions_feedback_text.color = ft.colors.ORANGE
+            self.history_actions_feedback_text.color = ft.Colors.ORANGE
             if self.history_actions_feedback_text.page: self.history_actions_feedback_text.update()
             return
 
@@ -252,7 +252,7 @@ class HistoryTab(ft.Column):  # Changed base class to ft.Column
             member_id_for_specific_history_refresh = self.controller.get_member_id_for_transaction(transaction_id)
             success, message = self.controller.delete_transaction_action(transaction_id)
             self.history_actions_feedback_text.value = message
-            self.history_actions_feedback_text.color = ft.colors.GREEN if success else ft.colors.RED
+            self.history_actions_feedback_text.color = ft.Colors.GREEN if success else ft.Colors.RED
             if success:
                 self.refresh_membership_history_display() # Refresh full history
                 # Call FletAppView to refresh member-specific history if it was affected
@@ -260,7 +260,7 @@ class HistoryTab(ft.Column):  # Changed base class to ft.Column
                     self.flet_app_view_ref.refresh_member_specific_history_after_deletion(member_id_for_specific_history_refresh)
         else:
             self.history_actions_feedback_text.value = "Transaction deletion cancelled."
-            self.history_actions_feedback_text.color = ft.colors.ORANGE
+            self.history_actions_feedback_text.color = ft.Colors.ORANGE
 
         if self.history_actions_feedback_text.page: self.history_actions_feedback_text.update()
         # self.update() # Main column update
