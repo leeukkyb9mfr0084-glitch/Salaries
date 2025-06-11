@@ -70,9 +70,9 @@ class ReportingTab(ft.Column):  # Changed base class to ft.Column
 
         self.controls = [
             ft.Text("Reporting Dashboard", weight=ft.FontWeight.BOLD, size=24, text_align=ft.TextAlign.CENTER),
-            ft.Divider(height=20, color=ft.colors.BLUE_GREY_100),
+            ft.Divider(height=20, color=ft.Colors.BLUE_GREY_100),
             renewals_section,
-            ft.Divider(height=20, color=ft.colors.BLUE_GREY_100),
+            ft.Divider(height=20, color=ft.Colors.BLUE_GREY_100),
             finance_section,
         ]
         # Properties for the main Column (self)
@@ -96,7 +96,7 @@ class ReportingTab(ft.Column):  # Changed base class to ft.Column
 
         if not year_str or not month_str:
             self.renewals_report_feedback_text.value = "Please select both year and month for renewals report."
-            self.renewals_report_feedback_text.color = ft.colors.RED
+            self.renewals_report_feedback_text.color = ft.Colors.RED
             if self.renewals_report_feedback_text.page: self.renewals_report_feedback_text.update()
             return
 
@@ -105,7 +105,7 @@ class ReportingTab(ft.Column):  # Changed base class to ft.Column
             month = int(month_str)
         except ValueError:
             self.renewals_report_feedback_text.value = "Invalid year or month format."
-            self.renewals_report_feedback_text.color = ft.colors.RED
+            self.renewals_report_feedback_text.color = ft.Colors.RED
             if self.renewals_report_feedback_text.page: self.renewals_report_feedback_text.update()
             return
 
@@ -121,10 +121,10 @@ class ReportingTab(ft.Column):  # Changed base class to ft.Column
                     ft.DataCell(ft.Text(str(row_data[4]))), # End Date
                 ]))
             self.renewals_report_feedback_text.value = f"Renewals report for {calendar.month_name[month]} {year} generated."
-            self.renewals_report_feedback_text.color = ft.colors.GREEN
+            self.renewals_report_feedback_text.color = ft.Colors.GREEN
         else:
             self.renewals_report_feedback_text.value = f"No upcoming renewals found for {calendar.month_name[month]} {year}."
-            self.renewals_report_feedback_text.color = ft.colors.ORANGE
+            self.renewals_report_feedback_text.color = ft.Colors.ORANGE
 
         if self.renewals_report_feedback_text.page: self.renewals_report_feedback_text.update()
         if self.pending_renewals_table.page: self.pending_renewals_table.update()
@@ -137,7 +137,7 @@ class ReportingTab(ft.Column):  # Changed base class to ft.Column
 
         if not year_str or not month_str:
             self.finance_report_feedback_text.value = "Please select both year and month for finance report."
-            self.finance_report_feedback_text.color = ft.colors.RED
+            self.finance_report_feedback_text.color = ft.Colors.RED
             if self.finance_report_feedback_text.page: self.finance_report_feedback_text.update()
             return
 
@@ -146,7 +146,7 @@ class ReportingTab(ft.Column):  # Changed base class to ft.Column
             self._pending_finance_report_month = int(month_str)
         except ValueError:
             self.finance_report_feedback_text.value = "Invalid year or month format."
-            self.finance_report_feedback_text.color = ft.colors.RED
+            self.finance_report_feedback_text.color = ft.Colors.RED
             if self.finance_report_feedback_text.page: self.finance_report_feedback_text.update()
             return
 
@@ -163,10 +163,10 @@ class ReportingTab(ft.Column):  # Changed base class to ft.Column
             # self.page.add(self.file_picker_ref) # No, file_picker is on overlay
             # self.page.update() # Not needed here, Flet handles picker display
             self.finance_report_feedback_text.value = "Saving file... Please choose a location."
-            self.finance_report_feedback_text.color = ft.colors.BLUE
+            self.finance_report_feedback_text.color = ft.Colors.BLUE
         else:
             self.finance_report_feedback_text.value = "FilePicker not available."
-            self.finance_report_feedback_text.color = ft.colors.RED
+            self.finance_report_feedback_text.color = ft.Colors.RED
 
         if self.finance_report_feedback_text.page: self.finance_report_feedback_text.update()
 
@@ -174,10 +174,10 @@ class ReportingTab(ft.Column):  # Changed base class to ft.Column
     def process_finance_report_save(self, success: bool, message: str, path: Optional[str]):
         if success:
             self.finance_report_feedback_text.value = f"Finance report saved to {path}. Message: {message}"
-            self.finance_report_feedback_text.color = ft.colors.GREEN
+            self.finance_report_feedback_text.color = ft.Colors.GREEN
         else:
             self.finance_report_feedback_text.value = f"Failed to save finance report. Error: {message}"
-            self.finance_report_feedback_text.color = ft.colors.RED
+            self.finance_report_feedback_text.color = ft.Colors.RED
 
         # Clear pending state
         self._pending_finance_report_year = None

@@ -154,13 +154,13 @@ class MembershipTab(ft.Row):  # Changed base class
         success, message = self.controller.save_member_action(name, phone)
         self.member_form_feedback_text.value = message
         if success:
-            self.member_form_feedback_text.color = ft.colors.GREEN
+            self.member_form_feedback_text.color = ft.Colors.GREEN
             self.member_name_input.value = ""
             self.member_phone_input.value = ""
             self.display_all_members_flet()
             self.populate_member_dropdowns_flet()
         else:
-            self.member_form_feedback_text.color = ft.colors.RED
+            self.member_form_feedback_text.color = ft.Colors.RED
         if self.member_name_input.page: self.member_name_input.update()
         if self.member_phone_input.page: self.member_phone_input.update()
         if self.member_form_feedback_text.page: self.member_form_feedback_text.update()
@@ -251,7 +251,7 @@ class MembershipTab(ft.Row):  # Changed base class
         )
         self.membership_form_feedback_text.value = message
         if success:
-            self.membership_form_feedback_text.color = ft.colors.GREEN
+            self.membership_form_feedback_text.color = ft.Colors.GREEN
             self.membership_amount_paid_input.value = ""
             self.membership_payment_method_input.value = ""
             self.membership_sessions_input.value = ""
@@ -261,7 +261,7 @@ class MembershipTab(ft.Row):  # Changed base class
             self.membership_payment_date_text.value = "Payment Date: Not Selected"
             if member_id is not None and self.selected_member_id_flet == member_id:
                 self.display_membership_history_flet(member_id)
-        else: self.membership_form_feedback_text.color = ft.colors.RED
+        else: self.membership_form_feedback_text.color = ft.Colors.RED
 
         controls_to_update = [
             self.membership_form_feedback_text, self.membership_amount_paid_input,
@@ -276,7 +276,7 @@ class MembershipTab(ft.Row):  # Changed base class
     def on_delete_selected_member_click_flet(self, e):
         if self.selected_member_id_flet is None:
             self.member_actions_feedback_text.value = "No member selected."
-            self.member_actions_feedback_text.color = ft.colors.ORANGE
+            self.member_actions_feedback_text.color = ft.Colors.ORANGE
             if self.member_actions_feedback_text.page: self.member_actions_feedback_text.update()
             return
 
@@ -302,7 +302,7 @@ class MembershipTab(ft.Row):  # Changed base class
         if confirmed:
             success, message = self.controller.deactivate_member_action(member_id)
             self.member_actions_feedback_text.value = message
-            self.member_actions_feedback_text.color = ft.colors.GREEN if success else ft.colors.RED
+            self.member_actions_feedback_text.color = ft.Colors.GREEN if success else ft.Colors.RED
             if success:
                 self.display_all_members_flet()
                 self.populate_member_dropdowns_flet()
@@ -311,7 +311,7 @@ class MembershipTab(ft.Row):  # Changed base class
                     self.display_membership_history_flet(None)
         else:
             self.member_actions_feedback_text.value = "Deactivation cancelled."
-            self.member_actions_feedback_text.color = ft.colors.ORANGE
+            self.member_actions_feedback_text.color = ft.Colors.ORANGE
         if self.member_actions_feedback_text.page: self.member_actions_feedback_text.update()
 
     def populate_plan_dropdowns_flet(self):

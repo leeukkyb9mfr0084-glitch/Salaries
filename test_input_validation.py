@@ -5,8 +5,15 @@ from datetime import datetime
 # Adjust PYTHONPATH
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
+import sqlite3
+from reporter.database_manager import DatabaseManager, DB_FILE # Assuming DB_FILE is used for the connection
+
+# At the top of the script, after imports
+db_connection = None
+db_manager = None
 try:
-    from reporter import database_manager
+    db_connection = sqlite3.connect(DB_FILE) # Or use an in-memory DB for testing: ":memory:"
+    db_manager = DatabaseManager(db_connection)
     # We need a valid member and plan for some transaction tests
     # Ensure a member and plan exist, or create them.
     # Using known existing ones from previous tests to simplify.
@@ -14,8 +21,8 @@ try:
     PLAN_ID_FOR_TESTS = 12  # "Test Auto Plan"
 
     # Verify member and plan exist
-    member_exists = any(m[0] == MEMBER_ID_FOR_TESTS for m in database_manager.get_all_members())
-    plan_exists = any(p[0] == PLAN_ID_FOR_TESTS for p in database_manager.get_all_plans_with_inactive())
+    member_exists = any(m[0] == MEMBER_ID_FOR_TESTS for m in db_manager.get_all_members())
+    plan_exists = any(p[0] == PLAN_ID_FOR_TESTS for p in db_manager.get_all_plans_with_inactive())
 
     if not (member_exists and plan_exists):
         print(f"CRITICAL: Test member (ID {MEMBER_ID_FOR_TESTS}) or plan (ID {PLAN_ID_FOR_TESTS}) not found. Validation tests for transactions might fail or be misleading.")
@@ -26,11 +33,15 @@ try:
         # sys.exit(1) # Or allow to continue with caution
 
 except ModuleNotFoundError:
-    print("CRITICAL ERROR: Could not import 'reporter.database_manager'.")
+    print("CRITICAL ERROR: Could not import 'reporter.database_manager' or DB_FILE.")
     sys.exit(1)
 except Exception as e:
-    print(f"CRITICAL ERROR during setup: {e}")
+    print(f"CRITICAL ERROR: Could not connect to database or instantiate DatabaseManager: {e}")
     sys.exit(1)
+
+# Ensure the connection is closed at the end
+# A try/finally block in main() or atexit could be used. For simplicity in this subtask,
+# we'll assume the script runs and exits. Proper test teardown would handle this.
 
 def run_test(test_name, function_call_lambda, expected_return_value_for_failure):
     print(f"\n--- Test: {test_name} ---")
@@ -62,24 +73,24 @@ def main():
 
     # 1. Add member with empty name
     run_test("Add member with empty name",
-             lambda: database_manager.add_member_to_db(name="", phone="12345VALID", join_date=today_date),
+             lambda: db_manager.add_member_to_db(name="", phone="12345VALID", join_date=today_date),
              False) # Expecting add_member_to_db to return False
 
     # 2. Add member with empty phone
     run_test("Add member with empty phone",
-             lambda: database_manager.add_member_to_db(name="Valid Name", phone="", join_date=today_date),
+             lambda: db_manager.add_member_to_db(name="Valid Name", phone="", join_date=today_date),
              False)
 
     # 3. Add group membership with invalid date format
     run_test("Add Group Class transaction with invalid date format",
-             lambda: database_manager.add_transaction(transaction_type='Group Class', member_id=MEMBER_ID_FOR_TESTS,
+             lambda: db_manager.add_transaction(transaction_type='Group Class', member_id=MEMBER_ID_FOR_TESTS,
                                                       plan_id=PLAN_ID_FOR_TESTS, start_date="2023-13-01",
                                                       amount_paid=50.0, payment_date="2023-13-01"),
              False) # Expecting add_transaction to return False
 
     # 4. Add group membership with non-numeric amount
     run_test("Add Group Class transaction with non-numeric amount",
-             lambda: database_manager.add_transaction(transaction_type='Group Class', member_id=MEMBER_ID_FOR_TESTS,
+             lambda: db_manager.add_transaction(transaction_type='Group Class', member_id=MEMBER_ID_FOR_TESTS,
                                                       plan_id=PLAN_ID_FOR_TESTS, start_date=today_date,
                                                       amount_paid="abc", payment_date=today_date),
              False)
@@ -88,7 +99,7 @@ def main():
     # Current code/schema might allow this. `add_transaction` returns True on successful DB op.
     # The "error" is lack of validation, not necessarily a False return.
     run_test("Add PT transaction with negative sessions",
-             lambda: database_manager.add_transaction(transaction_type='Personal Training', member_id=MEMBER_ID_FOR_TESTS,
+             lambda: db_manager.add_transaction(transaction_type='Personal Training', member_id=MEMBER_ID_FOR_TESTS,
                                                       start_date=today_date, amount_paid=100.0, sessions=-5),
              "CHECK_MANUALLY_FOR_NEGATIVE_VALUES")
 
@@ -96,24 +107,24 @@ def main():
     # 6. Add PT booking with negative amount
     # Similar to negative sessions.
     run_test("Add PT transaction with negative amount",
-             lambda: database_manager.add_transaction(transaction_type='Personal Training', member_id=MEMBER_ID_FOR_TESTS,
+             lambda: db_manager.add_transaction(transaction_type='Personal Training', member_id=MEMBER_ID_FOR_TESTS,
                                                       start_date=today_date, amount_paid=-100.0, sessions=5),
              "CHECK_MANUALLY_FOR_NEGATIVE_VALUES")
 
     # 7. Add plan with empty name
     run_test("Add plan with empty name",
-             lambda: database_manager.add_plan(name="", duration_days=30),
+             lambda: db_manager.add_plan(name="", duration_days=30),
              None) # Expecting add_plan to return None on failure
 
     # 8. Add plan with non-numeric or negative duration
     run_test("Add plan with non-numeric duration",
-             lambda: database_manager.add_plan(name="Test Plan Numeric Duration", duration_days="xyz"),
+             lambda: db_manager.add_plan(name="Test Plan Numeric Duration", duration_days="xyz"),
              None)
 
     # For negative duration, similar to negative sessions/amount for transactions.
     # `add_plan` returns new plan_id (int) on success.
     run_test("Add plan with negative duration",
-             lambda: database_manager.add_plan(name="Test Plan Negative Duration", duration_days=-30),
+             lambda: db_manager.add_plan(name="Test Plan Negative Duration", duration_days=-30),
              "CHECK_MANUALLY_FOR_NEGATIVE_VALUES") # Custom handler in run_test
 
     print("\n--- Input Validation Tests Complete ---")
