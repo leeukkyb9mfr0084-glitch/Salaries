@@ -323,9 +323,7 @@ class DatabaseManager:
             cursor = self.conn.cursor()
             query_params = []
             sql = """
-                SELECT t.transaction_id, t.member_id, t.transaction_type, t.plan_id, t.payment_date, t.start_date, t.end_date,
-                       t.amount_paid, t.payment_method, t.sessions, m.client_name, m.phone, m.join_date, p.plan_name
-                FROM transactions t JOIN members m ON t.member_id = m.member_id LEFT JOIN plans p ON t.plan_id = p.plan_id
+                SELECT t.transaction_id, t.member_id, t.transaction_type, t.plan_id, t.payment_date, t.start_date, t.end_date, t.amount_paid, t.payment_method, t.sessions, m.client_name, m.phone, m.join_date, p.plan_name FROM transactions t JOIN members m ON t.member_id = m.member_id LEFT JOIN plans p ON t.plan_id = p.plan_id
             """
             conditions = []
             if name_filter: conditions.append("m.client_name LIKE ?"); query_params.append(f"%{name_filter}%")
