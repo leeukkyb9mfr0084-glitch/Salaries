@@ -31,9 +31,10 @@ class PlansTab(ft.Row):  # Changed base class to ft.Row
                 ft.DataColumn(ft.Text("Is Active?")),
             ],
             rows=[],
-            on_select_changed=self.on_plan_select_changed,
+            # on_select_changed=self.on_plan_select_changed, # Removed
             expand=True # Make table take available vertical space in its container
         )
+        self.plans_table.on_select_changed = self.on_plan_select_changed # Assigned here
 
         # --- Layout Definition (as self.controls for ft.Row) ---
         form_column = ft.Container(
