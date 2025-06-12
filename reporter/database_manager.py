@@ -384,6 +384,7 @@ class DatabaseManager:
             return False
 
     def deactivate_member(self, member_id: int) -> Tuple[bool, str]:
+        # TODO: Handle active transactions for the member (e.g., by updating their end dates or status) when deactivating.
         try:
             cursor = self.conn.cursor()
             cursor.execute("UPDATE members SET is_active = 0 WHERE member_id = ?", (member_id,))

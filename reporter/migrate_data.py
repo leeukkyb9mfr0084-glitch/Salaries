@@ -10,14 +10,12 @@ from reporter.database_manager import DB_FILE, DatabaseManager # Updated import
 
 # Determine the directory of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
+# Get the project root by going up one level
+project_root = os.path.dirname(script_dir)
 
-# Construct absolute paths to the CSV files
-# Assuming CSVs are in 'reporter/data/csv/' and this script is in 'reporter/'
-csv_dir = os.path.join(script_dir, 'data', 'csv')
-
-# Use specific filenames as mentioned in the script, but now within csv_dir
-GC_CSV_PATH = os.path.join(csv_dir, 'Kranos MMA Members.xlsx - GC.csv')
-PT_CSV_PATH = os.path.join(csv_dir, 'Kranos MMA Members.xlsx - PT.csv')
+# Construct absolute paths to the CSV files in the project root
+GC_CSV_PATH = os.path.join(project_root, 'Kranos MMA Members.xlsx - GC.csv')
+PT_CSV_PATH = os.path.join(project_root, 'Kranos MMA Members.xlsx - PT.csv')
 
 def parse_date(date_str):
     """Parses DD/MM/YY or DD/MM/YYYY and returns YYYY-MM-DD format."""
@@ -45,7 +43,7 @@ def parse_amount(amount_str):
         return float(cleaned_str)
     except (ValueError, AttributeError):
         print(f"Warning: Could not parse amount '{amount_str}'.")
-        return 0.0
+        return None
 
 def process_gc_data():
     """Reads the Group Class CSV and populates members and group_memberships tables."""
@@ -130,12 +128,9 @@ def _process_gc_row(row, db_manager):
                 return # Important: return here if date is unparsable
 
         # New end date logic using plan_duration
-        if plan_duration <= 24: # Assumes durations like 1, 3, 6, 12, 24 are months
-            end_dt = start_dt + relativedelta(months=plan_duration)
-            duration_for_db_days = plan_duration * 30 # For consistency in the 'plans' table
-        else: # Assumes longer durations are specified in days
-            end_dt = start_dt + timedelta(days=plan_duration)
-            duration_for_db_days = plan_duration
+        # Simplified calculation: end_dt is always start_dt + plan_duration in days.
+        end_dt = start_dt + timedelta(days=plan_duration)
+        duration_for_db_days = plan_duration # This is already in days
 
         plan_end_date_db = end_dt.strftime('%Y-%m-%d')
 
@@ -171,6 +166,9 @@ def _process_gc_row(row, db_manager):
             return
 
         amount = parse_amount(row.get('Amount','0'))
+        if amount is None:
+            print(f"Warning: Skipping row due to invalid amount. Data: {row}")
+            return
 
         db_manager.add_transaction(
             transaction_type="Group Class",
