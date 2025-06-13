@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 3.  Place your data files (`Kranos MMA Members.xlsx - GC.csv` and `Kranos MMA Members.xlsx - PT.csv`) in the root directory of the project if you wish to use the data migration script.
 4.  Run the application by executing the `main.py` script:
     ```bash
-    streamlit run reporter/streamlit_ui/app.py
+    python -m streamlit run reporter/streamlit_ui/app.py
     ```
 
 ## Data Migration
