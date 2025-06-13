@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     ```
 
 ## Data Migration
-The `migrate_data.py` script is provided to import existing member data from CSV files into the database.
+The `migrate_data.py` script is provided to import existing member data from CSV files into the database. Duration is always in days. Month wise calculation is not needed.
 
 **Warning: Running the migration script is a destructive operation. It will permanently delete all existing data from the members, plans, and transactions tables before importing data from the CSV files.**
 
