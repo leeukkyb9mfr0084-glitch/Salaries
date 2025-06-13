@@ -24,11 +24,11 @@ def main():
     new_plan_id = None
 
     print(f"--- 1. Adding New Plan: '{initial_plan_name}', {initial_duration} days ---")
-    # add_plan returns the new plan_id or None
-    new_plan_id = database_manager.add_plan(initial_plan_name, initial_duration, is_active=True)
+    # add_plan returns (success_boolean, message, new_plan_id_or_None)
+    success, msg, new_plan_id = database_manager.add_plan(initial_plan_name, initial_duration, is_active=True)
 
-    if new_plan_id:
-        print(f"Success: Plan '{initial_plan_name}' added with ID: {new_plan_id}.")
+    if success:
+        print(msg) # Should contain success message like "Plan '...' added with ID: ..."
         # Verification
         all_plans = database_manager.get_all_plans_with_inactive()
         added_plan = find_plan_in_list(all_plans, new_plan_id)
@@ -38,8 +38,8 @@ def main():
             print(f"Verification failed for plan addition. Found: {added_plan}")
             return # Stop if verification fails
     else:
-        print(f"Error: Failed to add plan '{initial_plan_name}'.")
-        # Check if it already exists to provide more context
+        print(msg) # Should contain the error message from add_plan
+        # Existing logic to check if it already exists
         all_plans = database_manager.get_all_plans_with_inactive()
         existing_plan = next((p for p in all_plans if p[1] == initial_plan_name and p[2] == initial_duration), None)
         if existing_plan:

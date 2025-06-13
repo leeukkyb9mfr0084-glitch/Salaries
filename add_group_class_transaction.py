@@ -47,10 +47,14 @@ def main():
                 return
         else:
             print(f"Creating new plan: Name: {plan_name}, Duration: {plan_duration_days} days.")
-            target_plan_id = database_manager.add_plan(plan_name, plan_duration_days, is_active=True)
-            if target_plan_id:
-                print(f"New plan created successfully: ID {target_plan_id}, Name: {plan_name}, Duration: {plan_duration_days} days.")
+            success, msg, target_plan_id = database_manager.add_plan(plan_name, plan_duration_days, is_active=True)
+            if success:
+                print(msg) # Should contain success message like "New plan created successfully: ID ..."
+                # The message from add_plan already includes details, so we might not need the line below or can simplify it.
+                # For now, let's assume msg is comprehensive.
+                # print(f"New plan created successfully: ID {target_plan_id}, Name: {plan_name}, Duration: {plan_duration_days} days.")
             else:
+                print(msg) # Should contain the error message
                 print(f"Error: Could not create new plan '{plan_name}'. Cannot proceed.")
                 return
 
