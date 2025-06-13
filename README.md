@@ -1,11 +1,11 @@
 # Kranos MMA Reporter
 
 ## Objective
-A desktop application designed to manage gym operations, including memberships, personal training (PT) bookings, and financial reporting. The system allows for easy management of members, plans, and activities, and it includes a robust test suite to ensure data integrity and reliability.
+An application designed to manage gym operations, including memberships, personal training (PT) bookings, and financial reporting. The system allows for easy management of members, plans, and activities, and it includes a robust test suite to ensure data integrity and reliability.
 
 ## Technology Stack
 * **Language**: Python 3
-* **GUI**: Flet
+* **GUI**: Streamlit
 * **Database**: SQLite
 * **Testing**: pytest
 
@@ -70,17 +70,18 @@ CREATE TABLE IF NOT EXISTS transactions (
 ## File Structure
 ```
 /reporter/
-|-- main.py                 # Main application entry point
-|-- gui.py                  # Defines the Flet GUI
+|-- main.py                 # Main script (if still primary entry point, or describe new role)
+|-- streamlit_ui/
+|   |-- app.py              # Main Streamlit application GUI
+|-- app_api.py              # Application Programming Interface for UI and backend logic
 |-- database.py             # Defines the database schema and setup
 |-- database_manager.py     # Handles all database CRUD operations
 |-- migrate_data.py         # Script to migrate data from CSV files
 |-- /data/
 |   |-- kranos_data.db      # SQLite database file
-|-- /tests/
-|   |-- test_database.py
-|   |-- test_database_manager.py
-|-- requirements.txt
+|-- /tests/                 # Contains all pytest tests
+|-- /simulations/           # Scripts for simulating various application flows
+|-- requirements.txt        # Project dependencies
 ```
 
 ## Setup and Run
@@ -92,7 +93,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 3.  Place your data files (`Kranos MMA Members.xlsx - GC.csv` and `Kranos MMA Members.xlsx - PT.csv`) in the root directory of the project if you wish to use the data migration script.
 4.  Run the application by executing the `main.py` script:
     ```bash
-    python reporter/main.py
+    streamlit run reporter/streamlit_ui/app.py
     ```
 
 ## Data Migration
