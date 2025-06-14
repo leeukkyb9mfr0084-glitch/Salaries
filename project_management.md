@@ -38,7 +38,7 @@ Here is the breakdown of pending tasks. Mark a task as complete by changing `- [
         4.  Display success or error messages and refresh the table on success.
 
 * **Task 1.3: Implement Transaction Management UI in Streamlit**
-    * **Status**: ` - [ ] `
+    * **Status**: ` - [x] `
     * **Instructions**:
         1.  Create a new "Transactions" tab in `reporter/streamlit_ui/app.py`.
         2.  Add a form to add new transactions. It should include `st.selectbox` dropdowns to select a member and a plan.

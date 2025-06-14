@@ -23,7 +23,7 @@ st.set_page_config(layout="wide")
 st.title("Kranos MMA Reporter")
 
 # --- UI Tabs ---
-tab1, tab2, tab3 = st.tabs(["Members", "Plans", "Reporting"])
+tab1, tab2, tab3, tab4 = st.tabs(["Members", "Plans", "Reporting", "Transactions"])
 
 with tab1:
     st.header("Member Management")
@@ -151,6 +151,89 @@ with tab3:
                 st.metric(label=f"Total Revenue for {int(finance_month):02d}-{int(finance_year)}", value=f"₹{total_amount:,.2f}")
             else:
                 st.error("Could not retrieve finance report for the selected period.")
+
+with tab4:
+    st.header("Transaction Management")
+
+    # Fetching data for dropdowns
+    members_data = api.get_all_members()  # (member_id, client_name, phone, join_date, is_active)
+    plans_data = api.get_all_plans()  # (plan_id, plan_name, duration_days, is_active) - Assuming this gets active plans
+
+    member_display_list = ["No members available"]
+    member_name_to_id = {}
+    if members_data:
+        member_display_list = [f"{name} (ID: {mid})" for mid, name, _, _, _ in members_data]
+        member_name_to_id = {f"{name} (ID: {mid})": mid for mid, name, _, _, _ in members_data}
+
+    plan_display_list = ["No plans available"]
+    plan_name_to_id = {}
+    if plans_data:
+        # Assuming get_all_plans returns (plan_id, plan_name, duration_days, is_active)
+        # And we only want active plans if not already filtered by the API method
+        active_plans = [p for p in plans_data if p[3]] # Filter for active plans (is_active == True at index 3)
+        if not active_plans and plans_data: # If all plans are inactive
+            plan_display_list = ["No active plans available"]
+        elif active_plans:
+            plan_display_list = [f"{name} (ID: {pid})" for pid, name, _, _ in active_plans]
+            plan_name_to_id = {f"{name} (ID: {pid})": pid for pid, name, _, _ in active_plans}
+
+
+    with st.form("add_transaction_form"):
+        st.subheader("Add New Transaction")
+
+        selected_member_display = st.selectbox(
+            "Select Member",
+            options=member_display_list,
+            disabled=not members_data
+        )
+
+        selected_plan_display = st.selectbox(
+            "Select Plan",
+            options=plan_display_list,
+            disabled=not plan_name_to_id # Disable if no active plans to select
+        )
+
+        amount = st.number_input("Amount", min_value=0.01, format="%.2f")
+        payment_date = st.date_input("Payment Date", value=datetime.date.today())
+        start_date = st.date_input("Start Date", value=datetime.date.today())
+        payment_method = st.text_input("Payment Method (e.g., Cash, Card)")
+
+        transaction_submitted = st.form_submit_button("Add Transaction")
+
+        if transaction_submitted:
+            # Retrieve selected IDs
+            selected_member_id = member_name_to_id.get(selected_member_display)
+            selected_plan_id = plan_name_to_id.get(selected_plan_display)
+
+            # Client-side validation
+            if not selected_member_id or selected_member_display == "No members available":
+                st.error("Please select a member.")
+            elif not selected_plan_id or selected_plan_display == "No plans available" or selected_plan_display == "No active plans available":
+                st.error("Please select an active plan.")
+            elif amount <= 0:
+                st.error("Amount must be greater than zero.")
+            else:
+                # Format dates
+                payment_date_str = payment_date.strftime("%Y-%m-%d")
+                start_date_str = start_date.strftime("%Y-%m-%d")
+
+                # Call API
+                success, message = api.add_transaction(
+                    transaction_type="Group Class",  # Hardcoded as per instruction
+                    member_id=selected_member_id,
+                    start_date=start_date_str,
+                    amount_paid=float(amount),
+                    plan_id=selected_plan_id,
+                    payment_date=payment_date_str,
+                    payment_method=payment_method if payment_method else None, # Pass None if empty
+                    sessions=None,  # Not applicable for Group Class plan enrollment
+                    end_date=None  # Will be calculated by backend for Group Class
+                )
+
+                if success:
+                    st.success(message)
+                else:
+                    st.error(message)
 
 # To run the new application, execute streamlit run reporter/streamlit_ui/app.py from your terminal.
 # Continue building out the UI in this file, using only methods from the api object to interact with the backend.
