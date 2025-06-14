@@ -236,6 +236,8 @@ class DatabaseManager:
             )
             self._update_member_join_date_if_earlier(member_id, start_date, cursor) # Use self.method
             self.conn.commit()
+            # Update member status after successful transaction
+            self._update_member_status(member_id)
             return True, "Transaction added successfully."
         except ValueError as ve: # Should be caught by earlier checks mostly
             logging.error(f"Data validation or date parsing error in add_transaction: {ve}", exc_info=True)
@@ -243,6 +245,61 @@ class DatabaseManager:
         except sqlite3.Error as e:
             logging.error(f"Database error while adding transaction: {e}", exc_info=True)
             return False, f"Database error while adding transaction: {e}"
+
+    def _update_member_status(self, member_id: int):
+        """
+        Updates the is_active status of a member based on their transactions.
+        A member is active if they have any transaction whose end_date (calculated
+        from start_date and plan_duration) is after the current date.
+        """
+        try:
+            cursor = self.conn.cursor()
+            query = """
+                SELECT t.start_date, p.duration
+                FROM transactions t
+                JOIN plans p ON t.plan_id = p.id
+                WHERE t.member_id = ? AND t.plan_id IS NOT NULL
+            """
+            # Note: The original instructions mentioned p.duration_days, but the plans table schema
+            # in the provided code uses 'duration'. Assuming 'duration' stores days.
+            # Removed filter on transaction_type to consider all transactions with a valid plan.
+            # Added 't.plan_id IS NOT NULL' to ensure only transactions linked to a plan are considered,
+            # as transactions like direct PT session entries might not have a plan_id and thus no duration.
+
+            cursor.execute(query, (member_id,))
+            transactions = cursor.fetchall()
+
+            today = date.today()
+            is_currently_active = False
+
+            for transaction_start_date_str, duration_days in transactions:
+                if not transaction_start_date_str or duration_days is None:
+                    logging.warning(f"Skipping transaction for member {member_id} due to missing start_date or duration_days.")
+                    continue
+                try:
+                    start_date_obj = datetime.strptime(transaction_start_date_str, '%Y-%m-%d').date()
+                    end_date_obj = start_date_obj + timedelta(days=duration_days)
+                    if end_date_obj > today:
+                        is_currently_active = True
+                        break  # Found an active transaction, no need to check further
+                except ValueError as ve:
+                    logging.error(f"Date parsing error for member {member_id}, start_date '{transaction_start_date_str}': {ve}", exc_info=True)
+                except TypeError as te: # Handles if duration_days is not an int/float
+                    logging.error(f"Duration calculation error for member {member_id}, duration '{duration_days}': {te}", exc_info=True)
+
+
+            # Update member's status
+            update_status_query = "UPDATE members SET is_active = ? WHERE member_id = ?"
+            cursor.execute(update_status_query, (1 if is_currently_active else 0, member_id))
+            self.conn.commit()
+            logging.info(f"Member {member_id} status updated to {'active' if is_currently_active else 'inactive'}.")
+
+        except sqlite3.Error as e:
+            logging.error(f"Database error in _update_member_status for member {member_id}: {e}", exc_info=True)
+            # Optionally, re-raise or handle so the caller knows the update might have failed.
+        except Exception as ex: # Catch any other unexpected errors
+            logging.error(f"Unexpected error in _update_member_status for member {member_id}: {ex}", exc_info=True)
+
 
     def get_all_activity_for_member(self, member_id: int) -> list:
         try:
