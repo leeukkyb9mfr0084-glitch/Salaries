@@ -58,7 +58,7 @@ Here is the breakdown of pending tasks. Mark a task as complete by changing `- [
         3.  Update the `add_plan` and `update_plan` methods in `database_manager.py` to handle these new fields.
 
 * **Task 2.2: Refactor `transactions` table columns**
-    * **Status**: ` - [ ] `
+    * **Status**: ` - [x] `
     * **Instructions**:
         1.  Modify the `CREATE TABLE IF NOT EXISTS transactions` statement in `reporter/database.py`.
         2.  Rename `payment_date` to `transaction_date` and `amount_paid` to `amount` to match the design document.

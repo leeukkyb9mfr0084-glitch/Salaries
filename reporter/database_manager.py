@@ -187,11 +187,11 @@ class DatabaseManager:
             logging.error(f"Database error fetching member_id for transaction {transaction_id}: {e}", exc_info=True)
             return None
 
-    def add_transaction(self, transaction_type: str, member_id: int, start_date: str, amount_paid: float,
+    def add_transaction(self, transaction_type: str, member_id: int, start_date: str, amount: float,
                         plan_id: int = None, sessions: int = None, payment_method: str = None,
-                        payment_date: str = None, end_date: str = None) -> Tuple[bool, str]:
+                        transaction_date: str = None, end_date: str = None) -> Tuple[bool, str]:
         # Determine book month and status
-        effective_date_for_booking = payment_date if payment_date else start_date
+        effective_date_for_booking = transaction_date if transaction_date else start_date
         transaction_month_key = "N/A"
         book_status = "open"
         try:
@@ -207,14 +207,14 @@ class DatabaseManager:
             logging.warning(msg)
             return False, msg
 
-        if amount_paid <= 0:
+        if amount <= 0:
             return False, "Amount paid must be a positive number."
         if transaction_type == 'Personal Training' and sessions is not None and sessions <= 0:
             return False, "Number of sessions must be a positive number for Personal Training."
 
         try:
             cursor = self.conn.cursor()
-            final_payment_date = payment_date if payment_date else start_date
+            final_transaction_date = transaction_date if transaction_date else start_date
             final_end_date = end_date
 
             if transaction_type == 'Group Class':
@@ -231,8 +231,8 @@ class DatabaseManager:
                     final_end_date = (datetime.strptime(start_date, '%Y-%m-%d') + timedelta(days=duration_days)).strftime('%Y-%m-%d')
 
             cursor.execute(
-                "INSERT INTO transactions (member_id, transaction_type, plan_id, payment_date, start_date, end_date, amount_paid, payment_method, sessions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (member_id, transaction_type, plan_id, final_payment_date, start_date, final_end_date, amount_paid, payment_method, sessions)
+                "INSERT INTO transactions (member_id, transaction_type, plan_id, transaction_date, start_date, end_date, amount, payment_method, sessions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (member_id, transaction_type, plan_id, final_transaction_date, start_date, final_end_date, amount, payment_method, sessions)
             )
             self._update_member_join_date_if_earlier(member_id, start_date, cursor) # Use self.method
             self.conn.commit()
@@ -285,7 +285,7 @@ class DatabaseManager:
         year_month_str = f"{year:04d}-{month:02d}"
         try:
             cursor = self.conn.cursor()
-            cursor.execute("SELECT SUM(amount_paid) FROM transactions WHERE strftime('%Y-%m', payment_date) = ?", (year_month_str,))
+            cursor.execute("SELECT SUM(amount) FROM transactions WHERE strftime('%Y-%m', transaction_date) = ?", (year_month_str,))
             result = cursor.fetchone()
             return float(result[0]) if result and result[0] is not None else 0.0
         except sqlite3.Error as e:
@@ -348,7 +348,7 @@ class DatabaseManager:
             cursor = self.conn.cursor()
             query_params = []
             sql = """
-                SELECT t.transaction_id, t.member_id, t.transaction_type, t.plan_id, t.payment_date, t.start_date, t.end_date, t.amount_paid, t.payment_method, t.sessions, m.client_name, m.phone, m.join_date, p.plan_name FROM transactions t JOIN members m ON t.member_id = m.member_id LEFT JOIN plans p ON t.plan_id = p.plan_id
+                SELECT t.transaction_id, t.member_id, t.transaction_type, t.plan_id, t.transaction_date, t.start_date, t.end_date, t.amount, t.payment_method, t.sessions, m.client_name, m.phone, m.join_date, p.plan_name FROM transactions t JOIN members m ON t.member_id = m.member_id LEFT JOIN plans p ON t.plan_id = p.plan_id
             """
             conditions = []
             if name_filter: conditions.append("m.client_name LIKE ?"); query_params.append(f"%{name_filter}%")
@@ -370,14 +370,14 @@ class DatabaseManager:
         try:
             cursor = self.conn.cursor()
             query = """
-                SELECT t.transaction_id, m.client_name, t.payment_date, t.start_date, t.end_date, t.amount_paid, t.transaction_type,
+                SELECT t.transaction_id, m.client_name, t.transaction_date, t.start_date, t.end_date, t.amount, t.transaction_type,
                        CASE WHEN t.transaction_type = 'Group Class' THEN p.plan_name
                             WHEN t.transaction_type = 'Personal Training' THEN CAST(t.sessions AS TEXT) || ' sessions'
                             ELSE NULL END,
                        t.payment_method
                 FROM transactions t JOIN members m ON t.member_id = m.member_id LEFT JOIN plans p ON t.plan_id = p.plan_id
-                WHERE strftime('%Y', t.payment_date) = ? AND strftime('%m', t.payment_date) = ?
-                ORDER BY t.payment_date ASC, t.transaction_id ASC;
+                WHERE strftime('%Y', t.transaction_date) = ? AND strftime('%m', t.transaction_date) = ?
+                ORDER BY t.transaction_date ASC, t.transaction_id ASC;
             """
             cursor.execute(query, (year_str, month_str))
             return cursor.fetchall()
@@ -421,31 +421,31 @@ class DatabaseManager:
     def delete_transaction(self, transaction_id: int) -> Tuple[bool, str]:
         try:
             cursor = self.conn.cursor()
-            cursor.execute("SELECT member_id, payment_date FROM transactions WHERE transaction_id = ?", (transaction_id,))
+            cursor.execute("SELECT member_id, transaction_date FROM transactions WHERE transaction_id = ?", (transaction_id,))
             transaction_info = cursor.fetchone()
             if not transaction_info: return False, f"Transaction with ID {transaction_id} not found."
 
             # Existing code to get transaction_info...
-            payment_date_str = transaction_info[1] # Assuming payment_date is at index 1
-            transaction_month_key = datetime.strptime(payment_date_str, '%Y-%m-%d').strftime('%Y-%m')
+            transaction_date_str = transaction_info[1] # Assuming transaction_date is at index 1
+            transaction_month_key = datetime.strptime(transaction_date_str, '%Y-%m-%d').strftime('%Y-%m')
             if self.get_book_status(transaction_month_key) == "closed":
                 return False, f"Cannot delete transaction. Books for {transaction_month_key} are closed."
 
-            member_id_for_log, payment_date_str_log = transaction_info # Renamed payment_date_str to avoid conflict
+            member_id_for_log, transaction_date_str_log = transaction_info # Renamed transaction_date_str to avoid conflict
             book_status_for_log, transaction_month_key_for_log = "open", "N/A"
-            if payment_date_str_log:
+            if transaction_date_str_log:
                 try:
-                    transaction_month_key_for_log = datetime.strptime(payment_date_str_log, '%Y-%m-%d').strftime('%Y-%m')
+                    transaction_month_key_for_log = datetime.strptime(transaction_date_str_log, '%Y-%m-%d').strftime('%Y-%m')
                     # We already know the status if it was closed, this log is for other cases or if logic changes
                     book_status_for_log = self.get_book_status(transaction_month_key_for_log)
                 except ValueError:
-                    logging.warning(f"Invalid payment_date format '{payment_date_str_log}' for tx {transaction_id}. Cannot determine book status for logging.")
+                    logging.warning(f"Invalid transaction_date format '{transaction_date_str_log}' for tx {transaction_id}. Cannot determine book status for logging.")
 
             cursor.execute("DELETE FROM transactions WHERE transaction_id = ?", (transaction_id,))
             self.conn.commit()
 
             if cursor.rowcount > 0:
-                if book_status_for_log == "closed" and payment_date_str:
+                if book_status_for_log == "closed" and transaction_date_str:
                     logging.info(f"Transaction {transaction_id} (member_id: {member_id_for_log}) deleted from a closed period: {transaction_month_key_for_log}")
                 return True, "Transaction deleted successfully."
             return False, f"Transaction with ID {transaction_id} not found or already deleted (zero rows affected)."

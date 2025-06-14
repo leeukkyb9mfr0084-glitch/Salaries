@@ -382,41 +382,41 @@ def test_add_transaction_group_class(db_manager_fixture): # Use new fixture
     plan_id = test_plan[0]
     # plan_duration_days = test_plan[2] # Not used in this test logic directly
 
-    payment_date_str = "2024-01-15"
+    transaction_date_str = "2024-01-15"
     start_date_str = "2024-01-20"
     manual_end_date_str = "2024-02-28"
-    amount_paid = 75.50
+    amount = 75.50
     payment_method = "Credit Card"
 
     success, _ = db_manager_fixture.add_transaction( # Use db_manager_fixture
         transaction_type='Group Class',
         member_id=member_id,
         plan_id=plan_id,
-        payment_date=payment_date_str,
+        transaction_date=transaction_date_str,
         start_date=start_date_str,
         end_date=manual_end_date_str,
-        amount_paid=amount_paid,
+        amount=amount,
         payment_method=payment_method
     )
     assert success is True, "add_transaction for Group Class should return True on success." # Check success tuple
 
     cursor = db_manager_fixture.conn.cursor() # Use db_manager_fixture.conn
     cursor.execute(
-        "SELECT member_id, plan_id, payment_date, start_date, end_date, amount_paid, payment_method, transaction_type "
+        "SELECT member_id, plan_id, transaction_date, start_date, end_date, amount, payment_method, transaction_type "
         "FROM transactions WHERE member_id = ? AND transaction_type = 'Group Class'",
         (member_id,)
     )
     transaction_record = cursor.fetchone()
     assert transaction_record is not None, "Group Class transaction record not found."
 
-    (t_member_id, t_plan_id, t_payment_date, t_start_date,
-     t_end_date, t_amount_paid, t_payment_method, t_transaction_type) = transaction_record
+    (t_member_id, t_plan_id, t_transaction_date, t_start_date,
+     t_end_date, t_amount, t_payment_method, t_transaction_type) = transaction_record
 
     assert t_member_id == member_id
     assert t_plan_id == plan_id
-    assert t_payment_date == payment_date_str
+    assert t_transaction_date == transaction_date_str
     assert t_start_date == start_date_str
-    assert t_amount_paid == amount_paid
+    assert t_amount == amount
     assert t_payment_method == payment_method
     assert t_transaction_type == 'Group Class'
 
@@ -449,18 +449,18 @@ def test_add_transaction_group_class_invalid_plan_id(db_manager_fixture): # Use 
     member_id = cursor.fetchone()[0]
 
     invalid_plan_id = 99999
-    payment_date_str = "2024-03-10"
+    transaction_date_str = "2024-03-10"
     start_date_str = "2024-03-10"
-    amount_paid = 50.00
+    amount = 50.00
     payment_method = "Cash"
 
     success, _ = db_manager_fixture.add_transaction( # Use db_manager_fixture
         transaction_type='Group Class',
         member_id=member_id,
         plan_id=invalid_plan_id,
-        payment_date=payment_date_str,
+        transaction_date=transaction_date_str,
         start_date=start_date_str,
-        amount_paid=amount_paid,
+        amount=amount,
         payment_method=payment_method
     )
     assert success is False, "add_transaction should return False for an invalid plan_id." # Check success tuple
@@ -486,31 +486,31 @@ def test_add_transaction_personal_training(db_manager_fixture): # Use new fixtur
     start_date_str = "2024-03-01"
     manual_pt_end_date_str = "2024-03-31"
     sessions = 10
-    amount_paid = 500.00
+    amount = 500.00
 
     success, _ = db_manager_fixture.add_transaction( # Use db_manager_fixture
         transaction_type='Personal Training',
         member_id=member_id,
         start_date=start_date_str,
         end_date=manual_pt_end_date_str,
-        amount_paid=amount_paid,
+        amount=amount,
         sessions=sessions
     )
     assert success is True, "add_transaction for PT should return True on success." # Check success tuple
 
     cursor.execute(
-        "SELECT member_id, start_date, end_date, sessions, amount_paid, transaction_type FROM transactions WHERE member_id = ? AND transaction_type = 'Personal Training'",
+        "SELECT member_id, start_date, end_date, sessions, amount, transaction_type FROM transactions WHERE member_id = ? AND transaction_type = 'Personal Training'",
         (member_id,)
     )
     pt_record = cursor.fetchone()
     assert pt_record is not None, "PT transaction record not found."
 
-    (db_member_id, db_start_date, db_end_date, db_sessions, db_amount_paid, db_transaction_type) = pt_record
+    (db_member_id, db_start_date, db_end_date, db_sessions, db_amount, db_transaction_type) = pt_record
     assert db_member_id == member_id
     assert db_start_date == start_date_str
     assert db_end_date == manual_pt_end_date_str, f"PT end date mismatch. Expected {manual_pt_end_date_str}, got {db_end_date}."
     assert db_sessions == sessions
-    assert db_amount_paid == amount_paid
+    assert db_amount == amount
     assert db_transaction_type == 'Personal Training'
 
     cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
@@ -535,58 +535,63 @@ def test_get_all_activity_for_member(db_manager_fixture): # Use new fixture
     plan_name = test_plan[1]
 
     gm_start_date = "2024-02-15"
-    gm_payment_date = "2024-02-10"
+    gm_transaction_date = "2024-02-10"
     gm_amount = 120.0
     gm_method = "Visa"
-    add_gm_success, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id, payment_date=gm_payment_date, start_date=gm_start_date, amount_paid=gm_amount, payment_method=gm_method) # Use db_manager_fixture
+    add_gm_success, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id, transaction_date=gm_transaction_date, start_date=gm_start_date, amount=gm_amount, payment_method=gm_method) # Use db_manager_fixture
     assert add_gm_success
 
     pt_start_date = "2024-03-05"
     pt_sessions = 8
     pt_amount = 450.0
-    add_pt_success, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_id, start_date=pt_start_date, sessions=pt_sessions, amount_paid=pt_amount) # Use db_manager_fixture
+    add_pt_success, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_id, start_date=pt_start_date, sessions=pt_sessions, amount=pt_amount, transaction_date=pt_start_date) # Use db_manager_fixture
     assert add_pt_success
 
     pt_early_start_date = "2024-01-20"
     pt_early_sessions = 5
     pt_early_amount = 300.0
-    add_early_pt_success, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_id, start_date=pt_early_start_date, sessions=pt_early_sessions, amount_paid=pt_early_amount) # Use db_manager_fixture
+    add_early_pt_success, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_id, start_date=pt_early_start_date, sessions=pt_early_sessions, amount=pt_early_amount, transaction_date=pt_early_start_date) # Use db_manager_fixture
     assert add_early_pt_success
 
     activities = db_manager_fixture.get_all_activity_for_member(member_id) # Use db_manager_fixture
     assert len(activities) == 3, "Expected 3 activities for the member."
 
-    assert activities[0][3] == pt_start_date
-    assert activities[1][3] == gm_start_date
-    assert activities[2][3] == pt_early_start_date
+    # The get_all_activity_for_member sorts by start_date DESC.
+    # Column indices for get_all_activity_for_member:
+    # 0: transaction_type, 1: plan_name/PT Session, 2: transaction_date, 3: start_date,
+    # 4: end_date, 5: amount, 6: payment_method/sessions, 7: transaction_id
+
+    assert activities[0][3] == pt_start_date # Check start_date of latest PT
+    assert activities[1][3] == gm_start_date # Check start_date of Group Class
+    assert activities[2][3] == pt_early_start_date # Check start_date of earliest PT
 
     pt_latest_activity = activities[0]
     assert pt_latest_activity[0] == "Personal Training"
-    assert pt_latest_activity[1] == "PT Session"
-    assert pt_latest_activity[2] == pt_start_date
-    assert pt_latest_activity[3] == pt_start_date
-    assert pt_latest_activity[4] is None
-    assert pt_latest_activity[5] == pt_amount
-    assert pt_latest_activity[6] == f"{pt_sessions} sessions"
-    assert pt_latest_activity[7] is not None
+    assert pt_latest_activity[1] == "PT Session"        # plan_name (becomes 'PT Session')
+    assert pt_latest_activity[2] == pt_start_date       # transaction_date (now same as start_date for PT)
+    assert pt_latest_activity[3] == pt_start_date       # start_date
+    assert pt_latest_activity[4] is None                # end_date
+    assert pt_latest_activity[5] == pt_amount           # amount
+    assert pt_latest_activity[6] == f"{pt_sessions} sessions" # payment_method (becomes sessions for PT)
+    assert pt_latest_activity[7] is not None            # transaction_id
 
     gm_activity = activities[1]
     assert gm_activity[0] == "Group Class"
-    assert gm_activity[1] == plan_name
-    assert gm_activity[2] == gm_payment_date
-    assert gm_activity[3] == gm_start_date
-    assert gm_activity[4] is not None
-    assert gm_activity[5] == gm_amount
-    assert gm_activity[6] == gm_method
-    assert gm_activity[7] is not None
+    assert gm_activity[1] == plan_name                  # plan_name
+    assert gm_activity[2] == gm_transaction_date        # transaction_date
+    assert gm_activity[3] == gm_start_date              # start_date
+    assert gm_activity[4] is not None                   # end_date (calculated for Group Class)
+    assert gm_activity[5] == gm_amount                  # amount
+    assert gm_activity[6] == gm_method                  # payment_method
+    assert gm_activity[7] is not None                   # transaction_id
 
     pt_early_activity = activities[2]
     assert pt_early_activity[0] == "Personal Training"
     assert pt_early_activity[1] == "PT Session"
-    assert pt_early_activity[2] == pt_early_start_date
-    assert pt_early_activity[3] == pt_early_start_date
+    assert pt_early_activity[2] == pt_early_start_date  # transaction_date
+    assert pt_early_activity[3] == pt_early_start_date  # start_date
     assert pt_early_activity[4] is None
-    assert pt_early_activity[5] == pt_early_amount
+    assert pt_early_activity[5] == pt_early_amount      # amount
     assert pt_early_activity[6] == f"{pt_early_sessions} sessions"
     assert pt_early_activity[7] is not None
 
@@ -644,10 +649,10 @@ def test_get_pending_renewals(db_manager_fixture): # Use new fixture
             transaction_type='Group Class',
             member_id=member_info["id"],
             plan_id=plan_id,
-            payment_date=common_start_date,
+            transaction_date=common_start_date,
             start_date=common_start_date,
             end_date=end_date_str,
-            amount_paid=50,
+            amount=50,
             payment_method="CashTest"
         )
         assert add_transaction_success, f"Failed to add transaction for {member_info['name']} ending {end_date_str}. Error: {msg}"
@@ -692,11 +697,11 @@ def test_get_pending_renewals_none_when_no_relevant_data(db_manager_fixture): # 
     today_obj = datetime.today().date()
 
     end_date_future = (today_obj + timedelta(days=100)).strftime('%Y-%m-%d')
-    add_future_success, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id, payment_date=today_obj.strftime('%Y-%m-%d'), start_date=today_obj.strftime('%Y-%m-%d'), end_date=end_date_future, amount_paid=50) # Use db_manager_fixture
+    add_future_success, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id, transaction_date=today_obj.strftime('%Y-%m-%d'), start_date=today_obj.strftime('%Y-%m-%d'), end_date=end_date_future, amount=50) # Use db_manager_fixture
     assert add_future_success
 
     end_date_past = (today_obj - timedelta(days=100)).strftime('%Y-%m-%d')
-    add_past_success, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id, payment_date=today_obj.strftime('%Y-%m-%d'), start_date=today_obj.strftime('%Y-%m-%d'), end_date=end_date_past, amount_paid=50) # Use db_manager_fixture
+    add_past_success, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id, transaction_date=today_obj.strftime('%Y-%m-%d'), start_date=today_obj.strftime('%Y-%m-%d'), end_date=end_date_past, amount=50) # Use db_manager_fixture
     assert add_past_success
 
     renewals = db_manager_fixture.get_pending_renewals(year=1900, month=1) # Use db_manager_fixture
@@ -736,13 +741,13 @@ def test_get_finance_report(db_manager_fixture): # Use new fixture
     month_before_prev_month_end = last_day_previous_month.replace(day=1) - timedelta(days=1)
     bpm_date_str = month_before_prev_month_end.replace(day=15).strftime('%Y-%m-%d')
 
-    add_tx1_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_f1_id, plan_id=plan_any[0], payment_date=pm_date1_str, start_date=pm_date1_str, amount_paid=100.00, payment_method="CashFin1") # Use db_manager_fixture
+    add_tx1_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_f1_id, plan_id=plan_any[0], transaction_date=pm_date1_str, start_date=pm_date1_str, amount=100.00, payment_method="CashFin1") # Use db_manager_fixture
     assert add_tx1_s
-    add_tx2_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_f2_id, plan_id=plan_any[0], payment_date=pm_date2_str, start_date=pm_date2_str, amount_paid=50.50, payment_method="CardFin2") # Use db_manager_fixture
+    add_tx2_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_f2_id, plan_id=plan_any[0], transaction_date=pm_date2_str, start_date=pm_date2_str, amount=50.50, payment_method="CardFin2") # Use db_manager_fixture
     assert add_tx2_s
-    add_tx3_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_f1_id, plan_id=plan_any[0], payment_date=cm_date_str, start_date=cm_date_str, amount_paid=75.00, payment_method="CashFin3") # Use db_manager_fixture
+    add_tx3_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_f1_id, plan_id=plan_any[0], transaction_date=cm_date_str, start_date=cm_date_str, amount=75.00, payment_method="CashFin3") # Use db_manager_fixture
     assert add_tx3_s
-    add_tx4_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_f3_id, plan_id=plan_any[0], payment_date=bpm_date_str, start_date=bpm_date_str, amount_paid=25.00, payment_method="CashFin4") # Use db_manager_fixture
+    add_tx4_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_f3_id, plan_id=plan_any[0], transaction_date=bpm_date_str, start_date=bpm_date_str, amount=25.00, payment_method="CashFin4") # Use db_manager_fixture
     assert add_tx4_s
 
     total_revenue_prev_month = db_manager_fixture.get_finance_report(prev_year, prev_month) # Use db_manager_fixture
@@ -791,16 +796,16 @@ def test_get_finance_report_with_pt_bookings(db_manager_fixture): # Use new fixt
     target_month_date2 = last_day_previous_month.replace(day=20).strftime('%Y-%m-%d')
     other_month_date = (last_day_previous_month.replace(day=1) - timedelta(days=15)).strftime('%Y-%m-%d')
 
-    add_gm1_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_f1_id, plan_id=plan_any[0], payment_date=target_month_date1, start_date=target_month_date1, amount_paid=100.00, payment_method="GM_Cash1") # Use db_manager_fixture
+    add_gm1_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_f1_id, plan_id=plan_any[0], transaction_date=target_month_date1, start_date=target_month_date1, amount=100.00, payment_method="GM_Cash1") # Use db_manager_fixture
     assert add_gm1_s
-    add_gm2_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_f2_id, plan_id=plan_any[0], payment_date=other_month_date, start_date=other_month_date, amount_paid=50.00, payment_method="GM_Cash2") # Use db_manager_fixture
+    add_gm2_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_f2_id, plan_id=plan_any[0], transaction_date=other_month_date, start_date=other_month_date, amount=50.00, payment_method="GM_Cash2") # Use db_manager_fixture
     assert add_gm2_s
 
-    add_pt1_s, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_f1_id, payment_date=target_month_date2, start_date=target_month_date2, sessions=10, amount_paid=200.00) # Use db_manager_fixture
+    add_pt1_s, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_f1_id, transaction_date=target_month_date2, start_date=target_month_date2, sessions=10, amount=200.00) # Use db_manager_fixture
     assert add_pt1_s
-    add_pt2_s, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_f2_id, payment_date=target_month_date1, start_date=target_month_date1, sessions=5, amount_paid=150.00)  # Use db_manager_fixture
+    add_pt2_s, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_f2_id, transaction_date=target_month_date1, start_date=target_month_date1, sessions=5, amount=150.00)  # Use db_manager_fixture
     assert add_pt2_s
-    add_pt3_s, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_f1_id, payment_date=other_month_date, start_date=other_month_date, sessions=8, amount_paid=180.00) # Use db_manager_fixture
+    add_pt3_s, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_f1_id, transaction_date=other_month_date, start_date=other_month_date, sessions=8, amount=180.00) # Use db_manager_fixture
     assert add_pt3_s
 
     expected_total_revenue = 100.00 + 350.00
@@ -824,7 +829,7 @@ def test_join_date_standardization_new_member_then_group_membership(db_manager_f
     plans = db_manager_fixture.get_all_plans() # Use db_manager_fixture
     plan_id = plans[0][0]
     gm_start_date = "2024-04-01"
-    add_tx_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id, payment_date=gm_start_date, start_date=gm_start_date, amount_paid=50, payment_method="Cash") # Use db_manager_fixture
+    add_tx_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id, transaction_date=gm_start_date, start_date=gm_start_date, amount=50, payment_method="Cash") # Use db_manager_fixture
     assert add_tx_s
 
     cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
@@ -844,7 +849,7 @@ def test_join_date_standardization_new_member_then_pt_booking(db_manager_fixture
     assert initial_join_date is None, "Join date should be NULL on initial member add."
 
     pt_start_date = "2024-05-10"
-    add_tx_s, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_id, start_date=pt_start_date, sessions=10, amount_paid=300) # Use db_manager_fixture
+    add_tx_s, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_id, start_date=pt_start_date, sessions=10, amount=300, transaction_date=pt_start_date) # Use db_manager_fixture
     assert add_tx_s
 
     cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
@@ -862,7 +867,7 @@ def test_join_date_standardization_existing_member_earlier_activity(db_manager_f
     member_id = cursor.fetchone()[0]
 
     initial_activity_date = "2023-03-15"
-    add_tx1_s, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_id, start_date=initial_activity_date, sessions=5, amount_paid=250) # Use db_manager_fixture
+    add_tx1_s, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_id, start_date=initial_activity_date, sessions=5, amount=250, transaction_date=initial_activity_date) # Use db_manager_fixture
     assert add_tx1_s
 
     cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
@@ -872,7 +877,7 @@ def test_join_date_standardization_existing_member_earlier_activity(db_manager_f
     plans = db_manager_fixture.get_all_plans() # Use db_manager_fixture
     plan_id = plans[0][0]
     earlier_gm_start_date = "2023-03-01"
-    add_tx2_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id, payment_date=earlier_gm_start_date, start_date=earlier_gm_start_date, amount_paid=50, payment_method="Cash") # Use db_manager_fixture
+    add_tx2_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id, transaction_date=earlier_gm_start_date, start_date=earlier_gm_start_date, amount=50, payment_method="Cash") # Use db_manager_fixture
     assert add_tx2_s
 
     cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
@@ -892,7 +897,7 @@ def test_join_date_standardization_existing_member_later_activity(db_manager_fix
     initial_activity_date = "2023-04-01"
     plans = db_manager_fixture.get_all_plans() # Use db_manager_fixture
     plan_id = plans[0][0]
-    add_tx1_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id, payment_date=initial_activity_date, start_date=initial_activity_date, amount_paid=60, payment_method="Card") # Use db_manager_fixture
+    add_tx1_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id, transaction_date=initial_activity_date, start_date=initial_activity_date, amount=60, payment_method="Card") # Use db_manager_fixture
     assert add_tx1_s
 
     cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
@@ -900,7 +905,7 @@ def test_join_date_standardization_existing_member_later_activity(db_manager_fix
     assert current_join_date == initial_activity_date
 
     later_pt_start_date = "2023-04-10"
-    add_tx2_s, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_id, start_date=later_pt_start_date, sessions=8, amount_paid=280) # Use db_manager_fixture
+    add_tx2_s, _ = db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_id, start_date=later_pt_start_date, sessions=8, amount=280, transaction_date=later_pt_start_date) # Use db_manager_fixture
     assert add_tx2_s
 
     cursor.execute("SELECT join_date FROM members WHERE member_id = ?", (member_id,))
@@ -928,9 +933,9 @@ def test_deactivate_member(db_manager_fixture): # Use new fixture
     initial_number_of_transactions_added = 2
 
     db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id,
-                    payment_date="2024-01-01", start_date="2024-01-01", amount_paid=50, payment_method="Cash") # Use db_manager_fixture
+                    transaction_date="2024-01-01", start_date="2024-01-01", amount=50, payment_method="Cash") # Use db_manager_fixture
     db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_id, start_date="2024-01-05",
-                    sessions=5, amount_paid=100) # Use db_manager_fixture
+                    sessions=5, amount=100, transaction_date="2024-01-05") # Use db_manager_fixture
 
     cursor.execute("SELECT COUNT(*) FROM transactions WHERE member_id = ?", (member_id,))
     assert cursor.fetchone()[0] == initial_number_of_transactions_added, "Failed to add initial transactions for the member."
@@ -967,7 +972,7 @@ def test_delete_transaction(db_manager_fixture): # Use new fixture
     plans = db_manager_fixture.get_all_plans() # Use db_manager_fixture
     plan_id = plans[0][0]
     db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=plan_id,
-                    payment_date="2024-02-01", start_date="2024-02-01", amount_paid=60, payment_method="Card") # Use db_manager_fixture
+                    transaction_date="2024-02-01", start_date="2024-02-01", amount=60, payment_method="Card") # Use db_manager_fixture
 
     cursor.execute("SELECT transaction_id FROM transactions WHERE member_id = ? ORDER BY transaction_id DESC LIMIT 1", (member_id,))
     transaction_id_row = cursor.fetchone()
@@ -975,7 +980,7 @@ def test_delete_transaction(db_manager_fixture): # Use new fixture
     transaction_id_to_delete = transaction_id_row[0]
 
     db_manager_fixture.add_transaction(transaction_type='Personal Training', member_id=member_id, start_date="2024-02-05",
-                    sessions=3, amount_paid=70) # Use db_manager_fixture
+                    sessions=3, amount=70, transaction_date="2024-02-05") # Use db_manager_fixture
 
     cursor.execute("SELECT transaction_id FROM transactions WHERE member_id = ? AND transaction_type = 'Personal Training'", (member_id,))
     other_transaction_id_row = cursor.fetchone()
@@ -1028,7 +1033,7 @@ def test_delete_plan(db_manager_fixture): # Use new fixture
     member_id = member_id_row[0]
 
     add_tx_s, _ = db_manager_fixture.add_transaction(transaction_type='Group Class', member_id=member_id, plan_id=used_plan_id_val,
-                    payment_date="2024-03-01", start_date="2024-03-01", amount_paid=80, payment_method="Online") # Use db_manager_fixture
+                    transaction_date="2024-03-01", start_date="2024-03-01", amount=80, payment_method="Online") # Use db_manager_fixture
     assert add_tx_s
 
     result_used, message_used = db_manager_fixture.delete_plan(used_plan_id_val) # Use db_manager_fixture
@@ -1071,13 +1076,13 @@ def setup_test_data_for_history_filters(db_manager_fixture_conn: sqlite3.Connect
     cursor.execute("INSERT INTO members (client_name, phone, join_date) VALUES (?, ?, ?)",
                    ("Charlie NoTrans", "333-555-6666", "2023-03-01"))
 
-    cursor.execute("INSERT INTO transactions (member_id, transaction_type, amount_paid, start_date, payment_date) VALUES (?, ?, ?, ?, ?)",
+    cursor.execute("INSERT INTO transactions (member_id, transaction_type, amount, start_date, transaction_date) VALUES (?, ?, ?, ?, ?)",
                    (m_id_alice, "Group Class", 50.00, "2023-01-10", "2023-01-10"))
-    cursor.execute("INSERT INTO transactions (member_id, transaction_type, amount_paid, start_date, payment_date, sessions) VALUES (?, ?, ?, ?, ?, ?)",
+    cursor.execute("INSERT INTO transactions (member_id, transaction_type, amount, start_date, transaction_date, sessions) VALUES (?, ?, ?, ?, ?, ?)",
                    (m_id_alice, "Personal Training", 70.00, "2023-03-05", "2023-03-05", 10))
-    cursor.execute("INSERT INTO transactions (member_id, transaction_type, amount_paid, start_date, payment_date) VALUES (?, ?, ?, ?, ?)",
+    cursor.execute("INSERT INTO transactions (member_id, transaction_type, amount, start_date, transaction_date) VALUES (?, ?, ?, ?, ?)",
                    (m_id_bob, "Group Class", 60.00, "2023-02-20", "2023-02-20"))
-    cursor.execute("INSERT INTO transactions (member_id, transaction_type, amount_paid, start_date, payment_date) VALUES (?, ?, ?, ?, ?)",
+    cursor.execute("INSERT INTO transactions (member_id, transaction_type, amount, start_date, transaction_date) VALUES (?, ?, ?, ?, ?)",
                    (m_id_alice_other, "Group Class", 55.00, "2023-01-15", "2023-01-15"))
     db_manager_fixture_conn.commit() # Use passed connection
 
@@ -1209,7 +1214,7 @@ def test_add_transaction_when_books_closed(db_manager_fixture): # Use new fixtur
     member_id, plan_id = _setup_member_and_plan_for_transaction_tests(db_manager_fixture, "BC_ADD") # Pass fixture
 
     month_key_closed = "2024-07"
-    payment_date_in_closed_month = "2024-07-15"
+    transaction_date_in_closed_month = "2024-07-15"
     start_date = "2024-07-10"
 
     assert db_manager_fixture.set_book_status(month_key_closed, "closed") is True, "Failed to close books for the test." # Use db_manager_fixture
@@ -1218,9 +1223,9 @@ def test_add_transaction_when_books_closed(db_manager_fixture): # Use new fixtur
         transaction_type='Group Class',
         member_id=member_id,
         plan_id=plan_id,
-        payment_date=payment_date_in_closed_month,
+        transaction_date=transaction_date_in_closed_month,
         start_date=start_date,
-        amount_paid=100.00,
+        amount=100.00,
         payment_method="Cash"
     )
     assert success is False, "add_transaction should have failed due to closed books."
@@ -1228,8 +1233,8 @@ def test_add_transaction_when_books_closed(db_manager_fixture): # Use new fixtur
     assert message.startswith(expected_message), f"Expected message '{expected_message}', got '{message}'"
 
     cursor = db_manager_fixture.conn.cursor() # Use db_manager_fixture.conn
-    cursor.execute("SELECT COUNT(*) FROM transactions WHERE member_id = ? AND payment_date = ?",
-                   (member_id, payment_date_in_closed_month))
+    cursor.execute("SELECT COUNT(*) FROM transactions WHERE member_id = ? AND transaction_date = ?",
+                   (member_id, transaction_date_in_closed_month))
     count = cursor.fetchone()[0]
     assert count == 0, "Transaction was added despite books being closed."
 
@@ -1238,22 +1243,22 @@ def test_delete_transaction_when_books_closed(db_manager_fixture): # Use new fix
     member_id, plan_id = _setup_member_and_plan_for_transaction_tests(db_manager_fixture, "BC_DEL") # Pass fixture
 
     month_key_closed = "2024-08"
-    payment_date_in_closed_month = "2024-08-10"
+    transaction_date_in_closed_month = "2024-08-10"
 
     add_success, _ = db_manager_fixture.add_transaction( # Use db_manager_fixture
         transaction_type='Group Class',
         member_id=member_id,
         plan_id=plan_id,
-        payment_date=payment_date_in_closed_month,
-        start_date=payment_date_in_closed_month,
-        amount_paid=120.00,
+        transaction_date=transaction_date_in_closed_month,
+        start_date=transaction_date_in_closed_month,
+        amount=120.00,
         payment_method="Card"
     )
     assert add_success is True, "Failed to add initial transaction for the test."
 
     cursor = db_manager_fixture.conn.cursor() # Use db_manager_fixture.conn
-    cursor.execute("SELECT transaction_id FROM transactions WHERE member_id = ? AND payment_date = ?",
-                   (member_id, payment_date_in_closed_month))
+    cursor.execute("SELECT transaction_id FROM transactions WHERE member_id = ? AND transaction_date = ?",
+                   (member_id, transaction_date_in_closed_month))
     transaction_id_row = cursor.fetchone()
     assert transaction_id_row is not None, "Failed to retrieve the added transaction_id."
     transaction_id_to_delete = transaction_id_row[0]
@@ -1274,23 +1279,23 @@ def test_add_transaction_when_books_open(db_manager_fixture): # Use new fixture
     member_id, plan_id = _setup_member_and_plan_for_transaction_tests(db_manager_fixture, "BO_ADD") # Pass fixture
 
     month_key_open = "2024-09"
-    payment_date_in_open_month = "2024-09-15"
+    transaction_date_in_open_month = "2024-09-15"
     assert db_manager_fixture.set_book_status(month_key_open, "open") is True # Use db_manager_fixture
 
     success, message = db_manager_fixture.add_transaction( # Use db_manager_fixture
         transaction_type='Group Class',
         member_id=member_id,
         plan_id=plan_id,
-        payment_date=payment_date_in_open_month,
-        start_date=payment_date_in_open_month,
-        amount_paid=100.00,
+        transaction_date=transaction_date_in_open_month,
+        start_date=transaction_date_in_open_month,
+        amount=100.00,
         payment_method="Cash"
     )
     assert success is True, f"add_transaction should succeed when books are open. Message: {message}"
 
     cursor = db_manager_fixture.conn.cursor() # Use db_manager_fixture.conn
-    cursor.execute("SELECT COUNT(*) FROM transactions WHERE member_id = ? AND payment_date = ?",
-                   (member_id, payment_date_in_open_month))
+    cursor.execute("SELECT COUNT(*) FROM transactions WHERE member_id = ? AND transaction_date = ?",
+                   (member_id, transaction_date_in_open_month))
     count = cursor.fetchone()[0]
     assert count == 1, "Transaction was not added even though books were open."
 
@@ -1299,22 +1304,22 @@ def test_delete_transaction_when_books_open(db_manager_fixture): # Use new fixtu
     member_id, plan_id = _setup_member_and_plan_for_transaction_tests(db_manager_fixture, "BO_DEL") # Pass fixture
 
     month_key_open = "2024-10"
-    payment_date_in_open_month = "2024-10-10"
+    transaction_date_in_open_month = "2024-10-10"
 
     add_success, _ = db_manager_fixture.add_transaction( # Use db_manager_fixture
         transaction_type='Group Class',
         member_id=member_id,
         plan_id=plan_id,
-        payment_date=payment_date_in_open_month,
-        start_date=payment_date_in_open_month,
-        amount_paid=130.00,
+        transaction_date=transaction_date_in_open_month,
+        start_date=transaction_date_in_open_month,
+        amount=130.00,
         payment_method="Online"
     )
     assert add_success is True, "Failed to add initial transaction for the test."
 
     cursor = db_manager_fixture.conn.cursor() # Use db_manager_fixture.conn
-    cursor.execute("SELECT transaction_id FROM transactions WHERE member_id = ? AND payment_date = ?",
-                   (member_id, payment_date_in_open_month))
+    cursor.execute("SELECT transaction_id FROM transactions WHERE member_id = ? AND transaction_date = ?",
+                   (member_id, transaction_date_in_open_month))
     transaction_id_row = cursor.fetchone()
     assert transaction_id_row is not None, "Failed to retrieve the added transaction_id."
     transaction_id_to_delete = transaction_id_row[0]
