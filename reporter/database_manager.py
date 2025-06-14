@@ -78,39 +78,54 @@ class DatabaseManager:
             logging.error(f"Database error while fetching members: {e}", exc_info=True)
             return []
 
-    def add_plan(self, name: str, duration_days: int, is_active: bool = True) -> Tuple[bool, str, Optional[int]]:
-        if duration_days <= 0:
+    def add_plan(self, name: str, duration: int, price: int, type_text: str) -> Tuple[bool, str, Optional[int]]:
+        if duration <= 0:
             logging.error("Plan duration must be a positive number of days.")
             return False, "Error: Plan duration must be a positive number of days.", None
+        if price < 0: # Assuming price cannot be negative
+            logging.error("Plan price cannot be negative.")
+            return False, "Error: Plan price cannot be negative.", None
+        if not type_text: # Assuming type cannot be empty
+            logging.error("Plan type cannot be empty.")
+            return False, "Error: Plan type cannot be empty.", None
         try:
             cursor = self.conn.cursor()
             cursor.execute(
-                "INSERT INTO plans (plan_name, duration_days, is_active) VALUES (?, ?, ?)",
-                (name, duration_days, is_active)
+                "INSERT INTO plans (name, duration, price, type) VALUES (?, ?, ?, ?)",
+                (name, duration, price, type_text)
             )
             self.conn.commit()
             return True, "Plan added successfully.", cursor.lastrowid
         except sqlite3.IntegrityError:
-            logging.warning(f"Error adding plan: Plan name '{name}' likely already exists.")
+            logging.warning(f"Error adding plan: Plan name '{name}' likely already exists.") # Name is UNIQUE
             return False, f"Error adding plan: Plan name '{name}' likely already exists.", None
         except sqlite3.Error as e:
             logging.error(f"Database error while adding plan: {e}", exc_info=True)
             return False, f"Database error while adding plan: {e}", None
 
-    def update_plan(self, plan_id: int, name: str, duration_days: int) -> Tuple[bool, str]:
+    def update_plan(self, plan_id: int, name: str, duration: int, price: int, type_text: str) -> Tuple[bool, str]:
+        if duration <= 0:
+            logging.error("Plan duration must be a positive number of days.")
+            return False, "Error: Plan duration must be a positive number of days."
+        if price < 0: # Assuming price cannot be negative
+            logging.error("Plan price cannot be negative.")
+            return False, "Error: Plan price cannot be negative."
+        if not type_text: # Assuming type cannot be empty
+            logging.error("Plan type cannot be empty.")
+            return False, "Error: Plan type cannot be empty."
         try:
             cursor = self.conn.cursor()
             cursor.execute(
-                "UPDATE plans SET plan_name = ?, duration_days = ? WHERE plan_id = ?",
-                (name, duration_days, plan_id)
+                "UPDATE plans SET name = ?, duration = ?, price = ?, type = ? WHERE id = ?",
+                (name, duration, price, type_text, plan_id)
             )
             self.conn.commit()
             if cursor.rowcount > 0:
                 return True, "Plan updated successfully."
             return False, "Failed to update plan. Plan not found or data unchanged."
-        except sqlite3.IntegrityError:
-            logging.warning(f"Error updating plan: New plan name '{name}' likely already exists.")
-            return False, f"Error updating plan: New plan name '{name}' likely already exists for another plan."
+        except sqlite3.IntegrityError: # This typically means the 'name' (which is UNIQUE) conflicts.
+            logging.warning(f"Error updating plan {plan_id}: New plan name '{name}' likely already exists for another plan.")
+            return False, f"Error updating plan: Plan name '{name}' likely already exists for another plan."
         except sqlite3.Error as e:
             logging.error(f"Database error while updating plan {plan_id}: {e}", exc_info=True)
             return False, f"Database error while updating plan {plan_id}: {e}"
@@ -133,28 +148,33 @@ class DatabaseManager:
     def get_plan_by_id(self, plan_id: int) -> Optional[tuple]:
         try:
             cursor = self.conn.cursor()
-            cursor.execute("SELECT plan_id, plan_name, duration_days, is_active FROM plans WHERE plan_id = ?", (plan_id,))
+            # Assuming you want all new fields. Adjust if is_active was intentionally kept for some logic.
+            cursor.execute("SELECT id, name, duration, price, type FROM plans WHERE id = ?", (plan_id,))
             return cursor.fetchone()
         except sqlite3.Error as e:
             logging.error(f"Database error fetching plan by ID {plan_id}: {e}", exc_info=True)
             return None
 
-    def get_all_plans(self) -> list: # Fetches active plans
+    def get_all_plans(self) -> list: # Fetches all plans (is_active column was removed)
         try:
             cursor = self.conn.cursor()
-            cursor.execute("SELECT plan_id, plan_name, duration_days, is_active FROM plans WHERE is_active = TRUE ORDER BY plan_name ASC")
+            # is_active column is removed, so WHERE condition is removed.
+            # Adjust if there's a new way to determine active plans (e.g., via 'type' or a new 'status' column)
+            cursor.execute("SELECT id, name, duration, price, type FROM plans ORDER BY name ASC")
             return cursor.fetchall()
         except sqlite3.Error as e:
-            logging.error(f"Database error fetching active plans: {e}", exc_info=True)
+            logging.error(f"Database error fetching all plans: {e}", exc_info=True) # Updated log message
             return []
 
-    def get_all_plans_with_inactive(self) -> list: # Fetches all plans
+    def get_all_plans_with_inactive(self) -> list: # This method might be redundant now or needs re-evaluation
         try:
             cursor = self.conn.cursor()
-            cursor.execute("SELECT plan_id, plan_name, duration_days, is_active FROM plans ORDER BY plan_name ASC")
+            # is_active column is removed. This method now behaves like get_all_plans.
+            # Consider removing this method or adapting its purpose if there's a new distinction.
+            cursor.execute("SELECT id, name, duration, price, type FROM plans ORDER BY name ASC")
             return cursor.fetchall()
         except sqlite3.Error as e:
-            logging.error(f"Database error fetching all plans: {e}", exc_info=True)
+            logging.error(f"Database error fetching all plans (previously with inactive): {e}", exc_info=True) # Updated log
             return []
 
     def get_member_id_from_transaction(self, transaction_id: int) -> Optional[int]:
@@ -293,31 +313,34 @@ class DatabaseManager:
             logging.error(f"Database error adding member '{name}' with join date: {e}", exc_info=True)
             return None
 
-    def get_plan_by_name_and_duration(self, plan_name: str, duration_months: int) -> tuple | None:
-        duration_days = duration_months * 30
+    def get_plan_by_name_and_duration(self, name: str, duration: int) -> tuple | None: # Parameters renamed
+        # duration_days = duration_months * 30 # Assuming duration is now directly in days as per schema
         try:
             cursor = self.conn.cursor()
             cursor.execute(
-                "SELECT plan_id, plan_name, duration_days, is_active FROM plans WHERE plan_name = ? AND duration_days = ?",
-                (plan_name, duration_days)
+                # Column names updated, is_active removed
+                "SELECT id, name, duration, price, type FROM plans WHERE name = ? AND duration = ?",
+                (name, duration) # Parameters match updated column names
             )
             return cursor.fetchone()
         except sqlite3.Error as e:
-            logging.error(f"DB error fetching plan '{plan_name}' dur {duration_months}mo: {e}", exc_info=True)
+            logging.error(f"DB error fetching plan '{name}' dur {duration} days: {e}", exc_info=True) # Log updated
             return None
 
-    def get_or_create_plan_id(self, plan_name: str, duration_days: int) -> int | None:
+    def get_or_create_plan_id(self, name: str, duration: int, price: int, type_text: str) -> int | None: # Added price and type
         try:
             cursor = self.conn.cursor()
-            cursor.execute("SELECT plan_id FROM plans WHERE plan_name = ?", (plan_name,))
+            # Search by name and duration, assuming this combination should be unique for get_or_create logic
+            cursor.execute("SELECT id FROM plans WHERE name = ? AND duration = ?", (name, duration))
             result = cursor.fetchone()
             if result: return result[0]
-            cursor.execute("INSERT INTO plans (plan_name, duration_days) VALUES (?, ?)", (plan_name, duration_days))
+            # Column names updated, price and type added
+            cursor.execute("INSERT INTO plans (name, duration, price, type) VALUES (?, ?, ?, ?)", (name, duration, price, type_text))
             self.conn.commit()
-            logging.info(f"Created new plan via get_or_create: {plan_name}, {duration_days} days")
+            logging.info(f"Created new plan via get_or_create: {name}, {duration} days, Price: {price}, Type: {type_text}") # Log updated
             return cursor.lastrowid
         except sqlite3.Error as e:
-            logging.error(f"DB error in get_or_create_plan_id for '{plan_name}': {e}", exc_info=True)
+            logging.error(f"DB error in get_or_create_plan_id for '{name}': {e}", exc_info=True)
             return None
 
     def get_transactions_with_member_details(self, name_filter: str = None, phone_filter: str = None, join_date_filter: str = None) -> list:
@@ -433,10 +456,10 @@ class DatabaseManager:
     def delete_plan(self, plan_id: int) -> tuple[bool, str]:
         try:
             cursor = self.conn.cursor()
-            cursor.execute("SELECT 1 FROM transactions WHERE plan_id = ? LIMIT 1", (plan_id,))
+            cursor.execute("SELECT 1 FROM transactions WHERE plan_id = ? LIMIT 1", (plan_id,)) # Assuming plan_id in transactions still refers to id in plans
             if cursor.fetchone(): return False, "Plan is in use and cannot be deleted."
 
-            cursor.execute("DELETE FROM plans WHERE plan_id = ?", (plan_id,))
+            cursor.execute("DELETE FROM plans WHERE id = ?", (plan_id,)) # Changed plan_id to id
             self.conn.commit()
             if cursor.rowcount > 0: return True, "Plan deleted successfully."
             return False, "Error deleting plan or plan not found."
