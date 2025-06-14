@@ -28,6 +28,27 @@ tab1, tab2, tab3 = st.tabs(["Members", "Plans", "Reporting"])
 with tab1:
     st.header("Member Management")
 
+    # --- Add Member Form ---
+    with st.form("add_member_form"):
+        st.subheader("Add New Member")
+        new_member_name = st.text_input("Name")
+        new_member_phone = st.text_input("Phone")
+        submitted = st.form_submit_button("Add Member")
+        if submitted:
+            if new_member_name and new_member_phone:
+                # Call the API to add the member
+                # Assuming api.add_member returns a success/error message or status
+                response = api.add_member(new_member_name, new_member_phone)
+                if "successfully" in response.lower(): # Crude check, improve if API returns structured response
+                    st.success(response)
+                    # No explicit table refresh needed, Streamlit should rerun and pick up new data.
+                else:
+                    st.error(response)
+            else:
+                st.error("Please provide both name and phone number.")
+
+    st.markdown("---") # Separator
+
     # Example: Displaying all members in a table
     st.subheader("All Members")
     all_members = api.get_all_members() # This now uses the AppAPI
