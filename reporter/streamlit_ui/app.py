@@ -70,6 +70,27 @@ with tab1:
 with tab2:
     st.header("Plan Management")
 
+    # --- Add Plan Form ---
+    with st.form("add_plan_form"):
+        st.subheader("Add New Plan")
+        new_plan_name = st.text_input("Plan Name")
+        new_plan_duration = st.number_input("Duration (days)", min_value=1, step=1)
+        plan_submitted = st.form_submit_button("Save Plan")
+
+        if plan_submitted:
+            if new_plan_name and new_plan_duration:
+                # Call the API to add the plan
+                response = api.add_plan(new_plan_name, int(new_plan_duration))
+                if "successfully" in str(response).lower(): # Check if response indicates success
+                    st.success(response)
+                    # Streamlit should rerun and refresh the table below automatically
+                else:
+                    st.error(response)
+            else:
+                st.error("Please provide both Plan Name and Duration.")
+
+    st.markdown("---") # Separator
+
     st.subheader("All Plans")
     all_plans = api.get_all_plans_with_inactive() # Fetches active and inactive
     if all_plans:

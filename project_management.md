@@ -21,7 +21,7 @@ Here is the breakdown of pending tasks. Mark a task as complete by changing `- [
 * **Objective**: Transition the user interface to Streamlit, implementing the necessary forms and tables for daily operations.
 
 * **Task 1.1: Implement Member Management UI in Streamlit**
-    * **Status**: ` - [ ] `
+    * **Status**: ` - [x] `
     * **Instructions**:
         1.  In `reporter/streamlit_ui/app.py`, create a form using `st.form` within the "Members" tab.
         2.  Add `st.text_input` fields for "Name" and "Phone" and a `st.form_submit_button`.
@@ -30,7 +30,7 @@ Here is the breakdown of pending tasks. Mark a task as complete by changing `- [
         5.  Ensure the main member table automatically refreshes after a new member is added.
 
 * **Task 1.2: Implement Plan Management UI in Streamlit**
-    * **Status**: ` - [ ] `
+    * **Status**: ` - [x] `
     * **Instructions**:
         1.  In `reporter/streamlit_ui/app.py`, expand the "Plans" tab.
         2.  Add a form with "Plan Name" and "Duration (days)" input fields and a "Save Plan" button.
