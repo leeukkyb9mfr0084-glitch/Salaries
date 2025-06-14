@@ -27,10 +27,11 @@ def create_database(db_name: str):
         # Create plans table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS plans (
-            plan_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            plan_name TEXT NOT NULL UNIQUE,
-            duration_days INTEGER NOT NULL,
-            is_active BOOLEAN NOT NULL DEFAULT TRUE
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            duration INTEGER NOT NULL,
+            price INTEGER,
+            type TEXT
         );
         """)
 
@@ -78,14 +79,14 @@ def seed_initial_plans(conn: sqlite3.Connection):
         conn (sqlite3.Connection): The database connection object.
     """
     plans_to_seed = [
-        ("Monthly - Unrestricted", 30, True),
-        ("3 Months - Unrestricted", 90, True),
-        ("Annual - Unrestricted", 365, True)
+        ("Monthly - Unrestricted", 30, 100, "Standard"), # Example price and type
+        ("3 Months - Unrestricted", 90, 270, "Standard"), # Example price and type
+        ("Annual - Unrestricted", 365, 1000, "Standard") # Example price and type
     ]
     try:
         cursor = conn.cursor()
-        for plan_name, duration_days, is_active in plans_to_seed:
-            cursor.execute("INSERT OR IGNORE INTO plans (plan_name, duration_days, is_active) VALUES (?, ?, ?)", (plan_name, duration_days, is_active))
+        for plan_name, duration_days, price, type_text in plans_to_seed: # Added price and type
+            cursor.execute("INSERT OR IGNORE INTO plans (name, duration, price, type) VALUES (?, ?, ?, ?)", (plan_name, duration_days, price, type_text)) # Updated column names and added new ones
         conn.commit()
         print(f"Seeded {len(plans_to_seed)} initial plans.")
     except sqlite3.Error as e:

@@ -51,7 +51,7 @@ Here is the breakdown of pending tasks. Mark a task as complete by changing `- [
 * **Objective**: Update the database schema in `database.py` to match the `Design Document`.
 
 * **Task 2.1: Add `price` and `type` columns to `plans` table**
-    * **Status**: ` - [ ] `
+    * **Status**: ` - [x] `
     * **Instructions**:
         1.  Modify the `CREATE TABLE IF NOT EXISTS plans` statement in `reporter/database.py`.
         2.  Add a `price` column (INTEGER) and a `type` column (TEXT) as specified in the design.
