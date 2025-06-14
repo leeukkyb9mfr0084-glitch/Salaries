@@ -76,7 +76,7 @@ Here is the breakdown of pending tasks. Mark a task as complete by changing `- [
         3.  Verify that the `add_member_to_db` method in `database_manager.py` correctly catches the `sqlite3.IntegrityError` for duplicate names.
 
 * **Task 3.2: Implement Member Status Logic**
-    * **Status**: ` - [ ] `
+    * **Status**: ` - [x] `
     * **Instructions**:
         1.  The design requires a member's status to be active only if they have a current, valid plan.
         2.  Create a new private method `_update_member_status(member_id)` in `database_manager.py`.
