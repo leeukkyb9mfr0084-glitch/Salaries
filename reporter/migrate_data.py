@@ -174,10 +174,10 @@ def _process_gc_row(row, db_manager):
             transaction_type="Group Class",
             member_id=member_id,
             plan_id=plan_id,
-            payment_date=payment_date, # This is YYYY-MM-DD from parse_date
+            transaction_date=payment_date, # This is YYYY-MM-DD from parse_date
             start_date=plan_start_date_db, # This is YYYY-MM-DD
             end_date=plan_end_date_db, # This is YYYY-MM-DD
-            amount_paid=amount,
+            amount=amount,
             payment_method=row.get('Payment Mode', '').strip(),
             sessions=None
         )
@@ -239,11 +239,11 @@ def process_pt_data():
                         transaction_type="Personal Training",
                         member_id=member_id,
                         start_date=start_date,
-                        amount_paid=amount_paid,
+                        amount=amount_paid,
                         sessions=sessions_count,
                         plan_id=None,
                         payment_method=None,
-                        payment_date=start_date
+                        transaction_date=start_date
                     )
                 except (ValueError, KeyError) as e:
                     print(f"Skipping PT row due to data error ('{e}'): {row}")

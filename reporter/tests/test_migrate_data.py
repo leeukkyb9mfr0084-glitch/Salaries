@@ -62,7 +62,7 @@ def test_migration_clears_tables(migrate_test_db): # Uses the fixture
     # Plans
     cursor.execute("INSERT INTO plans (plan_name, duration_days, is_active) VALUES (?, ?, ?)", ("Test Plan 1", 30, True))
     # Transactions
-    cursor.execute("INSERT INTO transactions (member_id, transaction_type, plan_id, payment_date, start_date, amount_paid) VALUES (?, ?, ?, ?, ?, ?)",
+    cursor.execute("INSERT INTO transactions (member_id, transaction_type, plan_id, transaction_date, start_date, amount) VALUES (?, ?, ?, ?, ?, ?)",
                    (1, "Group Class", 1, "2023-01-01", "2023-01-01", 100))
     conn.commit()
 
