@@ -117,38 +117,247 @@ def display_plans_tab():
     """Displays the Plans Tab content."""
     st.header("Manage Plans")
 
-    st.subheader("Add New Plan")
-    with st.form("add_plan_form"):
-        plan_name = st.text_input("Plan Name", key="plan_name")
-        plan_price = st.number_input("Price (INR)", min_value=0, step=1, key="plan_price")
-        plan_duration_days = st.number_input("Duration (Days)", min_value=1, step=1, key="plan_duration")
-        plan_type = st.selectbox("Plan Type", ["GC", "PT"], key="plan_type") # GC: Group Class, PT: Personal Training
+    col1, col2 = st.columns(2) # Or st.columns([1,2]) for different widths, 2 is fine for now
 
-        submitted = st.form_submit_button("Add Plan")
-        if submitted:
-            if not plan_name:
-                st.error("Plan Name cannot be empty.")
-            else:
-                payload = {
-                    "name": plan_name,
-                    "price": plan_price,
-                    "duration_days": plan_duration_days,
-                    "type": plan_type
-                }
-                url = f"{API_BASE_URL}/plans"
-                try:
-                    response = requests.post(url, json=payload, timeout=10)
-                    response.raise_for_status()
-                    response_data = response.json()
-                    st.success(f"Plan '{plan_name}' added successfully! Plan ID: {response_data.get('plan_id')}")
-                    # Clear form by resetting session state for these keys
-                    st.session_state.plan_name = ""
-                    st.session_state.plan_price = 0
-                    st.session_state.plan_duration = 1
-                    st.session_state.plan_type = "GC" # Reset to default
-                except requests.exceptions.HTTPError as http_err:
+    with col1:
+        st.subheader("Add/Edit Plan")
+
+        # Initialize session state for form fields if not already present
+        if 'plan_name_input' not in st.session_state:
+            st.session_state.plan_name_input = ""
+        if 'plan_price_input' not in st.session_state:
+            st.session_state.plan_price_input = 0.0 # Use float for price
+        if 'plan_duration_input' not in st.session_state:
+            st.session_state.plan_duration_input = 30 # Default duration
+        if 'plan_type_input' not in st.session_state:
+            st.session_state.plan_type_input = "GC" # Default type
+        if 'plan_is_active_input' not in st.session_state:
+            st.session_state.plan_is_active_input = True
+
+        with st.form("add_edit_plan_form", clear_on_submit=False): # Keep clear_on_submit False for manual reset
+            name = st.text_input("Plan Name", key="plan_name_input")
+            price = st.number_input("Price (INR)", min_value=0.0, step=0.01, format="%.2f", key="plan_price_input")
+            duration_days = st.number_input("Duration (Days)", min_value=1, step=1, key="plan_duration_input")
+            # Define plan types - these could be dynamic or from config
+            plan_types = ["GC", "PT", "Open Mat", "Other"]
+            plan_type = st.selectbox("Plan Type", options=plan_types, key="plan_type_input")
+            is_active = st.checkbox("Is Active", key="plan_is_active_input")
+
+            submitted = st.form_submit_button("Save Plan")
+            if submitted:
+                if not name: # Basic validation
+                    st.error("Plan Name cannot be empty.")
+                elif price < 0: # price is float, so check against 0.0
+                    st.error("Price cannot be negative.")
+                elif duration_days <= 0:
+                    st.error("Duration must be a positive number of days.")
+                else:
+                    payload = {
+                        "name": name,
+                        "price": price,
+                        "duration_days": duration_days,
+                        "type": plan_type,
+                        "is_active": is_active
+                    }
+                    url = f"{API_BASE_URL}/plans"
                     try:
-                        error_detail = response.json().get("error", str(http_err))
+                        # Assuming this is primarily for adding new plans for now.
+                        # Edit would require a plan_id and likely a PUT request or different endpoint.
+                        response = requests.post(url, json=payload, timeout=10)
+                        response.raise_for_status()
+                        response_data = response.json()
+                        st.success(f"Plan '{name}' saved successfully! Plan ID: {response_data.get('plan_id')}")
+
+                        # Clear form fields after successful submission by resetting their session state keys
+                        st.session_state.plan_name_input = ""
+                        st.session_state.plan_price_input = 0.0
+                        st.session_state.plan_duration_input = 30
+                        st.session_state.plan_type_input = "GC"
+                        st.session_state.plan_is_active_input = True
+                        st.rerun() # Rerun to reflect cleared fields
+                    except requests.exceptions.HTTPError as http_err:
+                        try:
+                            error_detail = response.json().get("error", str(http_err))
+                        except ValueError:
+                            error_detail = response.text if response.text else str(http_err)
+                        st.error(f"Error saving plan: {error_detail}")
+                    except requests.exceptions.ConnectionError:
+                        st.error(f"Connection error: Could not connect to the API at {url}.")
+                    except requests.exceptions.Timeout:
+                        st.error(f"Timeout error: The request to {url} timed out.")
+                    except requests.exceptions.RequestException as req_err:
+                        st.error(f"Request error: {req_err}")
+                    except ValueError as json_err: # Catch JSON decoding errors
+                        st.error(f"JSON decode error: Could not parse API response. {json_err}")
+
+        # Clear button outside the form
+        if st.button("Clear Form"):
+            st.session_state.plan_name_input = ""
+            st.session_state.plan_price_input = 0.0
+            st.session_state.plan_duration_input = 30
+            st.session_state.plan_type_input = "GC"
+            st.session_state.plan_is_active_input = True
+            st.rerun() # Rerun to reflect cleared fields
+
+    with col2:
+        st.subheader("Existing Plans")
+        # List of existing plans will go here (as per a future task)
+        st.write("Display of existing plans will be implemented here.")
+
+
+def main():
+    """Main function to run the Streamlit app."""
+    st.set_page_config(page_title="Kranos MMA Reporter", layout="wide")
+    st.title("Kranos MMA Reporter")
+
+    tab_titles = ["Memberships", "Members", "Plans", "Reporting"] # Added "Memberships"
+    # Default to "Memberships" for now, can be changed later
+    try:
+        default_index = tab_titles.index("Plans") # Default to Plans for this task
+    except ValueError:
+        default_index = 0
+    selected_tab = st.sidebar.radio("Navigation", tab_titles, index=default_index)
+
+    if selected_tab == "Memberships":
+        display_memberships_tab()
+    elif selected_tab == "Members":
+        display_members_tab()
+    elif selected_tab == "Plans":
+        display_plans_tab()
+    elif selected_tab == "Reporting":
+        display_reporting_tab()
+    # Add other tabs here
+
+def display_memberships_tab():
+    """Displays the Memberships Tab content."""
+    st.header("Manage Memberships")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Add Membership")
+        # Form for adding membership will go here (as per a future task)
+        st.write("Form for adding new memberships will be implemented here.")
+
+    with col2:
+        st.subheader("Recent Transactions & Filters")
+
+        # --- Initialize Session State for Filters (if not already present) ---
+        if 'transactions_start_date' not in st.session_state:
+            st.session_state.transactions_start_date = None # Or a default like date.today() - 30 days
+        if 'transactions_end_date' not in st.session_state:
+            st.session_state.transactions_end_date = None # Or a default like date.today()
+        if 'transactions_member_search' not in st.session_state:
+            st.session_state.transactions_member_search = ""
+        if 'transactions_type_filter' not in st.session_state:
+            # Assuming common transaction types. These might need to be fetched or configured.
+            st.session_state.transactions_type_filter = "All"
+
+        # --- Filter Widgets ---
+        filter_col1, filter_col2 = st.columns(2)
+        with filter_col1:
+            st.date_input("From Date:", key="transactions_start_date")
+            st.text_input("Search by Member Name:", key="transactions_member_search")
+        with filter_col2:
+            st.date_input("To Date:", key="transactions_end_date")
+            # Define transaction types - these could be dynamic if needed
+            transaction_types = ["All", "New Subscription", "Renewal", "Payment"] # Example types
+            st.selectbox("Transaction Type:", options=transaction_types, key="transactions_type_filter")
+
+        # --- Fetch and Display Filtered Transactions ---
+        params = {}
+        if st.session_state.transactions_start_date:
+            params['start_date'] = st.session_state.transactions_start_date.strftime('%Y-%m-%d')
+        if st.session_state.transactions_end_date:
+            params['end_date'] = st.session_state.transactions_end_date.strftime('%Y-%m-%d')
+        if st.session_state.transactions_member_search:
+            params['member_name_search'] = st.session_state.transactions_member_search
+        if st.session_state.transactions_type_filter and st.session_state.transactions_type_filter != "All":
+            params['transaction_type'] = st.session_state.transactions_type_filter
+
+        # A button to trigger search, or search on change (st.rerun might be needed for on_change)
+        # For simplicity, let's use a button or rely on Streamlit's auto-rerun for widgets.
+        # Adding an explicit button can be better for performance with many filters.
+        # if st.button("Search Transactions"): # Optional: Use a button to trigger search
+
+        api_url = f"{API_BASE_URL}/transactions/filtered"
+        try:
+            response = requests.get(api_url, params=params, timeout=10)
+            response.raise_for_status()
+            transactions_data = response.json()
+
+            if transactions_data:
+                df_transactions = pd.DataFrame(transactions_data)
+                # Select and order columns for display
+                display_cols = [
+                    "member_name", "plan_name", "transaction_date", "amount",
+                    "transaction_type", "payment_method",
+                    "membership_start_date", "membership_end_date"
+                ]
+                # Filter df_transactions to only include columns that actually exist in it
+                existing_display_cols = [col for col in display_cols if col in df_transactions.columns]
+                st.dataframe(df_transactions[existing_display_cols], hide_index=True)
+            else:
+                st.info("No transactions found matching your criteria.")
+
+        except requests.exceptions.HTTPError as http_err:
+            try:
+                error_detail = response.json().get("error", str(http_err))
+            except ValueError:
+                error_detail = response.text if response.text else str(http_err)
+            st.error(f"Error fetching transactions: {error_detail}")
+        except requests.exceptions.ConnectionError:
+            st.error(f"Connection error: Could not connect to the API at {api_url}.")
+        except requests.exceptions.Timeout:
+            st.error(f"Timeout error: The request to {api_url} timed out.")
+        except requests.exceptions.RequestException as req_err:
+            st.error(f"An error occurred while fetching transactions: {req_err}")
+        except ValueError as json_err: # Catch JSON decoding errors
+            st.error(f"Error parsing transaction data: {json_err}")
+
+    # --- Close Books for Month Section ---
+    st.divider() # Visual separator
+    st.subheader("Close Books for Month")
+
+    # Get current year and month for defaults
+    current_year = datetime.now().year
+    current_month = datetime.now().month
+
+    # Month selection - list of month names
+    month_names = [datetime(2000, m, 1).strftime('%B') for m in range(1, 13)] # January to December
+    # Default to previous month, or December if current month is January
+    default_month_index = (current_month - 2) if current_month > 1 else 11
+
+    selected_month_name = st.selectbox(
+        "Month:",
+        options=month_names,
+        index=default_month_index, # Default to previous month
+        key="close_books_month"
+    )
+    # Convert month name back to month number (1-12)
+    selected_month_number = month_names.index(selected_month_name) + 1
+
+    selected_year = st.number_input(
+        "Year:",
+        min_value=current_year - 10, # Allow selecting back 10 years
+        max_value=current_year,      # Max year is current year
+        value=current_year if current_month > 1 else current_year -1, # Default to current year or previous if Jan
+        step=1,
+        key="close_books_year"
+    )
+
+    if st.button(f"Close Books for {selected_month_name} {selected_year}", type="primary"):
+        payload = {
+            "month": selected_month_number,
+            "year": selected_year
+        }
+        close_books_url = f"{API_BASE_URL}/books/close"
+        try:
+            response = requests.post(close_books_url, json=payload, timeout=15) # Increased timeout for potentially long operation
+            response.raise_for_status()
+            response_data = response.json()
+            st.success(response_data.get("message", "Books closed successfully!"))
+        except requests.exceptions.HTTPError as http_err:
+            try:
                     except ValueError:
                         error_detail = response.text if response.text else str(http_err)
                     st.error(f"Error adding plan: {error_detail}")
@@ -161,28 +370,173 @@ def display_plans_tab():
                 except ValueError as json_err: # Catch JSON decoding errors
                     st.error(f"JSON decode error: Could not parse API response. {json_err}")
 
+    with col2:
+        st.subheader("Existing Plans")
+        # List of existing plans will go here (as per a future task)
+        st.write("Display of existing plans will be implemented here.")
+
 
 def main():
     """Main function to run the Streamlit app."""
     st.set_page_config(page_title="Kranos MMA Reporter", layout="wide")
     st.title("Kranos MMA Reporter")
 
-    tab_titles = ["Reporting", "Plans", "Members"] # Add other tabs as needed
-    # Default to "Plans" for now, can be changed later
-    # Find default index for "Members" or set to 0 if not found
+    tab_titles = ["Memberships", "Members", "Plans", "Reporting"] # Added "Memberships"
+    # Default to "Memberships" for now, can be changed later
     try:
-        default_index = tab_titles.index("Members")
+        default_index = tab_titles.index("Memberships") # Default to Memberships
     except ValueError:
         default_index = 0
     selected_tab = st.sidebar.radio("Navigation", tab_titles, index=default_index)
 
-    if selected_tab == "Reporting":
-        display_reporting_tab()
-    elif selected_tab == "Plans":
-        display_plans_tab()
+    if selected_tab == "Memberships":
+        display_memberships_tab()
     elif selected_tab == "Members":
         display_members_tab()
+    elif selected_tab == "Plans":
+        display_plans_tab()
+    elif selected_tab == "Reporting":
+        display_reporting_tab()
     # Add other tabs here
+
+def display_memberships_tab():
+    """Displays the Memberships Tab content."""
+    st.header("Manage Memberships")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Add Membership")
+        # Form for adding membership will go here (as per a future task)
+        st.write("Form for adding new memberships will be implemented here.")
+
+    with col2:
+        st.subheader("Recent Transactions & Filters")
+
+        # --- Initialize Session State for Filters (if not already present) ---
+        if 'transactions_start_date' not in st.session_state:
+            st.session_state.transactions_start_date = None # Or a default like date.today() - 30 days
+        if 'transactions_end_date' not in st.session_state:
+            st.session_state.transactions_end_date = None # Or a default like date.today()
+        if 'transactions_member_search' not in st.session_state:
+            st.session_state.transactions_member_search = ""
+        if 'transactions_type_filter' not in st.session_state:
+            # Assuming common transaction types. These might need to be fetched or configured.
+            st.session_state.transactions_type_filter = "All"
+
+        # --- Filter Widgets ---
+        filter_col1, filter_col2 = st.columns(2)
+        with filter_col1:
+            st.date_input("From Date:", key="transactions_start_date")
+            st.text_input("Search by Member Name:", key="transactions_member_search")
+        with filter_col2:
+            st.date_input("To Date:", key="transactions_end_date")
+            # Define transaction types - these could be dynamic if needed
+            transaction_types = ["All", "New Subscription", "Renewal", "Payment"] # Example types
+            st.selectbox("Transaction Type:", options=transaction_types, key="transactions_type_filter")
+
+        # --- Fetch and Display Filtered Transactions ---
+        params = {}
+        if st.session_state.transactions_start_date:
+            params['start_date'] = st.session_state.transactions_start_date.strftime('%Y-%m-%d')
+        if st.session_state.transactions_end_date:
+            params['end_date'] = st.session_state.transactions_end_date.strftime('%Y-%m-%d')
+        if st.session_state.transactions_member_search:
+            params['member_name_search'] = st.session_state.transactions_member_search
+        if st.session_state.transactions_type_filter and st.session_state.transactions_type_filter != "All":
+            params['transaction_type'] = st.session_state.transactions_type_filter
+
+        # A button to trigger search, or search on change (st.rerun might be needed for on_change)
+        # For simplicity, let's use a button or rely on Streamlit's auto-rerun for widgets.
+        # Adding an explicit button can be better for performance with many filters.
+        # if st.button("Search Transactions"): # Optional: Use a button to trigger search
+
+        api_url = f"{API_BASE_URL}/transactions/filtered"
+        try:
+            response = requests.get(api_url, params=params, timeout=10)
+            response.raise_for_status()
+            transactions_data = response.json()
+
+            if transactions_data:
+                df_transactions = pd.DataFrame(transactions_data)
+                # Select and order columns for display
+                display_cols = [
+                    "member_name", "plan_name", "transaction_date", "amount",
+                    "transaction_type", "payment_method",
+                    "membership_start_date", "membership_end_date"
+                ]
+                # Filter df_transactions to only include columns that actually exist in it
+                existing_display_cols = [col for col in display_cols if col in df_transactions.columns]
+                st.dataframe(df_transactions[existing_display_cols], hide_index=True)
+            else:
+                st.info("No transactions found matching your criteria.")
+
+        except requests.exceptions.HTTPError as http_err:
+            try:
+                error_detail = response.json().get("error", str(http_err))
+            except ValueError:
+                error_detail = response.text if response.text else str(http_err)
+            st.error(f"Error fetching transactions: {error_detail}")
+        except requests.exceptions.ConnectionError:
+            st.error(f"Connection error: Could not connect to the API at {api_url}.")
+        except requests.exceptions.Timeout:
+            st.error(f"Timeout error: The request to {api_url} timed out.")
+        except requests.exceptions.RequestException as req_err:
+            st.error(f"An error occurred while fetching transactions: {req_err}")
+        except ValueError as json_err: # Catch JSON decoding errors
+            st.error(f"Error parsing transaction data: {json_err}")
+
+    # --- Close Books for Month Section ---
+    st.divider() # Visual separator
+    st.subheader("Close Books for Month")
+
+    # Get current year and month for defaults
+    current_year = datetime.now().year
+    current_month = datetime.now().month
+
+    # Month selection - list of month names
+    month_names = [datetime(2000, m, 1).strftime('%B') for m in range(1, 13)] # January to December
+    # Default to previous month, or December if current month is January
+    default_month_index = (current_month - 2) if current_month > 1 else 11
+
+    selected_month_name = st.selectbox(
+        "Month:",
+        options=month_names,
+        index=default_month_index, # Default to previous month
+        key="close_books_month"
+    )
+    # Convert month name back to month number (1-12)
+    selected_month_number = month_names.index(selected_month_name) + 1
+
+    selected_year = st.number_input(
+        "Year:",
+        min_value=current_year - 10, # Allow selecting back 10 years
+        max_value=current_year,      # Max year is current year
+        value=current_year if current_month > 1 else current_year -1, # Default to current year or previous if Jan
+        step=1,
+        key="close_books_year"
+    )
+
+    if st.button(f"Close Books for {selected_month_name} {selected_year}", type="primary"):
+        payload = {
+            "month": selected_month_number,
+            "year": selected_year
+        }
+        close_books_url = f"{API_BASE_URL}/books/close"
+        try:
+            response = requests.post(close_books_url, json=payload, timeout=15) # Increased timeout for potentially long operation
+            response.raise_for_status()
+            response_data = response.json()
+            st.success(response_data.get("message", "Books closed successfully!"))
+        except requests.exceptions.HTTPError as http_err:
+            try:
+                error_detail = response.json().get("error", str(http_err))
+            except ValueError: # If response is not JSON
+                error_detail = response.text if response.text else str(http_err)
+            st.error(f"Error closing books: {error_detail}")
+        except requests.exceptions.RequestException as e:
+            st.error(f"Failed to connect to API: {e}")
+        except ValueError as json_err: # Catch JSON decoding errors
+            st.error(f"Error parsing API response: {json_err}")
 
 
 def display_members_tab():
@@ -302,7 +656,50 @@ def display_members_tab():
 
                         # Action buttons
                         if cols[3].button("History", key=f"history_{member_id}"):
-                            st.toast(f"History clicked for {member_id}") # Placeholder action
+                            # --- History Modal Logic ---
+                            @st.dialog(f"Transaction History: {row.get('member_name', 'Member')}")
+                            def show_history_modal(member_id_for_modal, member_name_for_modal):
+                                st.subheader(f"Transactions for {member_name_for_modal}")
+                                transactions_url = f"{API_BASE_URL}/member/{member_id_for_modal}/transactions"
+                                try:
+                                    response = requests.get(transactions_url, timeout=10)
+                                    response.raise_for_status()
+                                    transactions_data = response.json()
+
+                                    if transactions_data:
+                                        df_transactions = pd.DataFrame(transactions_data)
+                                        # Ensure 'amount' column exists and is numeric for sum
+                                        if 'amount' not in df_transactions.columns:
+                                            df_transactions['amount'] = 0 # Add column if missing, or handle error
+
+                                        # Convert 'amount' to numeric, coercing errors to NaN, then fill NaN with 0
+                                        df_transactions['amount'] = pd.to_numeric(df_transactions['amount'], errors='coerce').fillna(0)
+
+                                        st.dataframe(df_transactions[[
+                                            'transaction_date', 'transaction_type', 'plan_name', 'amount',
+                                            'payment_method', 'start_date', 'end_date'
+                                        ]], hide_index=True) # hide_index for cleaner table
+
+                                        total_paid = df_transactions['amount'].sum()
+                                        st.metric("Total Amount Paid", f"₹{total_paid:,.2f}")
+                                    else:
+                                        st.info("No transaction history found for this member.")
+                                except requests.exceptions.HTTPError as http_err:
+                                    try:
+                                        error_detail = response.json().get("error", str(http_err))
+                                    except ValueError:
+                                        error_detail = response.text if response.text else str(http_err)
+                                    st.error(f"Error fetching history: {error_detail}")
+                                except requests.exceptions.RequestException as e:
+                                    st.error(f"Could not fetch transaction history: {e}")
+                                except ValueError as json_err: # Catch JSON decoding errors
+                                    st.error(f"Error parsing transaction data: {json_err}")
+
+                                if st.button("Close"):
+                                    st.rerun() # Close the dialog
+
+                            show_history_modal(member_id, row.get("member_name", "Member"))
+                            # --- End of History Modal Logic ---
 
                         if cols[4].button("Edit", key=f"edit_{member_id}"):
                             # Fetch member details and populate form
