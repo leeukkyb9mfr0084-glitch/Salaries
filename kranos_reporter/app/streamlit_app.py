@@ -2,10 +2,23 @@ import streamlit as st
 import requests
 import pandas as pd
 import os
+from datetime import datetime, date
 
 # Define the base URL for the API
 # Assumes the Flask API (api.py) is running locally on port 5000
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:5000/api")
+
+# --- Helper function to fetch active plans ---
+def fetch_active_plans():
+    """Fetches active plans from the API for selection."""
+    url = f"{API_BASE_URL}/plans/list"
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        return response.json() # Expected: list of {"id": plan_id, "name": plan_name}
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error fetching plans: {e}")
+        return [] # Return empty list on error
 
 def fetch_renewal_report(days_ahead):
     """Fetches the renewal report from the API."""
@@ -154,17 +167,201 @@ def main():
     st.set_page_config(page_title="Kranos MMA Reporter", layout="wide")
     st.title("Kranos MMA Reporter")
 
-    tab_titles = ["Reporting", "Plans"] # Add other tabs as needed
+    tab_titles = ["Reporting", "Plans", "Members"] # Add other tabs as needed
     # Default to "Plans" for now, can be changed later
-    selected_tab = st.sidebar.radio("Navigation", tab_titles, index=1)
+    # Find default index for "Members" or set to 0 if not found
+    try:
+        default_index = tab_titles.index("Members")
+    except ValueError:
+        default_index = 0
+    selected_tab = st.sidebar.radio("Navigation", tab_titles, index=default_index)
 
     if selected_tab == "Reporting":
         display_reporting_tab()
     elif selected_tab == "Plans":
         display_plans_tab()
+    elif selected_tab == "Members":
+        display_members_tab()
     # Add other tabs here
-    # elif selected_tab == "Members":
-    #     st.write("Members section (To be implemented)")
+
+
+def display_members_tab():
+    """Displays the Members Tab content."""
+    st.header("Manage Members")
+
+    # As per project plan, two-column layout
+    col1, col2 = st.columns(2)
+
+    # --- Initialize Session State for Form Fields (if not already present) ---
+    if 'editing_member_id' not in st.session_state:
+        st.session_state.editing_member_id = None
+    if 'member_name_input' not in st.session_state:
+        st.session_state.member_name_input = ""
+    if 'member_email_input' not in st.session_state:
+        st.session_state.member_email_input = ""
+    if 'member_phone_input' not in st.session_state:
+        st.session_state.member_phone_input = ""
+    if 'member_join_date_input' not in st.session_state:
+        st.session_state.member_join_date_input = datetime.now().date()
+    if 'member_plan_selection' not in st.session_state:
+        st.session_state.member_plan_selection = None # Will store plan_id
+    if 'member_is_active_checkbox' not in st.session_state:
+        st.session_state.member_is_active_checkbox = True
+    if 'all_plans_list' not in st.session_state: # Cache plans list
+        st.session_state.all_plans_list = fetch_active_plans()
+
+
+    with col1:
+        st.subheader("Add/Edit Member")
+        form_title = "Edit Member" if st.session_state.editing_member_id else "Add New Member"
+        st.markdown(f"**{form_title}**")
+
+        st.text_input("Name:", key="member_name_input")
+        st.text_input("Email:", key="member_email_input")
+        st.text_input("Phone:", key="member_phone_input")
+        st.date_input("Join Date:", key="member_join_date_input")
+
+        # Plan selection
+        plans_options = {plan['id']: plan['name'] for plan in st.session_state.all_plans_list}
+        st.selectbox(
+            "Plan:",
+            options=list(plans_options.keys()),
+            format_func=lambda plan_id: plans_options.get(plan_id, "Select Plan"),
+            key="member_plan_selection"
+        )
+
+        st.checkbox("Is Active", key="member_is_active_checkbox")
+
+        form_col1, form_col2 = st.columns(2)
+        if form_col1.button("Save", type="primary"):
+            if st.session_state.editing_member_id:
+                st.toast(f"Save clicked for editing member {st.session_state.editing_member_id}") # Placeholder
+                # Actual save logic for update will be here
+            else:
+                st.toast("Save clicked for new member") # Placeholder
+                # Actual save logic for add will be here
+            # For now, we don't clear the form on save.
+
+        if form_col2.button("Clear"):
+            st.session_state.editing_member_id = None
+            st.session_state.member_name_input = ""
+            st.session_state.member_email_input = ""
+            st.session_state.member_phone_input = ""
+            st.session_state.member_join_date_input = datetime.now().date()
+            st.session_state.member_plan_selection = None
+            st.session_state.member_is_active_checkbox = True
+            st.rerun()
+
+
+    with col2:
+        st.subheader("Members List & Filters")
+
+        # Filter widgets
+        st.text_input("Search Member", key="member_search")
+        st.selectbox("Plan Type", ["All", "GC", "PT"], key="member_plan_type_filter")
+        st.selectbox("Status", ["All", "Active", "Inactive"], key="member_status_filter")
+
+        # Fetch and display filtered members
+        search_term = st.session_state.member_search
+        plan_type_filter = st.session_state.member_plan_type_filter
+        status_filter = st.session_state.member_status_filter
+
+        params = {}
+        if search_term:
+            params['search_term'] = search_term
+        if plan_type_filter and plan_type_filter != "All":
+            params['plan_type'] = plan_type_filter
+        if status_filter and status_filter != "All":
+            params['status'] = status_filter
+
+        api_url = f"{API_BASE_URL}/members/filtered/"
+
+        try:
+            response = requests.get(api_url, params=params, timeout=10)
+            response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
+
+            members_data = response.json()
+
+            if members_data:
+                df_members = pd.DataFrame(members_data)
+                if not df_members.empty:
+                    # Define columns for the header
+                    header_cols = st.columns([3, 2, 1, 1, 1, 1]) # Adjust ratios as needed
+                    header_cols[0].write("**Name**")
+                    header_cols[1].write("**Plan**")
+                    header_cols[2].write("**Status**")
+                    header_cols[3].write("**Actions**") # Placeholder for action buttons header
+
+                    for index, row in df_members.iterrows():
+                        member_id = row["member_id"]
+                        cols = st.columns([3, 2, 1, 1, 1, 1]) # Name, Plan, Status, History, Edit, Delete
+
+                        cols[0].write(row.get("member_name", "N/A"))
+                        cols[1].write(row.get("plan_name", "N/A"))
+                        cols[2].write("Active" if row.get("is_active") else "Inactive")
+
+                        # Action buttons
+                        if cols[3].button("History", key=f"history_{member_id}"):
+                            st.toast(f"History clicked for {member_id}") # Placeholder action
+
+                        if cols[4].button("Edit", key=f"edit_{member_id}"):
+                            # Fetch member details and populate form
+                            member_api_url = f"{API_BASE_URL}/member/{member_id}"
+                            try:
+                                response = requests.get(member_api_url, timeout=5)
+                                response.raise_for_status()
+                                member_data = response.json()
+
+                                st.session_state.editing_member_id = member_data.get('member_id')
+                                st.session_state.member_name_input = member_data.get('member_name', "")
+                                st.session_state.member_email_input = member_data.get('email', "")
+                                st.session_state.member_phone_input = member_data.get('phone', "")
+
+                                join_date_str = member_data.get('join_date')
+                                if join_date_str:
+                                    try:
+                                        st.session_state.member_join_date_input = datetime.strptime(join_date_str, '%Y-%m-%d').date()
+                                    except ValueError: # Handle cases where date might be in other formats or malformed
+                                        st.session_state.member_join_date_input = datetime.now().date()
+                                        st.warning(f"Could not parse join date '{join_date_str}'. Please check.")
+                                else:
+                                    st.session_state.member_join_date_input = datetime.now().date()
+
+                                st.session_state.member_plan_selection = member_data.get('current_plan_id')
+                                st.session_state.member_is_active_checkbox = member_data.get('is_active', True)
+
+                                # Refresh all_plans_list if it's empty (e.g. initial load error)
+                                if not st.session_state.all_plans_list:
+                                     st.session_state.all_plans_list = fetch_active_plans()
+                                st.rerun() # Rerun to update the form fields in col1
+
+                            except requests.exceptions.RequestException as e:
+                                st.error(f"Error fetching member details: {e}")
+                            except ValueError as e: # JSON decoding error
+                                st.error(f"Error parsing member data: {e}")
+
+                        if cols[5].button("Delete", key=f"delete_{member_id}"):
+                            st.toast(f"Delete clicked for {member_id}") # Placeholder action
+                        st.divider() # Visual separation between rows
+                else:
+                    st.info("No members found matching your criteria.")
+            else: # This case handles if members_data itself is empty from the start
+                st.info("No members found matching your criteria.")
+
+        except requests.exceptions.HTTPError as http_err:
+            try:
+                error_detail = response.json().get("error", str(http_err))
+            except ValueError: # If response is not JSON
+                error_detail = response.text if response.text else str(http_err)
+            st.error(f"Error fetching members: {error_detail}")
+        except requests.exceptions.ConnectionError:
+            st.error(f"Connection error: Could not connect to the API at {api_url}. Ensure the API is running.")
+        except requests.exceptions.Timeout:
+            st.error(f"Timeout error: The request to {api_url} timed out.")
+        except requests.exceptions.RequestException as req_err:
+            st.error(f"An error occurred while fetching members: {req_err}")
+        except ValueError as json_err: # Catch JSON decoding errors
+             st.error(f"Error parsing member data: {json_err}")
 
 
 if __name__ == '__main__':
