@@ -111,3 +111,23 @@ The `migrate_data.py` script is provided to import existing member data from CSV
     ```bash
     python reporter/migrate_data.py
     ```
+
+## Data Processing Script
+
+The `scripts/process_data.py` script reads data from `data/raw_data.csv`, calculates the sum of the 'value' column, and prints the result.
+
+### Running the Script
+
+To run the script, use the following command:
+
+```bash
+python scripts/process_data.py
+```
+
+### Running the Tests
+
+To run the tests for the script, use the following command:
+
+```bash
+python -m unittest tests.test_process_data
+```
