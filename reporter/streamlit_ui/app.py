@@ -74,20 +74,32 @@ with tab2:
     with st.form("add_plan_form"):
         st.subheader("Add New Plan")
         new_plan_name = st.text_input("Plan Name")
-        new_plan_duration = st.number_input("Duration (days)", min_value=1, step=1)
+        new_plan_duration = st.number_input("Duration (days)", min_value=1, value=30, step=1)
+        new_plan_price = st.number_input("Price (e.g., 1500)", min_value=0, value=1000, step=50, format="%d")
+        new_plan_type = st.text_input("Type (e.g., GC, PT, Combo)") # GC for Group Class, PT for Personal Training
         plan_submitted = st.form_submit_button("Save Plan")
 
         if plan_submitted:
-            if new_plan_name and new_plan_duration:
+            if new_plan_name and new_plan_duration and new_plan_price >= 0 and new_plan_type:
                 # Call the API to add the plan
-                response = api.add_plan(new_plan_name, int(new_plan_duration))
-                if "successfully" in str(response).lower(): # Check if response indicates success
-                    st.success(response)
+                # Ensure types are correct, e.g., int(new_plan_duration), int(new_plan_price)
+                response_tuple = api.add_plan(
+                    new_plan_name,
+                    int(new_plan_duration),
+                    int(new_plan_price), # Ensure price is passed as int
+                    new_plan_type
+                )
+                # api.add_plan now returns Tuple[bool, str, Optional[int]]
+                # We can check the success boolean (first element)
+                if response_tuple and response_tuple[0]: # Check if response_tuple is not None and success is True
+                    st.success(response_tuple[1]) # Display success message
                     # Streamlit should rerun and refresh the table below automatically
+                elif response_tuple:
+                    st.error(response_tuple[1]) # Display error message
                 else:
-                    st.error(response)
+                    st.error("Failed to add plan. Received no response from API.")
             else:
-                st.error("Please provide both Plan Name and Duration.")
+                st.error("Please provide Plan Name, Duration, Price, and Type. Duration and Price must be valid numbers.")
 
     st.markdown("---") # Separator
 
@@ -171,11 +183,15 @@ with tab4:
         # Assuming get_all_plans returns (plan_id, plan_name, duration_days, is_active)
         # And we only want active plans if not already filtered by the API method
         active_plans = [p for p in plans_data if p[3]] # Filter for active plans (is_active == True at index 3)
+        # TODO: The above filter p[3] (price) is likely incorrect for determining "active" status
+        # as get_all_plans now returns (id, name, duration, price, type).
+        # This subtask is only to fix the unpacking, not this filter logic.
         if not active_plans and plans_data: # If all plans are inactive
             plan_display_list = ["No active plans available"]
         elif active_plans:
-            plan_display_list = [f"{name} (ID: {pid})" for pid, name, _, _ in active_plans]
-            plan_name_to_id = {f"{name} (ID: {pid})": pid for pid, name, _, _ in active_plans}
+            # Unpack 5 columns: pid, name, duration, price, type. Using _ for unused ones.
+            plan_display_list = [f"{name} (ID: {pid})" for pid, name, _, _, _ in active_plans]
+            plan_name_to_id = {f"{name} (ID: {pid})": pid for pid, name, _, _, _ in active_plans}
 
 
     with st.form("add_transaction_form"):

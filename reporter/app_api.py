@@ -44,20 +44,28 @@ class AppAPI:
     def get_all_plans(self): # Active plans
         return self.db_manager.get_all_plans()
 
-    def get_all_plans_with_inactive(self): # All plans including inactive
-        return self.db_manager.get_all_plans_with_inactive()
+    def add_plan(self, name: str, duration_days: int, price: int, type_text: str) -> Tuple[bool, str, Optional[int]]:
+        """
+        Adds a new plan by calling the DatabaseManager.
 
-    def add_plan(self, name: str, duration_days: int, is_active: bool = True):
-        # DatabaseManager.add_plan returns Tuple[bool, str, Optional[int]]
-        return self.db_manager.add_plan(name, duration_days, is_active)
+        Args:
+            name: The name of the plan.
+            duration_days: The duration of the plan in days.
+            price: The price of the plan.
+            type_text: The type or category of the plan.
+
+        Returns:
+            A tuple mirroring DatabaseManager.add_plan's return:
+            - bool: True if successful, False otherwise.
+            - str: Success or error message.
+            - Optional[int]: The new plan's ID if successful, else None.
+        """
+        # The is_active parameter was removed as it's no longer in DatabaseManager.add_plan.
+        return self.db_manager.add_plan(name, duration_days, price, type_text)
 
     def update_plan(self, plan_id: int, name: str, duration_days: int):
         # DatabaseManager.update_plan returns Tuple[bool, str]
         return self.db_manager.update_plan(plan_id, name, duration_days)
-
-    def set_plan_active_status(self, plan_id: int, is_active: bool):
-        # DatabaseManager.set_plan_active_status returns Tuple[bool, str]
-        return self.db_manager.set_plan_active_status(plan_id, is_active)
 
     def get_plan_by_id(self, plan_id: int):
         # DatabaseManager.get_plan_by_id returns Optional[tuple]
