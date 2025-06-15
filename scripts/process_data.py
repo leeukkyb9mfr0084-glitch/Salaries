@@ -1,13 +1,15 @@
 import pandas as pd
 
+
 def process_data(filepath):
     """
     Reads a CSV file, calculates the sum of the 'value' column,
     and returns the sum.
     """
     df = pd.read_csv(filepath)
-    total_value = df['value'].sum()
+    total_value = df["value"].sum()
     return total_value
+
 
 if __name__ == "__main__":
     filepath = "data/raw_data.csv"

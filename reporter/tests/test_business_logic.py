@@ -114,7 +114,9 @@ def test_plan_management_flow(api_db_fixture):  # Use new fixture
     assert len(db_plans_after_add) == initial_plan_count + 1
 
     new_plan_entry = next((p for p in db_plans_after_add if p[0] == new_plan_id), None)
-    assert new_plan_entry is not None, f"{formatted_plan_name_test} not found after adding."
+    assert (
+        new_plan_entry is not None
+    ), f"{formatted_plan_name_test} not found after adding."
     assert new_plan_entry[1] == formatted_plan_name_test  # Name
     assert new_plan_entry[2] == duration_test_plan  # Duration
     # Columns for price and type_text are now 4 and 5 if they exist in your db_mngr.get_all_plans_with_inactive() output
@@ -167,9 +169,14 @@ def test_add_membership_flow(api_db_fixture):  # Use new fixture
     # AppAPI.add_plan needs price and type_text.
     base_membership_plan_name = "Membership Plan"
     membership_plan_duration = 30
-    formatted_membership_plan_name = f"{base_membership_plan_name} - {membership_plan_duration} Days"
+    formatted_membership_plan_name = (
+        f"{base_membership_plan_name} - {membership_plan_duration} Days"
+    )
     add_plan_success, _, db_plan_id_val = db_mngr.add_plan(
-        formatted_membership_plan_name, membership_plan_duration, DEFAULT_PRICE, DEFAULT_TYPE_TEXT
+        formatted_membership_plan_name,
+        membership_plan_duration,
+        DEFAULT_PRICE,
+        DEFAULT_TYPE_TEXT,
     )
     assert add_plan_success is True and db_plan_id_val is not None, "Failed to add plan"
 
@@ -248,9 +255,14 @@ def test_deactivate_member_action_flow(api_db_fixture):  # Use new fixture
     if not plans:
         base_default_plan_name = "Default Test Plan API"
         default_plan_duration = 30
-        formatted_default_plan_name = f"{base_default_plan_name} - {default_plan_duration} Days"
+        formatted_default_plan_name = (
+            f"{base_default_plan_name} - {default_plan_duration} Days"
+        )
         add_plan_success, _, plan_id_for_tx_val = db_mngr.add_plan(
-            formatted_default_plan_name, default_plan_duration, DEFAULT_PRICE, DEFAULT_TYPE_TEXT
+            formatted_default_plan_name,
+            default_plan_duration,
+            DEFAULT_PRICE,
+            DEFAULT_TYPE_TEXT,
         )
         assert (
             add_plan_success and plan_id_for_tx_val is not None
@@ -312,9 +324,14 @@ def test_delete_transaction_action_flow(api_db_fixture):  # Use new fixture
     if not plans:
         base_default_plan_name_trx = "Default Plan API"
         default_plan_duration_trx = 30
-        formatted_default_plan_name_trx = f"{base_default_plan_name_trx} - {default_plan_duration_trx} Days"
+        formatted_default_plan_name_trx = (
+            f"{base_default_plan_name_trx} - {default_plan_duration_trx} Days"
+        )
         add_plan_success, _, plan_id_val = db_mngr.add_plan(
-            formatted_default_plan_name_trx, default_plan_duration_trx, DEFAULT_PRICE, DEFAULT_TYPE_TEXT
+            formatted_default_plan_name_trx,
+            default_plan_duration_trx,
+            DEFAULT_PRICE,
+            DEFAULT_TYPE_TEXT,
         )
         assert add_plan_success and plan_id_val is not None
     else:
@@ -430,7 +447,7 @@ def test_generate_custom_pending_renewals_action_flow(
     # Need plan name for assertion, get it from db_mngr as AppAPI.add_plan doesn't return it.
     plan_details_30day = db_mngr.get_plan_by_id(plan_id_30day_val)
     assert plan_details_30day is not None
-    plan_name_30day = plan_details_30day[1] # This will be the formatted name
+    plan_name_30day = plan_details_30day[1]  # This will be the formatted name
 
     target_year = 2025
     target_month = 7
@@ -469,7 +486,12 @@ def test_generate_custom_pending_renewals_action_flow(
     # end_date = (datetime.strptime(start_date, '%Y-%m-%d') + timedelta(days=plan_duration_days)).strftime('%Y-%m-%d')
     # So, for start_date_rf1 and 30-day plan, end_date should be end_date_rf1_target.
 
-    assert data[0] == (client_name_rf1, "RF002", formatted_plan_name_30day, expected_end_date_str)
+    assert data[0] == (
+        client_name_rf1,
+        "RF002",
+        formatted_plan_name_30day,
+        expected_end_date_str,
+    )
 
     no_renew_year, no_renew_month = 2026, 1
     data_none = app_api.get_pending_renewals(no_renew_year, no_renew_month)
@@ -490,9 +512,14 @@ def test_get_finance_report_data_flow(api_db_fixture):  # Use new fixture, renam
 
     base_finance_plan_name = "Finance Plan API"
     finance_plan_duration = 30
-    formatted_finance_plan_name = f"{base_finance_plan_name} - {finance_plan_duration} Days"
+    formatted_finance_plan_name = (
+        f"{base_finance_plan_name} - {finance_plan_duration} Days"
+    )
     add_plan_s, _, plan_fx_id_val = app_api.add_plan(
-        formatted_finance_plan_name, finance_plan_duration, DEFAULT_PRICE, DEFAULT_TYPE_TEXT
+        formatted_finance_plan_name,
+        finance_plan_duration,
+        DEFAULT_PRICE,
+        DEFAULT_TYPE_TEXT,
     )
     assert add_plan_s and plan_fx_id_val is not None
 

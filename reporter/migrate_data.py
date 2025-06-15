@@ -310,7 +310,7 @@ def process_pt_data():
                     formatted_pt_plan_name = f"{pt_plan_name} - {pt_duration_days} Days"
 
                     plan_id = db_manager.get_or_create_plan_id(
-                        name=formatted_pt_plan_name, # Use formatted name
+                        name=formatted_pt_plan_name,  # Use formatted name
                         duration=pt_duration_days,
                         price=plan_price,
                         type_text="PT",
