@@ -7,21 +7,21 @@
 
 *Goal: Create a stable foundation by fixing blocking errors and refactoring the tests to match the current Streamlit architecture.*
 
-* [ ] **Task 1.1: Fix Application Startup `NameError`**
+* [x] **Task 1.1: Fix Application Startup `NameError`**
     * **Context:** The Streamlit app crashes on startup due to a `NameError` because the type hint `Tuple` is used without being imported in `reporter/app_api.py`.
     * **Instructions:**
         1.  Open the file `reporter/app_api.py`.
         2.  At the top of the file, add the following import statement: `from typing import Tuple, Optional`.
         3.  This will make the `Tuple` and `Optional` type hints available, resolving the error.
 
-* [ ] **Task 1.2: Update Project Dependencies**
+* [x] **Task 1.2: Update Project Dependencies**
     * **Context:** The test logs show a `ModuleNotFoundError` for `openpyxl`, which is required for generating Excel reports. This dependency is missing from the project's requirements file.
     * **Instructions:**
         1.  Open the `requirements.txt` file.
         2.  Add the line `openpyxl` to the file.
         3.  This ensures that the dependency is installed when setting up the environment, allowing the report generation features to function correctly.
 
-* [ ] **Task 1.3: Refactor Test Suite Imports**
+* [x] **Task 1.3: Refactor Test Suite Imports**
     * **Context:** The `test_results.log` indicates that `test_book_closing.py`, `test_gui_flows.py`, and `test_main.py` are failing because they try to import `reporter.gui`, a module that does not exist. The UI is now handled by Streamlit. These tests need to be refactored to test the business logic directly, not a defunct UI.
     * **Instructions:**
         1.  Go through each of the failing test files (`test_book_closing.py`, `test_gui_flows.py`, `test_main.py`).
@@ -34,14 +34,14 @@
 
 *Goal: Implement the remaining user interface tabs and features as detailed in the `app_specs.md` document.*
 
-* [ ] **Task 2.1: Implement "Members" Tab Actions**
+* [x] **Task 2.1: Implement "Members" Tab Actions**
     * **Context:** The main layout of the "Members" tab is done, but the action buttons for each row ("History", "Edit", "Delete") are not fully functional.
     * **Instructions:**
         1.  **Edit Button:** Wire the "Edit" button to populate the "Add/Edit Member" form with the data from the selected row.
         2.  **Delete Button:** Wire the "Delete" button to call the `api.deactivate_member` function, passing the correct `member_id`.
         3.  **History Modal:** On clicking the "History" button, implement the logic to open a modal window that displays the full transaction history for the selected member, including a calculated total amount paid.
 
-* [ ] **Task 2.2: Build "Memberships" Tab**
+* [x] **Task 2.2: Build "Memberships" Tab**
     * **Context:** This tab is currently a placeholder and needs to be built out.
     * **Instructions:**
         1.  Implement the two-column layout as per the spec.
