@@ -12,53 +12,53 @@ This document outlines the tasks required to refactor the Kranos Reporter applic
 Phase 1: Initial Bug Fixes & Code Cleanup
 Goal: Stabilize the current application before starting major refactoring.
 
-[ ] Fix Data Migration Crash: Modify get_or_create_plan_id in database_manager.py to first check if a plan with the same name and duration exists before inserting a new one. This will resolve the UNIQUE constraint failed error.
+[x] Fix Data Migration Crash: Modify get_or_create_plan_id in database_manager.py to first check if a plan with the same name and duration exists before inserting a new one. This will resolve the UNIQUE constraint failed error.
 
-[ ] Fix UI Startup Crash: In reporter/streamlit_ui/app.py, update the plan_display_list list comprehension to correctly unpack the 5 columns now returned by the plan query, resolving the ValueError.
+[x] Fix UI Startup Crash: In reporter/streamlit_ui/app.py, update the plan_display_list list comprehension to correctly unpack the 5 columns now returned by the plan query, resolving the ValueError.
 
 [ ] Clean Up Dead Code:
 
-[ ] Delete the set_plan_active_status method from database_manager.py.
+[x] Delete the set_plan_active_status method from database_manager.py.
 
-[ ] Delete the get_all_plans_with_inactive method from database_manager.py.
+[x] Delete the get_all_plans_with_inactive method from database_manager.py.
 
-[ ] Delete the corresponding API endpoints for the above methods in app_api.py.
+[x] Delete the corresponding API endpoints for the above methods in app_api.py.
 
 [ ] Fix "Add Plan" Feature:
 
-[ ] Add price and type input fields to the "Add New Plan" form in streamlit_ui/app.py.
+[x] Add price and type input fields to the "Add New Plan" form in streamlit_ui/app.py.
 
-[ ] Update the api.add_plan call to pass the new values.
+[x] Update the api.add_plan call to pass the new values.
 
-[ ] Update the add_plan method signatures in app_api.py and database_manager.py to accept the new fields.
+[x] Update the add_plan method signatures in app_api.py and database_manager.py to accept the new fields.
 
 Phase 2: Backend & Data Model Refactoring
 Goal: Align the backend with the simplified v2.0 data model.
 
 [ ] Update Database Schema:
 
-[ ] In database.py, delete the CREATE TABLE pt_records statement.
+[x] In database.py, delete the CREATE TABLE pt_records statement.
 
-[ ] In database.py, add the is_active (BOOLEAN) column to the plans table definition.
+[x] In database.py, add the is_active (BOOLEAN) column to the plans table definition.
 
 [ ] Remove Obsolete PT Logic:
 
-[ ] In database_manager.py, delete all methods related to the pt_records table (e.g., add_pt_transaction). Ensure all associated comments are also removed.
+[x] In database_manager.py, delete all methods related to the pt_records table (e.g., add_pt_transaction). Ensure all associated comments are also removed.
 
-[ ] In app_api.py, delete the API endpoints that called the obsolete PT methods.
+[x] In app_api.py, delete the API endpoints that called the obsolete PT methods.
 
 [ ] Update Data Migration Script:
 
-[ ] In migrate_data.py, modify process_pt_data to treat PT sessions as standard transactions.
+[x] In migrate_data.py, modify process_pt_data to treat PT sessions as standard transactions.
 
-[ ] Ensure process_pt_data now calls get_or_create_plan_id and then add_transaction.
+[x] Ensure process_pt_data now calls get_or_create_plan_id and then add_transaction.
 
-[ ] Remove any old logic or comments related to processing PT data into a separate table.
+[x] Remove any old logic or comments related to processing PT data into a separate table.
 
 Phase 3: UI Overhaul - Global Structure
 Goal: Rebuild the Streamlit UI with the new tabbed navigation.
 
-[ ] Implement Tabbed Layout: In streamlit_ui/app.py, delete all old UI code and replace it with st.tabs(["Memberships", "Members", "Plans", "Reporting"]).
+[x] Implement Tabbed Layout: In streamlit_ui/app.py, delete all old UI code and replace it with st.tabs(["Memberships", "Members", "Plans", "Reporting"]).
 
 [ ] Create Tab Functions: For better organization, create separate functions to render the content of each tab (e.g., render_memberships_tab(), etc.) and call them within their respective tabs.
 
