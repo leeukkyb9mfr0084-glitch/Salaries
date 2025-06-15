@@ -60,14 +60,14 @@ Goal: Rebuild the Streamlit UI with the new tabbed navigation.
 
 [x] Implement Tabbed Layout: In streamlit_ui/app.py, delete all old UI code and replace it with st.tabs(["Memberships", "Members", "Plans", "Reporting"]).
 
-[ ] Create Tab Functions: For better organization, create separate functions to render the content of each tab (e.g., render_memberships_tab(), etc.) and call them within their respective tabs.
+[x] Create Tab Functions: For better organization, create separate functions to render the content of each tab (e.g., render_memberships_tab(), etc.) and call them within their respective tabs.
 
 Phase 4: UI Build - "Members" Tab
 Goal: Implement the full functionality of the "Members" tab.
 
-[ ] Implement Layout: Create the two-column layout.
+[x] Implement Layout: Create the two-column layout.
 
-[ ] Build Left Form: Create the "Add/Edit Member" form with "Save" and "Clear" buttons.
+[x] Build Left Form: Create the "Add/Edit Member" form with "Save" and "Clear" buttons.
 
 [ ] Build Right Table & Filters:
 
