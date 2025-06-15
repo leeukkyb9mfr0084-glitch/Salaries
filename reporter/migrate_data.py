@@ -4,9 +4,22 @@ import sqlite3
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 
+import os
+import sys
+
+if __name__ == '__main__' and __package__ is None:
+    # Get the directory of the current script (reporter/migrate_data.py)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Get the parent directory (Salaries/) and add it to sys.path
+    parent_dir = os.path.dirname(script_dir)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    # Now we can use absolute imports from the reporter package
+    __package__ = "reporter"
+
 # Make sure the main database file is initialized
-from .database import create_database
-from .database_manager import DB_FILE, DatabaseManager
+from reporter.database import create_database
+from reporter.database_manager import DB_FILE, DatabaseManager
 
 # Determine the directory of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
