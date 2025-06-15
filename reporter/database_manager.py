@@ -79,6 +79,21 @@ class DatabaseManager:
             return []
 
     def add_plan(self, name: str, duration: int, price: int, type_text: str) -> Tuple[bool, str, Optional[int]]:
+        """
+        Adds a new plan to the database.
+
+        Args:
+            name: The name of the plan. Must be unique.
+            duration: The duration of the plan in days. Must be positive.
+            price: The price of the plan. Must not be negative.
+            type_text: The type or category of the plan (e.g., 'GC', 'PT'). Must not be empty.
+
+        Returns:
+            A tuple containing:
+            - bool: True if the plan was added successfully, False otherwise.
+            - str: A message indicating success or the reason for failure.
+            - Optional[int]: The ID of the newly added plan if successful, None otherwise.
+        """
         if duration <= 0:
             logging.error("Plan duration must be a positive number of days.")
             return False, "Error: Plan duration must be a positive number of days.", None
@@ -130,21 +145,6 @@ class DatabaseManager:
             logging.error(f"Database error while updating plan {plan_id}: {e}", exc_info=True)
             return False, f"Database error while updating plan {plan_id}: {e}"
 
-    def set_plan_active_status(self, plan_id: int, is_active: bool) -> Tuple[bool, str]:
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute(
-                "UPDATE plans SET is_active = ? WHERE plan_id = ?",
-                (is_active, plan_id)
-            )
-            self.conn.commit()
-            if cursor.rowcount > 0:
-                return True, "Plan status updated successfully."
-            return False, "Failed to update plan status. Plan not found."
-        except sqlite3.Error as e:
-            logging.error(f"Database error for plan {plan_id} status update: {e}", exc_info=True)
-            return False, f"Database error while setting active status for plan {plan_id}: {e}"
-
     def get_plan_by_id(self, plan_id: int) -> Optional[tuple]:
         try:
             cursor = self.conn.cursor()
@@ -164,17 +164,6 @@ class DatabaseManager:
             return cursor.fetchall()
         except sqlite3.Error as e:
             logging.error(f"Database error fetching all plans: {e}", exc_info=True) # Updated log message
-            return []
-
-    def get_all_plans_with_inactive(self) -> list: # This method might be redundant now or needs re-evaluation
-        try:
-            cursor = self.conn.cursor()
-            # is_active column is removed. This method now behaves like get_all_plans.
-            # Consider removing this method or adapting its purpose if there's a new distinction.
-            cursor.execute("SELECT id, name, duration, price, type FROM plans ORDER BY name ASC")
-            return cursor.fetchall()
-        except sqlite3.Error as e:
-            logging.error(f"Database error fetching all plans (previously with inactive): {e}", exc_info=True) # Updated log
             return []
 
     def get_member_id_from_transaction(self, transaction_id: int) -> Optional[int]:
@@ -384,20 +373,72 @@ class DatabaseManager:
             logging.error(f"DB error fetching plan '{name}' dur {duration} days: {e}", exc_info=True) # Log updated
             return None
 
-    def get_or_create_plan_id(self, name: str, duration: int, price: int, type_text: str) -> int | None: # Added price and type
+    def get_or_create_plan_id(self, name: str, duration: int, price: int, type_text: str) -> Optional[int]:
+        """
+        Retrieves the ID of an existing plan or creates a new one.
+
+        The method first queries the database for a plan with the specified 'name'
+        and 'duration'.
+        - If a plan with the same name and duration is found, its ID is returned.
+        - If no such plan exists, a new plan is created with the provided 'name',
+          'duration', 'price', and 'type_text', and the ID of the new plan is returned.
+
+        This approach helps prevent "UNIQUE constraint failed" errors when data migration
+        or other processes attempt to add plans, assuming the relevant unique constraint
+        involves at least 'name' and 'duration'.
+
+        Args:
+            name: The name of the plan.
+            duration: The duration of the plan in days.
+            price: The price of the plan. Used if creating a new plan.
+            type_text: The type of the plan (e.g., 'GC', 'PT'). Used if creating a new plan.
+
+        Returns:
+            The ID of the existing or newly created plan, or None if an error occurs.
+        """
+        cursor = self.conn.cursor()
         try:
-            cursor = self.conn.cursor()
-            # Search by name and duration, assuming this combination should be unique for get_or_create logic
+            # Check if a plan with the same name and duration already exists
             cursor.execute("SELECT id FROM plans WHERE name = ? AND duration = ?", (name, duration))
             result = cursor.fetchone()
-            if result: return result[0]
-            # Column names updated, price and type added
-            cursor.execute("INSERT INTO plans (name, duration, price, type) VALUES (?, ?, ?, ?)", (name, duration, price, type_text))
-            self.conn.commit()
-            logging.info(f"Created new plan via get_or_create: {name}, {duration} days, Price: {price}, Type: {type_text}") # Log updated
-            return cursor.lastrowid
+            if result:
+                logging.debug(f"Found existing plan for name='{name}', duration={duration}. ID: {result[0]}")
+                return result[0]
+            else:
+                # If it doesn't exist, insert the new plan
+                logging.info(f"Creating new plan: name='{name}', duration={duration}, price={price}, type='{type_text}'")
+                cursor.execute(
+                    "INSERT INTO plans (name, duration, price, type) VALUES (?, ?, ?, ?)",
+                    (name, duration, price, type_text)
+                )
+                self.conn.commit()
+                new_plan_id = cursor.lastrowid
+                logging.info(f"Created new plan with ID: {new_plan_id} (Name: '{name}', Duration: {duration} days)")
+                return new_plan_id
+        except sqlite3.IntegrityError as ie:
+            # This specific catch can be useful if there's a race condition or
+            # if the UNIQUE constraint is on something unexpected (e.g. name alone)
+            # and the initial check passed.
+            self.conn.rollback() # Rollback any pending transaction
+            logging.error(f"Integrity error in get_or_create_plan_id for name='{name}', duration={duration}: {ie}. "
+                          "This might indicate a conflict with an existing plan not caught by the initial check.", exc_info=True)
+            # Attempt to fetch again, in case another process created it.
+            # This is an optimistic recovery for race conditions.
+            try:
+                cursor.execute("SELECT id FROM plans WHERE name = ? AND duration = ?", (name, duration))
+                result = cursor.fetchone()
+                if result:
+                    logging.warning(f"Found plan ID {result[0]} for name='{name}', duration={duration} after initial IntegrityError.")
+                    return result[0]
+                logging.error(f"Still no plan found for name='{name}', duration={duration} after IntegrityError and re-check.")
+                return None
+            except sqlite3.Error as final_e:
+                logging.error(f"Further SQLite error after IntegrityError in get_or_create_plan_id for '{name}': {final_e}", exc_info=True)
+                return None
+
         except sqlite3.Error as e:
-            logging.error(f"DB error in get_or_create_plan_id for '{name}': {e}", exc_info=True)
+            self.conn.rollback() # Rollback any pending transaction
+            logging.error(f"General SQLite error in get_or_create_plan_id for name='{name}', duration={duration}: {e}", exc_info=True)
             return None
 
     def get_transactions_with_member_details(self, name_filter: str = None, phone_filter: str = None, join_date_filter: str = None) -> list:
