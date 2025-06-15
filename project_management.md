@@ -10,7 +10,7 @@
 
 | Task ID | Task Description | Instructions for Junior Developer | Status |
 | :--- | :--- | :--- | :--- |
-| **P1-T1** | Consolidate Project Structure | **Why:** We have two code folders (`reporter`, `kranos_reporter`). This is confusing and will lead to errors. We need one source of truth. \<br\> **How:** \<br\> 1. In your file explorer, delete the entire `kranos_reporter` folder. \<br\> 2. In your code editor, do a project-wide search for "kranos\_reporter" to find any leftover imports. Change them all to import from `reporter`. | `[ ]` |
+| **P1-T1** | Consolidate Project Structure | **Why:** We have two code folders (`reporter`, `reporter`). This is confusing and will lead to errors. We need one source of truth. \<br\> **How:** \<br\> 1. In your file explorer, delete the entire `reporter` folder. \<br\> 2. In your code editor, do a project-wide search for "reporter" to find any leftover imports. Change them all to import from `reporter`. | `[ ]` |
 | **P1-T2** | Clean Up Root Directory | **Why:** The main project folder is cluttered with dozens of old, single-purpose scripts. They are not part of the final application and create confusion. \<br\> **How:** Delete all the standalone Python scripts from the root directory (e.g., `add_and_verify_member.py`, `manage_plan_lifecycle.py`, all the `simulate_...` files). Their logic will be properly implemented in the main application. | `[ ]` |
 | **P1-T3** | Fix Missing Dependency | **Why:** The application will crash when a user tries to download an Excel report because a required library is missing. \<br\> **How:** \<br\> 1. Open the `requirements.txt` file. \<br\> 2. On a new line, add the word `openpyxl`. | `[ ]` |
 

@@ -2,219 +2,320 @@ import streamlit as st
 import pandas as pd
 from datetime import date, datetime # Added datetime
 import sqlite3
+# Import AppAPI class if needed by other parts, and specific functions that are standalone
 from reporter.app_api import AppAPI
-from reporter.database_manager import DB_FILE # To get the database path
+# Standalone API functions for memberships tab (assuming they handle their own DB connection)
+from reporter.app_api import (
+    create_membership,
+    get_active_members_for_dropdown,
+    get_active_plans_for_dropdown,
+    get_all_memberships_for_view, # Added
+    update_membership,            # Added
+    delete_membership             # Added
+)
+from reporter.database import DB_FILE # Use this for DB_PATH
 
-# --- Database Connection & API Initialization ---
+# --- Database Connection & API Initialization (for AppAPI class if used elsewhere) ---
 def get_db_connection():
     conn = sqlite3.connect(DB_FILE)
-    # conn.row_factory = sqlite3.Row # Optional: for dict-like row access if you prefer
     return conn
 
-api = AppAPI(get_db_connection())
+api = AppAPI(get_db_connection()) # This instance is for other tabs/features potentially
+
+# --- Helper function to clear form state ---
+def clear_membership_form_state():
+    st.session_state.create_member_id = None
+    st.session_state.create_plan_id = None
+    st.session_state.create_transaction_amount = 0.0
+    st.session_state.create_start_date = date.today()
+    # If using a form key to force rebuild, you might increment it here
+    if 'form_key_create_membership' in st.session_state:
+        st.session_state.form_key_create_membership = f"form_{datetime.now().timestamp()}"
+
 
 # --- Tab Rendering Functions ---
 def render_memberships_tab():
-    st.header("Membership & Financials")
+    # This tab is for creating and managing memberships as per P3-T1 / P3-T2
 
-    # Initialize session state variables
-    if 'memberships_form_key' not in st.session_state:
-        st.session_state.memberships_form_key = 'initial_memberships_form'
-    if 'close_books_month_key' not in st.session_state: # Used for the date input widget itself
-        st.session_state.close_books_month_key = date.today().replace(day=1)
-    if 'current_book_month_str' not in st.session_state: # Stores YYYY-MM for display
-         st.session_state.current_book_month_str = st.session_state.close_books_month_key.strftime("%Y-%m")
-    if 'book_status_message' not in st.session_state:
-        st.session_state.book_status_message = ""
-    # transactions_data is not explicitly pre-initialized here; fetched on demand by filters.
+    # Initialize session state for form inputs if not already present
+    if 'create_member_id' not in st.session_state:
+        st.session_state.create_member_id = None
+    if 'create_plan_id' not in st.session_state:
+        st.session_state.create_plan_id = None
+    if 'create_transaction_amount' not in st.session_state:
+        st.session_state.create_transaction_amount = 0.0
+    if 'create_start_date' not in st.session_state:
+        st.session_state.create_start_date = date.today()
+    if 'form_key_create_membership' not in st.session_state:
+        st.session_state.form_key_create_membership = 'initial_form_key'
 
-    # --- Data fetching for selectboxes ---
-    try:
-        all_members = api.get_all_members() # Assuming this returns (id, name, ...)
-        member_options = {member[0]: member[1] for member in all_members} if all_members else {}
-    except Exception as e:
-        st.error(f"Error fetching members: {e}")
-        member_options = {}
-        all_members = [] # Ensure it's an iterable
+    # Session state for View/Manage Memberships panel
+    if 'filter_membership_name' not in st.session_state:
+        st.session_state.filter_membership_name = ""
+    if 'filter_membership_phone' not in st.session_state:
+        st.session_state.filter_membership_phone = ""
+    if 'filter_membership_status' not in st.session_state:
+        st.session_state.filter_membership_status = "All" # Default to "All"
+    if 'manage_selected_membership_id' not in st.session_state:
+        st.session_state.manage_selected_membership_id = None
+    if 'memberships_view_data' not in st.session_state: # To store data for selectbox
+        st.session_state.memberships_view_data = []
+    if 'edit_form_key' not in st.session_state:
+        st.session_state.edit_form_key = 'initial_edit_form'
 
-    try:
-        all_plans = api.get_all_plans() # Assuming (id, name, ..., is_active)
-        # Filter for active plans for new memberships
-        active_plan_options = {plan[0]: plan[1] for plan in all_plans if bool(plan[5])} if all_plans else {}
-    except Exception as e:
-        st.error(f"Error fetching plans: {e}")
-        active_plan_options = {}
-        all_plans = [] # Ensure it's an iterable
+    # Edit form field states
+    if 'edit_start_date' not in st.session_state:
+        st.session_state.edit_start_date = date.today()
+    if 'edit_end_date' not in st.session_state:
+        st.session_state.edit_end_date = date.today()
+    if 'edit_is_active' not in st.session_state:
+        st.session_state.edit_is_active = True
 
 
     left_column, right_column = st.columns(2)
 
-    # Left Column: Add Membership Form
+    # Left Column: Create Membership Form
     with left_column:
-        st.subheader("Add New Membership/Transaction")
-        with st.form(key=st.session_state.memberships_form_key, clear_on_submit=True):
-            selected_member_id = st.selectbox("Select Member", options=list(member_options.keys()), format_func=lambda x: member_options.get(x, "Unknown Member"))
-            selected_plan_id = st.selectbox("Select Plan", options=list(active_plan_options.keys()), format_func=lambda x: active_plan_options.get(x, "Unknown Plan"))
+        st.header("Create Membership")
 
-            transaction_date = st.date_input("Transaction Date", value=date.today())
-            amount_paid = st.number_input("Amount Paid", min_value=0.0, format="%.2f")
-            payment_method_options = ["Cash", "Card", "Bank Transfer", "Other"]
-            payment_method = st.selectbox("Payment Method", options=payment_method_options)
+        # Fetch data for dropdowns
+        try:
+            member_list = get_active_members_for_dropdown(DB_FILE) # List of (id, name)
+            plan_list = get_active_plans_for_dropdown(DB_FILE)     # List of (id, name)
+        except Exception as e:
+            st.error(f"Error fetching data for dropdowns: {e}")
+            member_list = []
+            plan_list = []
 
-            submit_button = st.form_submit_button("Save Transaction")
+        # Add a "Select..." option
+        member_options = [(None, "Select Member...")] + member_list
+        plan_options = [(None, "Select Plan...")] + plan_list
 
-            if submit_button:
-                if not selected_member_id or not selected_plan_id or amount_paid <= 0:
-                    st.error("Please select a member, a plan, and enter a valid amount.")
-                else:
+        # Use st.form for better grouping of inputs and submission
+        with st.form(key=st.session_state.form_key_create_membership, clear_on_submit=False): # Clear on submit handled manually by clear_membership_form_state
+            st.selectbox(
+                "Member Name",
+                options=member_options,
+                format_func=lambda x: x[1],
+                key="create_member_id_display" # This will store (id,name) tuple
+            )
+            st.selectbox(
+                "Plan Name",
+                options=plan_options,
+                format_func=lambda x: x[1],
+                key="create_plan_id_display" # This will store (id,name) tuple
+            )
+            st.number_input(
+                "Transaction Amount",
+                min_value=0.0,
+                key="create_transaction_amount",
+                format="%.2f"
+            )
+            st.date_input(
+                "Start Date",
+                key="create_start_date"
+            )
+
+            col1, col2 = st.columns(2)
+            with col1:
+                save_button = st.form_submit_button("SAVE")
+            with col2:
+                clear_button = st.form_submit_button("CLEAR")
+
+        if save_button:
+            # Extract IDs from the stored tuples in session state
+            selected_member_tuple = st.session_state.get("create_member_id_display")
+            selected_plan_tuple = st.session_state.get("create_plan_id_display")
+
+            member_id = selected_member_tuple[0] if selected_member_tuple and selected_member_tuple[0] is not None else None
+            plan_id = selected_plan_tuple[0] if selected_plan_tuple and selected_plan_tuple[0] is not None else None
+            amount = st.session_state.create_transaction_amount
+            start_date_val = st.session_state.create_start_date
+
+            if not member_id or not plan_id:
+                st.error("Please select a member and a plan.")
+            elif amount <= 0:
+                st.error("Transaction amount must be greater than zero.")
+            else:
+                try:
+                    success, message = create_membership(
+                        DB_FILE,
+                        member_id,
+                        plan_id,
+                        amount,
+                        start_date_val.strftime('%Y-%m-%d')
+                    )
+                    if success:
+                        st.success(message)
+                        clear_membership_form_state() # Clear form on success
+                        # To see the form clear, we might need to rerun if not using clear_on_submit=True on st.form
+                        # or by changing the form key which is done in clear_membership_form_state
+                        st.rerun()
+                    else:
+                        st.error(message)
+                except Exception as e:
+                    st.error(f"An unexpected error occurred: {e}")
+
+        if clear_button:
+            clear_membership_form_state()
+            st.rerun() # Rerun to reflect cleared state
+
+    # Right Column: View/Manage Memberships Panel
+    with right_column:
+        st.header("View/Manage Memberships")
+
+        # Filters
+        col_filter1, col_filter2, col_filter3 = st.columns(3)
+        with col_filter1:
+            st.text_input("Filter by Name", key="filter_membership_name")
+        with col_filter2:
+            st.text_input("Filter by Phone", key="filter_membership_phone")
+        with col_filter3:
+            st.selectbox(
+                "Filter by Status",
+                options=["All", "Active", "Inactive"],
+                key="filter_membership_status"
+            )
+
+        # Apply filters button (or trigger on change)
+        if st.button("Apply Filters / Refresh List", key="apply_membership_filters"):
+            st.session_state.manage_selected_membership_id = None # Reset selection on new filter application
+
+        # Fetch and display data
+        try:
+            status_query = st.session_state.filter_membership_status if st.session_state.filter_membership_status != "All" else None
+
+            # Store data in session state to populate the selection dropdown
+            st.session_state.memberships_view_data = get_all_memberships_for_view(
+                DB_FILE,
+                name_filter=st.session_state.filter_membership_name if st.session_state.filter_membership_name else None,
+                phone_filter=st.session_state.filter_membership_phone if st.session_state.filter_membership_phone else None,
+                status_filter=status_query
+            )
+
+            if st.session_state.memberships_view_data:
+                # Prepare for display (e.g., client_name, plan_name, start_date, end_date, status string)
+                display_df = pd.DataFrame(st.session_state.memberships_view_data)
+                # Ensure correct columns for display if needed, API returns dicts with correct keys
+                st.dataframe(display_df[['client_name', 'phone', 'plan_name', 'start_date', 'end_date', 'status', 'membership_id']], hide_index=True, use_container_width=True)
+            else:
+                st.info("No memberships found matching your criteria.")
+
+        except Exception as e:
+            st.error(f"Error fetching memberships: {e}")
+            st.session_state.memberships_view_data = [] # Ensure it's an empty list on error
+            st.dataframe(pd.DataFrame(), use_container_width=True) # Display empty dataframe
+
+        # Select Membership to Manage
+        # Create options for the selectbox from the fetched data
+        manage_options = [(None, "Select Membership...")] + \
+                         [(item['membership_id'], f"{item['client_name']} - {item['plan_name']} ({item['start_date']} to {item['end_date']})")
+                          for item in st.session_state.memberships_view_data]
+
+        if not st.session_state.memberships_view_data and st.session_state.manage_selected_membership_id:
+             st.session_state.manage_selected_membership_id = None # Clear selection if list is empty
+
+        def on_select_membership_for_management():
+            selected_id = st.session_state.get('_manage_selected_membership_id_display') # temp key from widget
+            if selected_id is None:
+                 st.session_state.manage_selected_membership_id = None
+                 return
+
+            st.session_state.manage_selected_membership_id = selected_id
+            # Populate edit form fields
+            selected_details = next((m for m in st.session_state.memberships_view_data if m['membership_id'] == selected_id), None)
+            if selected_details:
+                st.session_state.edit_start_date = datetime.strptime(selected_details['start_date'], "%Y-%m-%d").date()
+                st.session_state.edit_end_date = datetime.strptime(selected_details['end_date'], "%Y-%m-%d").date()
+                st.session_state.edit_is_active = True if selected_details['status'].lower() == 'active' else False
+                st.session_state.edit_form_key = f"edit_form_{datetime.now().timestamp()}" # Change key to force re-render of form defaults
+
+
+        st.selectbox(
+            "Select Membership to Manage",
+            options=manage_options,
+            format_func=lambda x: x[1],
+            key="_manage_selected_membership_id_display", # Temporary key to capture selection
+            on_change=on_select_membership_for_management,
+            index = manage_options.index(next((opt for opt in manage_options if opt[0] == st.session_state.manage_selected_membership_id), (None, "Select Membership...")))
+
+        )
+
+        # Edit/Delete Form (conditional)
+        if st.session_state.manage_selected_membership_id is not None:
+            st.subheader(f"Edit Membership ID: {st.session_state.manage_selected_membership_id}")
+
+            # Find details again (or ensure they are robustly passed if selectbox changes)
+            current_selection_details = next((m for m in st.session_state.memberships_view_data if m['membership_id'] == st.session_state.manage_selected_membership_id), None)
+
+            if current_selection_details:
+                # If selection changes, ensure form defaults are updated. on_change callback handles this.
+                with st.form(key=st.session_state.edit_form_key, clear_on_submit=False):
+                    st.date_input("Start Date", key="edit_start_date")
+                    st.date_input("End Date", key="edit_end_date")
+                    st.checkbox("Is Active", key="edit_is_active")
+
+                    edit_col, delete_col,_ = st.columns([1,1,3]) # Make buttons smaller
+                    with edit_col:
+                        edit_button = st.form_submit_button("SAVE Changes")
+                    with delete_col:
+                        delete_button = st.form_submit_button("DELETE")
+
+                if edit_button:
                     try:
-                        # For simplicity, using 'new_subscription'. Could be 'renewal' or 'payment' based on context.
-                        # Using transaction_date for both start_date and payment_date.
-                        success, message = api.add_transaction(
-                            transaction_type='new_subscription',
-                            member_id=selected_member_id,
-                            plan_id=selected_plan_id,
-                            start_date=transaction_date.strftime("%Y-%m-%d"),
-                            amount_paid=float(amount_paid),
-                            payment_method=payment_method,
-                            payment_date=transaction_date.strftime("%Y-%m-%d")
+                        success, message = update_membership(
+                            DB_FILE,
+                            st.session_state.manage_selected_membership_id,
+                            st.session_state.edit_start_date.strftime('%Y-%m-%d'),
+                            st.session_state.edit_end_date.strftime('%Y-%m-%d'),
+                            st.session_state.edit_is_active
                         )
                         if success:
                             st.success(message)
-                            st.session_state.memberships_form_key = f"memberships_form_{datetime.now().timestamp()}"
-                            # Trigger refresh of transactions list - simple way is rerun, or manage data in session_state
-                            st.rerun()
+                            st.session_state.manage_selected_membership_id = None # Clear selection
+                            st.rerun() # Refresh list
                         else:
                             st.error(message)
                     except Exception as e:
-                        st.error(f"Failed to save transaction: {e}")
+                        st.error(f"Error updating membership: {e}")
 
-    # Right Column: Recent Transactions List & Filters
-    with right_column:
-        st.subheader("Recent Transactions")
-
-        filter_member_id = st.selectbox("Filter by Member", options=["All Members"] + list(member_options.keys()), format_func=lambda x: member_options.get(x, "All Members"))
-        filter_plan_id = st.selectbox("Filter by Plan", options=["All Plans"] + list(active_plan_options.keys()), format_func=lambda x: active_plan_options.get(x, "All Plans")) # Using active_plan_options for consistency
-
-        col_start_date, col_end_date = st.columns(2)
-        filter_start_date = col_start_date.date_input("From Date", value=None)
-        filter_end_date = col_end_date.date_input("To Date", value=None)
-
-        if st.button("Refresh Transactions", key="refresh_transactions"):
-            try:
-                api_member_id = filter_member_id if filter_member_id != "All Members" else None
-                api_plan_id = filter_plan_id if filter_plan_id != "All Plans" else None
-                api_start_date = filter_start_date.strftime("%Y-%m-%d") if filter_start_date else None
-                api_end_date = filter_end_date.strftime("%Y-%m-%d") if filter_end_date else None
-
-                # Store fetched data in session state to persist unless filters change and refresh is hit
-                st.session_state.transactions_data = api.get_transactions_filtered(
-                    member_id=api_member_id,
-                    plan_id=api_plan_id,
-                    start_date_filter=api_start_date,
-                    end_date_filter=api_end_date,
-                    limit=100 # Increased limit
-                )
-            except Exception as e:
-                st.error(f"Error fetching transactions: {e}")
-                st.session_state.transactions_data = []
-
-        # Display transactions from session state
-        if 'transactions_data' in st.session_state and st.session_state.transactions_data:
-            transactions_to_display = []
-            for tx in st.session_state.transactions_data:
-                # (transaction_id, transaction_date, member_name, plan_name, amount, payment_method, description, start_date, end_date)
-                transactions_to_display.append({
-                    "ID": tx[0],
-                    "Date": tx[1],
-                    "Member": tx[2] if tx[2] else "N/A",
-                    "Plan": tx[3] if tx[3] else "N/A",
-                    "Amount": f"${tx[4]:.2f}" if tx[4] is not None else "-",
-                    "Method": tx[5] if tx[5] else "N/A",
-                    "Description": tx[6] if tx[6] else "-"
-                })
-            df_transactions = pd.DataFrame(transactions_to_display)
-            st.dataframe(df_transactions, hide_index=True, use_container_width=True)
-
-            for tx_original_data in st.session_state.transactions_data:
-                tx_id = tx_original_data[0]
-                tx_desc = tx_original_data[6] or tx_original_data[1] # Use description or date as fallback display
-
-                action_cols = st.columns([4,1])
-                action_cols[0].write(f"Tx ID: {tx_id} - {tx_desc[:30]}...")
-                if action_cols[1].button("Delete", key=f"delete_tx_{tx_id}"):
-                    st.session_state[f"confirm_delete_tx_{tx_id}"] = True
-                    st.rerun() # Rerun to show confirmation
-
-                if st.session_state.get(f"confirm_delete_tx_{tx_id}", False):
-                    st.warning(f"Are you sure you want to delete transaction ID {tx_id}?")
-                    confirm_del_col1, confirm_del_col2 = st.columns(2)
-                    if confirm_del_col1.button("Yes, Delete Transaction", key=f"confirm_delete_btn_tx_{tx_id}"):
-                        try:
-                            success, message = api.delete_transaction(tx_id)
-                            if success:
-                                st.success(message)
-                                # Invalidate transactions_data so it's refreshed if "Refresh" is hit next
-                                if 'transactions_data' in st.session_state: del st.session_state.transactions_data
-                            else:
-                                st.error(message)
-                            del st.session_state[f"confirm_delete_tx_{tx_id}"]
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error deleting transaction: {e}")
-                            del st.session_state[f"confirm_delete_tx_{tx_id}"]
-                            st.rerun()
-                    if confirm_del_col2.button("Cancel", key=f"cancel_delete_tx_{tx_id}"):
-                        del st.session_state[f"confirm_delete_tx_{tx_id}"]
+                if delete_button:
+                    # Confirmation for delete
+                    if 'confirm_delete_membership_id' not in st.session_state or \
+                       st.session_state.confirm_delete_membership_id != st.session_state.manage_selected_membership_id:
+                        st.session_state.confirm_delete_membership_id = st.session_state.manage_selected_membership_id
+                        st.warning(f"Are you sure you want to DEACTIVATE membership ID {st.session_state.manage_selected_membership_id}? This will mark it as inactive.")
+                        # Rerun to show confirmation buttons
                         st.rerun()
-        elif 'transactions_data' in st.session_state and not st.session_state.transactions_data:
-            st.info("No transactions found for the selected filters.")
-        else:
-            st.info("Click 'Refresh Transactions' to load data.")
 
+                    if st.session_state.get('confirm_delete_membership_id') == st.session_state.manage_selected_membership_id:
+                        confirm_yes, confirm_no = st.columns(2)
+                        with confirm_yes:
+                            if st.button("Yes, Deactivate", key=f"confirm_del_ms_{st.session_state.manage_selected_membership_id}"):
+                                try:
+                                    success, message = delete_membership(DB_FILE, st.session_state.manage_selected_membership_id)
+                                    if success:
+                                        st.success(message)
+                                    else:
+                                        st.error(message)
+                                    st.session_state.manage_selected_membership_id = None # Clear selection
+                                    del st.session_state.confirm_delete_membership_id # Clear confirmation state
+                                    st.rerun() # Refresh list
+                                except Exception as e:
+                                    st.error(f"Error deactivating membership: {e}")
+                                    del st.session_state.confirm_delete_membership_id
+                                    st.rerun()
+                        with confirm_no:
+                             if st.button("Cancel Deactivation", key=f"cancel_del_ms_{st.session_state.manage_selected_membership_id}"):
+                                del st.session_state.confirm_delete_membership_id
+                                st.rerun()
+            else:
+                 # This case might occur if the list was refreshed and the selected ID is no longer valid
+                 st.session_state.manage_selected_membership_id = None
+                 # Optionally show a message e.g. st.info("Selected membership details not found. Please re-select.")
+                 # Rerun can help clear the state if it's stuck
+                 st.rerun()
 
-    # Bottom Section: Close Books
-    st.divider()
-    st.subheader("Close Books for Month")
-
-    selected_month_for_books = st.date_input("Select Month to Manage", value=st.session_state.close_books_month_key, key="close_books_date_selector")
-
-    # Update current_book_month_str whenever the date input changes
-    st.session_state.current_book_month_str = selected_month_for_books.strftime("%Y-%m")
-
-    if st.button("Check/Refresh Book Status", key="refresh_book_status"):
-        try:
-            status = api.get_book_status(st.session_state.current_book_month_str)
-            st.session_state.book_status_message = f"Books for {st.session_state.current_book_month_str} are: **{status.upper()}**"
-        except Exception as e:
-            st.session_state.book_status_message = f"Error fetching book status: {e}"
-
-    if st.session_state.book_status_message:
-        st.markdown(st.session_state.book_status_message)
-
-    current_status = ""
-    if "are: **CLOSED**" in st.session_state.book_status_message:
-        current_status = "closed"
-    elif "are: **OPEN**" in st.session_state.book_status_message:
-        current_status = "open"
-
-    if current_status:
-        action_button_label = f"Reopen Books for {st.session_state.current_book_month_str}" if current_status == "closed" else f"Close Books for {st.session_state.current_book_month_str}"
-        new_status_on_action = "open" if current_status == "closed" else "closed"
-
-        if st.button(action_button_label, key="toggle_book_status_action"):
-            try:
-                success = api.set_book_status(st.session_state.current_book_month_str, new_status_on_action)
-                if success:
-                    st.success(f"Books for {st.session_state.current_book_month_str} are now {new_status_on_action.upper()}.")
-                    # Refresh status message
-                    status = api.get_book_status(st.session_state.current_book_month_str)
-                    st.session_state.book_status_message = f"Books for {st.session_state.current_book_month_str} are: **{status.upper()}**"
-                else:
-                    st.error(f"Failed to {new_status_on_action} books for {st.session_state.current_book_month_str}.")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error setting book status: {e}")
 
 def render_members_tab():
     st.header("Member Management")

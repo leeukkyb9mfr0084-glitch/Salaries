@@ -1,5 +1,5 @@
 from .database_manager import DatabaseManager
-from typing import Tuple, Optional, List, Any  # Added List, Any
+from typing import Tuple, Optional, List, Any, Dict  # Added List, Any, Dict
 import sqlite3  # Required for type hinting Connection
 
 
@@ -436,3 +436,300 @@ class AppAPI:
 # Removed PT-specific validation and logic from DBManager.add_transaction.
 # Standardized transaction_type handling in DBManager.add_transaction.
 # Generalized end_date calculation in DBManager.add_transaction.
+
+import sqlite3
+from datetime import datetime, timedelta
+
+def create_membership(db_path: str, member_id: int, plan_id: int, transaction_amount: float, start_date_str: str) -> Tuple[bool, str]:
+    """
+    Creates a new membership, deactivates existing ones, and records the transaction.
+
+    Args:
+        db_path: Path to the SQLite database file.
+        member_id: The ID of the member.
+        plan_id: The ID of the plan.
+        transaction_amount: The amount paid for the transaction.
+        start_date_str: The start date of the membership (YYYY-MM-DD).
+
+    Returns:
+        A tuple (success_status, message).
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # 1. Fetch plan duration
+        cursor.execute("SELECT duration FROM plans WHERE id = ?", (plan_id,))
+        plan_row = cursor.fetchone()
+        if not plan_row:
+            return False, "Plan not found."
+        plan_duration_days = plan_row[0]
+
+        # 2. Determine transaction_type
+        cursor.execute("SELECT 1 FROM memberships WHERE member_id = ? AND is_active = 1", (member_id,))
+        existing_active_membership = cursor.fetchone()
+        transaction_type = 'Renewal' if existing_active_membership else 'New'
+
+        # 3. Deactivate existing active memberships for this member
+        cursor.execute("UPDATE memberships SET is_active = 0 WHERE member_id = ? AND is_active = 1", (member_id,))
+
+        # 4. Calculate end_date
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+        end_date = start_date + timedelta(days=plan_duration_days)
+        end_date_str = end_date.strftime("%Y-%m-%d")
+
+        # 5. Insert into memberships table
+        cursor.execute(
+            """
+            INSERT INTO memberships (member_id, plan_id, start_date, end_date, is_active)
+            VALUES (?, ?, ?, ?, 1)
+            """,
+            (member_id, plan_id, start_date_str, end_date_str),
+        )
+        if cursor.rowcount == 0:
+            conn.rollback()
+            return False, "Failed to create new membership entry."
+
+        # 6. Insert into transactions table
+        # transaction_date is the start_date_str for new memberships/renewals
+        cursor.execute(
+            """
+            INSERT INTO transactions (member_id, plan_id, transaction_type, amount, transaction_date, start_date, end_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (member_id, plan_id, transaction_type, transaction_amount, start_date_str, start_date_str, end_date_str),
+        )
+        if cursor.rowcount == 0:
+            conn.rollback() # Rollback if transaction insert fails
+            return False, "Failed to create transaction entry."
+
+        conn.commit()
+        return True, f"Membership created successfully. Type: {transaction_type}."
+
+    except sqlite3.Error as e:
+        if conn:
+            conn.rollback()
+        return False, f"Database error: {e}"
+    except ValueError as e: # For date parsing errors
+        return False, f"Date error: {e}"
+    finally:
+        if conn:
+            conn.close()
+
+def update_membership(db_path: str, membership_id: int, start_date_str: str, end_date_str: str, is_active_bool: bool) -> Tuple[bool, str]:
+    """
+    Updates an existing membership's start date, end date, and active status.
+
+    Args:
+        db_path: Path to the SQLite database file.
+        membership_id: The ID of the membership to update.
+        start_date_str: The new start date (YYYY-MM-DD).
+        end_date_str: The new end date (YYYY-MM-DD).
+        is_active_bool: The new active status (True or False).
+
+    Returns:
+        A tuple (success_status, message).
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Validate date strings format (optional, but good practice)
+        try:
+            datetime.strptime(start_date_str, "%Y-%m-%d")
+            datetime.strptime(end_date_str, "%Y-%m-%d")
+        except ValueError:
+            return False, "Invalid date format. Please use YYYY-MM-DD."
+
+        is_active_int = 1 if is_active_bool else 0
+
+        cursor.execute(
+            "UPDATE memberships SET start_date = ?, end_date = ?, is_active = ? WHERE id = ?",
+            (start_date_str, end_date_str, is_active_int, membership_id)
+        )
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return True, "Membership updated successfully."
+        else:
+            return False, "Membership not found or no changes made."
+
+    except sqlite3.Error as e:
+        if conn:
+            conn.rollback()
+        return False, f"Database error: {e}"
+    finally:
+        if conn:
+            conn.close()
+
+def delete_membership(db_path: str, membership_id: int) -> Tuple[bool, str]:
+    """
+    Deactivates a membership (soft delete).
+
+    Args:
+        db_path: Path to the SQLite database file.
+        membership_id: The ID of the membership to deactivate.
+
+    Returns:
+        A tuple (success_status, message).
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("UPDATE memberships SET is_active = 0 WHERE id = ?", (membership_id,))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return True, "Membership deactivated successfully."
+        else:
+            return False, "Membership not found."
+
+    except sqlite3.Error as e:
+        if conn:
+            conn.rollback()
+        return False, f"Database error: {e}"
+    finally:
+        if conn:
+            conn.close()
+
+def get_all_memberships_for_view(
+    db_path: str,
+    name_filter: Optional[str] = None,
+    phone_filter: Optional[str] = None,
+    status_filter: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Retrieves memberships joined with member and plan details, with optional filters.
+    Returns data as a list of dictionaries for UI display.
+
+    Args:
+        db_path: Path to the SQLite database file.
+        name_filter: Optional filter for member name (case-insensitive, partial match).
+        phone_filter: Optional filter for member phone (partial match).
+        status_filter: Optional status to filter by ("Active" or "Inactive").
+
+    Returns:
+        A list of dictionaries, each representing a membership view record.
+    """
+    conn = None
+    results = []
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row  # Access columns by name
+        cursor = conn.cursor()
+
+        base_query = """
+            SELECT
+                ms.id as membership_id,
+                m.client_name,
+                m.phone,
+                p.name AS plan_name,
+                ms.start_date,
+                ms.end_date,
+                ms.is_active
+            FROM
+                members m
+                JOIN memberships ms ON m.member_id = ms.member_id
+                JOIN plans p ON ms.plan_id = p.id
+        """
+
+        conditions = []
+        params = []
+
+        if name_filter:
+            conditions.append("m.client_name LIKE ?")
+            params.append(f"%{name_filter}%")
+
+        if phone_filter:
+            conditions.append("m.phone LIKE ?")
+            params.append(f"%{phone_filter}%")
+
+        if status_filter:
+            if status_filter.lower() == "active":
+                conditions.append("ms.is_active = 1")
+            elif status_filter.lower() == "inactive":
+                conditions.append("ms.is_active = 0")
+            # If status_filter is something else, it's ignored
+
+        if conditions:
+            base_query += " WHERE " + " AND ".join(conditions)
+
+        base_query += " ORDER BY ms.start_date DESC" # Show recent ones first
+
+        cursor.execute(base_query, params)
+        rows = cursor.fetchall()
+
+        for row in rows:
+            results.append(
+                {
+                    "membership_id": row["membership_id"],
+                    "client_name": row["client_name"],
+                    "phone": row["phone"],
+                    "plan_name": row["plan_name"],
+                    "start_date": row["start_date"],
+                    "end_date": row["end_date"],
+                    "status": "Active" if row["is_active"] == 1 else "Inactive",
+                }
+            )
+
+    except sqlite3.Error as e:
+        print(f"Database error in get_all_memberships_for_view: {e}")
+        # Optionally, re-raise or handle more gracefully
+    finally:
+        if conn:
+            conn.close()
+    return results
+
+def get_active_members_for_dropdown(db_path: str) -> List[Tuple[int, str]]:
+    """
+    Retrieves active members (ID and name) for dropdown population.
+
+    Args:
+        db_path: Path to the SQLite database file.
+
+    Returns:
+        A list of tuples, where each tuple is (member_id, client_name).
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        # Fetches members that are marked as active
+        cursor.execute("SELECT member_id, client_name FROM members WHERE is_active = 1 ORDER BY client_name ASC")
+        members = cursor.fetchall()
+        return members
+    except sqlite3.Error as e:
+        print(f"Database error in get_active_members_for_dropdown: {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+def get_active_plans_for_dropdown(db_path: str) -> List[Tuple[int, str]]:
+    """
+    Retrieves active plans (ID and name) for dropdown population.
+
+    Args:
+        db_path: Path to the SQLite database file.
+
+    Returns:
+        A list of tuples, where each tuple is (plan_id, plan_name).
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        # Fetches plans that are marked as active
+        cursor.execute("SELECT id, name FROM plans WHERE is_active = 1 ORDER BY name ASC")
+        plans = cursor.fetchall()
+        return plans
+    except sqlite3.Error as e:
+        print(f"Database error in get_active_plans_for_dropdown: {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()

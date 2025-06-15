@@ -27,6 +27,22 @@ def create_database(db_name: str):
         """
         )
 
+        # Create memberships table
+        cursor.execute(
+            """
+        CREATE TABLE IF NOT EXISTS memberships (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            member_id INTEGER,
+            plan_id INTEGER,
+            start_date TEXT,
+            end_date TEXT,
+            is_active BOOLEAN,
+            FOREIGN KEY (member_id) REFERENCES members(id),
+            FOREIGN KEY (plan_id) REFERENCES plans(id)
+        );
+        """
+        )
+
         # Create plans table
         cursor.execute(
             """
