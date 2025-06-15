@@ -200,9 +200,8 @@ class DatabaseManager:
     def get_plan_by_id(self, plan_id: int) -> Optional[tuple]:
         try:
             cursor = self.conn.cursor()
-            # Assuming you want all new fields. Adjust if is_active was intentionally kept for some logic.
             cursor.execute(
-                "SELECT id, name, duration, price, type FROM plans WHERE id = ?",
+                "SELECT id, name, duration, price, type, is_active FROM plans WHERE id = ?",
                 (plan_id,),
             )
             return cursor.fetchone()
@@ -215,10 +214,10 @@ class DatabaseManager:
     def get_all_plans(self) -> list:  # Fetches all plans (is_active column was removed)
         try:
             cursor = self.conn.cursor()
-            # is_active column is removed, so WHERE condition is removed.
-            # Adjust if there's a new way to determine active plans (e.g., via 'type' or a new 'status' column)
+            # Selects all plans, including their is_active status.
+            # Callers can filter based on is_active if needed.
             cursor.execute(
-                "SELECT id, name, duration, price, type FROM plans ORDER BY name ASC"
+                "SELECT id, name, duration, price, type, is_active FROM plans ORDER BY name ASC"
             )
             return cursor.fetchall()
         except sqlite3.Error as e:
@@ -285,55 +284,37 @@ class DatabaseManager:
 
         db_amount = int(amount)  # Ensure amount is integer for DB
 
-        # Validate sessions for Personal Training
-        if transaction_type == "Personal Training" and (
-            sessions is None or sessions <= 0
-        ):
-            return (
-                False,
-                "Number of sessions must be a positive number for Personal Training.",
-            )
-
         # --- Parameter Mapping ---
         db_type = ""
         db_description = ""
 
-        if transaction_type == "Personal Training":
-            db_type = "payment"
-            if sessions:
-                db_description = f"{sessions} PT sessions"
-            else:  # Should be caught by above validation, but as a fallback
-                db_description = "Personal Training"
-        elif transaction_type == "Group Class":
-            db_type = "new_subscription"  # As per instruction
-            # Try to get plan name for description
-            plan_name_desc = transaction_type  # Fallback
-            if plan_id:
-                plan_details_for_desc = self.get_plan_by_id(plan_id)
-                if (
-                    plan_details_for_desc and plan_details_for_desc[1]
-                ):  # plan_details_for_desc[1] is name
-                    plan_name_desc = plan_details_for_desc[1]
-            db_description = f"Subscription: {plan_name_desc}"
-        elif transaction_type in [
-            "renewal",
-            "payment",
-            "expense",
-            "new_subscription",
-        ]:  # If a valid DB type is passed directly
-            db_type = transaction_type
-            db_description = (
-                f"Transaction type: {transaction_type}"  # Generic description
+        # transaction_type should be one of the canonical types.
+        if transaction_type not in ['new_subscription', 'renewal', 'payment', 'expense']:
+            logging.error(
+                f"Invalid transaction_type '{transaction_type}' received."
             )
+            return False, f"Invalid transaction_type: {transaction_type}. Must be one of ['new_subscription', 'renewal', 'payment', 'expense']."
+
+        db_type = transaction_type
+
+        # Generate a generic description. If a plan is linked, use its name.
+        if plan_id:
+            plan_details = self.get_plan_by_id(plan_id)
+            if plan_details and plan_details[1]: # plan_details[1] is name
+                db_description = f"{transaction_type.capitalize()}: {plan_details[1]}"
+            else:
+                # Plan details not found, or name is missing. Fallback.
+                db_description = f"{transaction_type.capitalize()}: Plan ID {plan_id}"
         else:
-            # Fallback for unmapped transaction_type
-            logging.warning(
-                f"Unmapped transaction_type '{transaction_type}' received. Storing as 'payment' with original type in description."
-            )
-            db_type = (
-                "payment"  # Default to 'payment' or choose another appropriate default
-            )
-            db_description = f"Original type: {transaction_type}"
+            # No plan_id, use a generic description based on transaction type.
+            # For 'expense' or 'payment', a more specific description might be passed
+            # via the 'description' parameter in the future if needed, but current signature doesn't have it.
+            # For now, this is a basic generic description.
+            db_description = f"{transaction_type.capitalize()}"
+            if transaction_type == "expense" and sessions: # 'sessions' might be repurposed or come from elsewhere
+                logging.warning("The 'sessions' parameter was provided for an 'expense' transaction. This may need review.")
+                # Potentially add sessions to description if relevant for some expenses, though this is unlikely.
+                # db_description += f" (Sessions: {sessions})" # Example, if sessions were to be used generically
 
         final_transaction_date = transaction_date if transaction_date else start_date
         final_end_date = end_date
@@ -352,79 +333,48 @@ class DatabaseManager:
                 f"Invalid date format for start_date ('{start_date}') or transaction_date ('{final_transaction_date}').",
             )
 
-        if (
-            transaction_type == "Group Class"
-        ):  # This logic seems to apply to 'new_subscription' or 'renewal' related to plans
+        # Generic end_date calculation for transactions linked to a plan
+        # This applies if transaction_type is 'new_subscription' or 'renewal' and plan_id is provided
+        if transaction_type in ["new_subscription", "renewal"] and plan_id:
             if final_end_date:
                 try:
                     datetime.strptime(final_end_date, "%Y-%m-%d")
                 except ValueError:
-                    # If end_date is provided but invalid, it might be better to error out or log
                     logging.warning(
-                        f"Invalid end_date format '{final_end_date}' for Group Class. Will attempt to calculate if possible."
+                        f"Invalid end_date format '{final_end_date}' for transaction type {transaction_type}. Will attempt to calculate."
                     )
-                    final_end_date = (
-                        None  # Reset to trigger calculation if plan_id is present
-                    )
+                    final_end_date = None # Reset to trigger calculation
 
-            if not final_end_date:  # Calculate if not provided or if it was invalid
-                if not plan_id:
-                    # If it's a group class, it should have a plan_id to calculate duration.
-                    # If not, it's ambiguous how to set end_date.
-                    logging.error(
-                        "plan_id is required for Group Class if end_date is not supplied or invalid."
-                    )
-                    return (
-                        False,
-                        "plan_id is required for Group Class if end_date is not supplied or invalid.",
-                    )
-
+            if not final_end_date:
                 plan_details = self.get_plan_by_id(plan_id)
                 if not plan_details:
-                    return False, f"Plan with ID {plan_id} not found."
+                    return False, f"Plan with ID {plan_id} not found for end_date calculation."
 
-                # plan_details structure: id (0), name (1), duration (2), price (3), type (4)
-                duration_days = plan_details[2]
-                if (
-                    duration_days is None
-                    or not isinstance(duration_days, int)
-                    or duration_days <= 0
-                ):
+                duration_days = plan_details[2] # Assuming plan_details[2] is duration
+                if not isinstance(duration_days, int) or duration_days <= 0:
                     logging.error(
                         f"Invalid duration ({duration_days}) for plan ID {plan_id}. Cannot calculate end_date."
                     )
-                    return (
-                        False,
-                        f"Invalid duration for plan ID {plan_id}. Cannot calculate end_date.",
-                    )
+                    return False, f"Invalid duration for plan ID {plan_id} for end_date calculation."
 
                 try:
                     final_end_date = (
-                        datetime.strptime(start_date, "%Y-%m-%d")
-                        + timedelta(days=duration_days)
+                        datetime.strptime(start_date, "%Y-%m-%d") + timedelta(days=duration_days)
                     ).strftime("%Y-%m-%d")
-                except (
-                    ValueError
-                ) as ve:  # Catch error from strptime if start_date was somehow bad despite earlier check
-                    logging.error(
-                        f"Date calculation error for end_date: {ve}", exc_info=True
-                    )
-                    return (
-                        False,
-                        f"Error calculating end_date from start_date '{start_date}'.",
-                    )
+                except ValueError as ve:
+                    logging.error(f"Date calculation error for end_date: {ve}", exc_info=True)
+                    return False, f"Error calculating end_date from start_date '{start_date}'."
 
-        # For other types like 'Personal Training' (payment), 'expense', direct 'payment',
-        # end_date might not be applicable or directly provided.
-        # If final_end_date is still None here for such cases, it will be inserted as NULL.
+        # For other types like 'payment', 'expense', end_date might not be applicable
+        # or should be directly provided if needed. If final_end_date is still None, it will be NULL.
 
         try:
             cursor = self.conn.cursor()
 
             sql = """
                 INSERT INTO transactions
-                (member_id, plan_id, transaction_date, amount, transaction_type, description, start_date, end_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (member_id, plan_id, transaction_date, amount, transaction_type, description, start_date, end_date, payment_method, sessions)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             # Ensure 'type' in the SQL query above is changed to 'transaction_type'
             # if that's the actual column name in the transactions table.
@@ -439,6 +389,8 @@ class DatabaseManager:
                 db_description,
                 start_date,
                 final_end_date,
+                payment_method, # Added payment_method
+                sessions        # Added sessions
             )
 
             cursor.execute(sql, params)
@@ -537,14 +489,27 @@ class DatabaseManager:
     def get_all_activity_for_member(self, member_id: int) -> list:
         try:
             cursor = self.conn.cursor()
+            # Refactored query to return more direct data, reducing complex CASE statements.
+            # The UI or calling layer can format this data as needed.
+            # t.description should now contain a good summary of the transaction.
+            # p.name is the plan name if a plan is linked.
+            # t.sessions is included; its relevance may diminish over time.
             query = """
-                SELECT t.transaction_type,
-                       CASE WHEN t.transaction_type = 'Group Class' THEN p.plan_name ELSE 'PT Session' END,
-                       t.payment_date, t.start_date, t.end_date, t.amount_paid,
-                       CASE WHEN t.transaction_type = 'Group Class' THEN t.payment_method ELSE CAST(t.sessions AS TEXT) || ' sessions' END,
-                       t.transaction_id
-                FROM transactions t LEFT JOIN plans p ON t.plan_id = p.plan_id
-                WHERE t.member_id = ? ORDER BY t.start_date DESC;
+                SELECT
+                    t.transaction_id,
+                    t.transaction_type,
+                    t.description,
+                    t.transaction_date,
+                    t.start_date,
+                    t.end_date,
+                    t.amount,
+                    p.name AS plan_name,
+                    t.payment_method,
+                    t.sessions
+                FROM transactions t
+                LEFT JOIN plans p ON t.plan_id = p.id
+                WHERE t.member_id = ?
+                ORDER BY t.start_date DESC, t.transaction_id DESC;
             """
             cursor.execute(query, (member_id,))
             return cursor.fetchall()
@@ -562,10 +527,13 @@ class DatabaseManager:
         try:
             cursor = self.conn.cursor()
             query = """
-                SELECT m.client_name, m.phone, p.plan_name, t.end_date
+                SELECT m.client_name, m.phone, p.name AS plan_name, t.end_date
                 FROM transactions t
-                JOIN members m ON t.member_id = m.member_id JOIN plans p ON t.plan_id = p.plan_id
-                WHERE strftime('%Y-%m', t.end_date) = ? AND m.is_active = 1 AND t.transaction_type = 'Group Class'
+                JOIN members m ON t.member_id = m.member_id
+                JOIN plans p ON t.plan_id = p.id -- Corrected join condition and selected p.name
+                WHERE strftime('%Y-%m', t.end_date) = ?
+                  AND m.is_active = 1
+                  AND t.transaction_type IN ('new_subscription', 'renewal') -- Changed from 'Group Class'
                 ORDER BY t.end_date ASC, m.client_name ASC;
             """
             cursor.execute(query, (year_month_str,))
@@ -790,12 +758,21 @@ class DatabaseManager:
         try:
             cursor = self.conn.cursor()
             query = """
-                SELECT t.transaction_id, m.client_name, t.transaction_date, t.start_date, t.end_date, t.amount, t.transaction_type,
-                       CASE WHEN t.transaction_type = 'Group Class' THEN p.plan_name
-                            WHEN t.transaction_type = 'Personal Training' THEN CAST(t.sessions AS TEXT) || ' sessions'
-                            ELSE NULL END,
-                       t.payment_method
-                FROM transactions t JOIN members m ON t.member_id = m.member_id LEFT JOIN plans p ON t.plan_id = p.plan_id
+                SELECT
+                    t.transaction_id,
+                    m.client_name,
+                    t.transaction_date,
+                    t.start_date,
+                    t.end_date,
+                    t.amount,
+                    t.transaction_type,
+                    t.description,      -- Use the stored transaction description
+                    p.name AS plan_name, -- Also provide plan name if available
+                    t.payment_method,
+                    t.sessions          -- Include sessions, its utility might vary
+                FROM transactions t
+                JOIN members m ON t.member_id = m.member_id
+                LEFT JOIN plans p ON t.plan_id = p.id -- Corrected join condition
                 WHERE strftime('%Y', t.transaction_date) = ? AND strftime('%m', t.transaction_date) = ?
                 ORDER BY t.transaction_date ASC, t.transaction_id ASC;
             """
