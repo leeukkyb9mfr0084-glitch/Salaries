@@ -128,14 +128,15 @@ def test_add_transaction_to_closed_month(book_closing_fixture):  # Use new fixtu
     assert member_result is not None, "Test member setup failed"
     member_id = member_result[0]
 
-    plan_name = "Test Plan for Closed Month"
+    base_plan_name = "Test Plan for Closed Month"
     plan_duration = 30
+    formatted_plan_name = f"{base_plan_name} - {plan_duration} Days"
     # db_mngr.add_plan returns Tuple[bool, str, Optional[int]]
     # AppAPI.add_plan needs name, duration_days, price, type_text
     # Using db_mngr.add_plan for directness in setup as it's simpler here.
     # The plans table was updated to include price and type_text for AppAPI compatibility if needed elsewhere.
     success_add_plan, message_add_plan, plan_id = db_mngr.add_plan(
-        plan_name, plan_duration, 100, "TestType"
+        formatted_plan_name, plan_duration, 100, "TestType"
     )
     assert (
         success_add_plan is True
@@ -207,8 +208,11 @@ def test_delete_transaction_from_closed_month(book_closing_fixture):  # Use new 
     member_id = member_id_row[0]
 
     # Using db_mngr.add_plan for setup simplicity
+    base_plan_name_del = "Delete Test Plan"
+    plan_duration_del = 30
+    formatted_plan_name_del = f"{base_plan_name_del} - {plan_duration_del} Days"
     success_add_plan_del, message_add_plan_del, plan_id_del = db_mngr.add_plan(
-        "Delete Test Plan", 30, 100, "TestType"
+        formatted_plan_name_del, plan_duration_del, 100, "TestType"
     )
     assert (
         success_add_plan_del is True

@@ -43,15 +43,16 @@ def api_db_fixture(monkeypatch):
 # Tests for app_api.add_plan
 def test_add_plan_success(api_db_fixture):
     app_api, db_mngr = api_db_fixture
-    plan_name = "New Valid Plan"
-    success, message, plan_id = app_api.add_plan(name=plan_name, duration_days=DEFAULT_DURATION, price=DEFAULT_PRICE, type_text=DEFAULT_TYPE_TEXT)
+    base_plan_name = "New Valid Plan"
+    formatted_plan_name = f"{base_plan_name} - {DEFAULT_DURATION} Days"
+    success, message, plan_id = app_api.add_plan(name=formatted_plan_name, duration_days=DEFAULT_DURATION, price=DEFAULT_PRICE, type_text=DEFAULT_TYPE_TEXT)
     assert success is True
     assert message == "Plan added successfully."
     assert plan_id is not None
 
     fetched_plan = db_mngr.get_plan_by_id(plan_id)
     assert fetched_plan is not None
-    assert fetched_plan[1] == plan_name
+    assert fetched_plan[1] == formatted_plan_name
     assert fetched_plan[2] == DEFAULT_DURATION
     assert fetched_plan[3] == DEFAULT_PRICE
     assert fetched_plan[4] == DEFAULT_TYPE_TEXT
@@ -59,39 +60,49 @@ def test_add_plan_success(api_db_fixture):
 
 def test_add_plan_invalid_duration_zero(api_db_fixture):
     app_api, _ = api_db_fixture
-    success, message, plan_id = app_api.add_plan(name="Zero Duration Plan", duration_days=0, price=DEFAULT_PRICE, type_text=DEFAULT_TYPE_TEXT)
+    # Name formatting with invalid duration, though the validation is on duration itself.
+    formatted_name = "Zero Duration Plan - 0 Days"
+    success, message, plan_id = app_api.add_plan(name=formatted_name, duration_days=0, price=DEFAULT_PRICE, type_text=DEFAULT_TYPE_TEXT)
     assert success is False
     assert "duration must be a positive number" in message
     assert plan_id is None
 
 def test_add_plan_invalid_duration_negative(api_db_fixture):
     app_api, _ = api_db_fixture
-    success, message, plan_id = app_api.add_plan(name="Negative Duration Plan", duration_days=-10, price=DEFAULT_PRICE, type_text=DEFAULT_TYPE_TEXT)
+    formatted_name = "Negative Duration Plan - -10 Days" # Pathological name, but follows format
+    success, message, plan_id = app_api.add_plan(name=formatted_name, duration_days=-10, price=DEFAULT_PRICE, type_text=DEFAULT_TYPE_TEXT)
     assert success is False
     assert "duration must be a positive number" in message
     assert plan_id is None
 
 def test_add_plan_negative_price(api_db_fixture):
     app_api, _ = api_db_fixture
-    success, message, plan_id = app_api.add_plan(name="Negative Price Plan", duration_days=DEFAULT_DURATION, price=-100, type_text=DEFAULT_TYPE_TEXT)
+    base_name = "Negative Price Plan"
+    formatted_name = f"{base_name} - {DEFAULT_DURATION} Days"
+    success, message, plan_id = app_api.add_plan(name=formatted_name, duration_days=DEFAULT_DURATION, price=-100, type_text=DEFAULT_TYPE_TEXT)
     assert success is False
     assert "price cannot be negative" in message # Based on DatabaseManager validation
     assert plan_id is None
 
 def test_add_plan_empty_type_text(api_db_fixture):
     app_api, _ = api_db_fixture
-    success, message, plan_id = app_api.add_plan(name="Empty Type Plan", duration_days=DEFAULT_DURATION, price=DEFAULT_PRICE, type_text="")
+    base_name = "Empty Type Plan"
+    formatted_name = f"{base_name} - {DEFAULT_DURATION} Days"
+    success, message, plan_id = app_api.add_plan(name=formatted_name, duration_days=DEFAULT_DURATION, price=DEFAULT_PRICE, type_text="")
     assert success is False
     assert "type cannot be empty" in message # Based on DatabaseManager validation
     assert plan_id is None
 
 def test_add_plan_duplicate_name(api_db_fixture):
     app_api, _ = api_db_fixture
-    plan_name = "Duplicate Name Plan"
+    base_name = "Duplicate Name Plan"
+    duration1 = DEFAULT_DURATION
+    formatted_name1 = f"{base_name} - {duration1} Days"
     # Add first plan
-    app_api.add_plan(name=plan_name, duration_days=DEFAULT_DURATION, price=DEFAULT_PRICE, type_text=DEFAULT_TYPE_TEXT)
-    # Try to add another with the same name
-    success, message, plan_id = app_api.add_plan(name=plan_name, duration_days=DEFAULT_DURATION + 10, price=DEFAULT_PRICE + 50, type_text="OtherType")
+    app_api.add_plan(name=formatted_name1, duration_days=duration1, price=DEFAULT_PRICE, type_text=DEFAULT_TYPE_TEXT)
+    # Try to add another with the same name but different duration (should still be a name conflict)
+    duration2 = DEFAULT_DURATION + 10
+    success, message, plan_id = app_api.add_plan(name=formatted_name1, duration_days=duration2, price=DEFAULT_PRICE + 50, type_text="OtherType")
     assert success is False
     assert "likely already exists" in message # Because plan name should be unique
     assert plan_id is None
@@ -101,21 +112,25 @@ def test_add_plan_duplicate_name(api_db_fixture):
 def test_update_plan_success(api_db_fixture):
     app_api, db_mngr = api_db_fixture
     # Add an initial plan
-    add_success, _, plan_id = app_api.add_plan(name="Initial Plan", duration_days=30, price=100, type_text="TypeA")
+    base_initial_name = "Initial Plan"
+    initial_duration = 30
+    formatted_initial_name = f"{base_initial_name} - {initial_duration} Days"
+    add_success, _, plan_id = app_api.add_plan(name=formatted_initial_name, duration_days=initial_duration, price=100, type_text="TypeA")
     assert add_success is True and plan_id is not None
 
-    updated_name = "Updated Plan Name"
+    base_updated_name = "Updated Plan Name"
     updated_duration = 60
     updated_price = 150
     updated_type_text = "TypeB"
+    formatted_updated_name = f"{base_updated_name} - {updated_duration} Days"
 
-    success, message = app_api.update_plan(plan_id, updated_name, updated_duration, updated_price, updated_type_text)
+    success, message = app_api.update_plan(plan_id, formatted_updated_name, updated_duration, updated_price, updated_type_text)
     assert success is True
     assert message == "Plan updated successfully."
 
     fetched_plan = db_mngr.get_plan_by_id(plan_id)
     assert fetched_plan is not None
-    assert fetched_plan[1] == updated_name
+    assert fetched_plan[1] == formatted_updated_name
     assert fetched_plan[2] == updated_duration
     assert fetched_plan[3] == updated_price
     assert fetched_plan[4] == updated_type_text
@@ -125,7 +140,10 @@ def test_update_plan_success(api_db_fixture):
 def test_update_plan_non_existent(api_db_fixture):
     app_api, _ = api_db_fixture
     non_existent_plan_id = 9999
-    success, message = app_api.update_plan(non_existent_plan_id, "NonExistent", 30, 100, "TypeC")
+    base_name = "NonExistent"
+    duration = 30
+    formatted_name = f"{base_name} - {duration} Days"
+    success, message = app_api.update_plan(non_existent_plan_id, formatted_name, duration, 100, "TypeC")
     assert success is False
     # Message might vary, e.g. "Failed to update plan. Plan not found or data unchanged."
     # AppAPI specific message is "Failed to update plan. Plan not found."
@@ -133,43 +151,66 @@ def test_update_plan_non_existent(api_db_fixture):
 
 def test_update_plan_invalid_duration(api_db_fixture):
     app_api, _ = api_db_fixture
-    add_success, _, plan_id = app_api.add_plan(name="PlanForUpdateFail", duration_days=30, price=100, type_text="TypeD")
+    base_initial_name = "PlanForUpdateFail"
+    initial_duration = 30
+    formatted_initial_name = f"{base_initial_name} - {initial_duration} Days"
+    add_success, _, plan_id = app_api.add_plan(name=formatted_initial_name, duration_days=initial_duration, price=100, type_text="TypeD")
     assert add_success is True and plan_id is not None
 
-    success, message = app_api.update_plan(plan_id, "UpdatedName", 0, 120, "TypeE") # Invalid duration
+    base_updated_name = "UpdatedName"
+    # Use a valid duration for formatting the name part of the update, even if testing invalid duration value
+    formatted_updated_name = f"{base_updated_name} - {initial_duration} Days"
+    success, message = app_api.update_plan(plan_id, formatted_updated_name, 0, 120, "TypeE") # Invalid duration 0
     assert success is False
     assert "duration must be a positive number" in message
 
 def test_update_plan_negative_price(api_db_fixture):
     app_api, _ = api_db_fixture
-    add_success, _, plan_id = app_api.add_plan(name="PlanForUpdatePriceFail", duration_days=30, price=100, type_text="TypeF")
+    base_initial_name = "PlanForUpdatePriceFail"
+    initial_duration = 30
+    formatted_initial_name = f"{base_initial_name} - {initial_duration} Days"
+    add_success, _, plan_id = app_api.add_plan(name=formatted_initial_name, duration_days=initial_duration, price=100, type_text="TypeF")
     assert add_success is True and plan_id is not None
 
-    success, message = app_api.update_plan(plan_id, "UpdatedName", 30, -50, "TypeG") # Invalid price
+    base_updated_name = "UpdatedName"
+    formatted_updated_name = f"{base_updated_name} - {initial_duration} Days"
+    success, message = app_api.update_plan(plan_id, formatted_updated_name, initial_duration, -50, "TypeG") # Invalid price
     assert success is False
     assert "price cannot be negative" in message
 
 def test_update_plan_empty_type_text(api_db_fixture):
     app_api, _ = api_db_fixture
-    add_success, _, plan_id = app_api.add_plan(name="PlanForUpdateTypeFail", duration_days=30, price=100, type_text="TypeH")
+    base_initial_name = "PlanForUpdateTypeFail"
+    initial_duration = 30
+    formatted_initial_name = f"{base_initial_name} - {initial_duration} Days"
+    add_success, _, plan_id = app_api.add_plan(name=formatted_initial_name, duration_days=initial_duration, price=100, type_text="TypeH")
     assert add_success is True and plan_id is not None
 
-    success, message = app_api.update_plan(plan_id, "UpdatedName", 30, 120, "") # Invalid type_text
+    base_updated_name = "UpdatedName"
+    formatted_updated_name = f"{base_updated_name} - {initial_duration} Days"
+    success, message = app_api.update_plan(plan_id, formatted_updated_name, initial_duration, 120, "") # Invalid type_text
     assert success is False
     assert "type cannot be empty" in message
 
 def test_update_plan_to_duplicate_name(api_db_fixture):
     app_api, _ = api_db_fixture
-    plan1_name = "UniqueName1"
-    plan2_name = "UniqueName2"
+    base_name1 = "UniqueName1"
+    duration1 = 30
+    formatted_name1 = f"{base_name1} - {duration1} Days"
 
-    add_success1, _, plan_id1 = app_api.add_plan(name=plan1_name, duration_days=30, price=100, type_text="TypeI")
+    base_name2 = "UniqueName2"
+    duration2 = 40
+    formatted_name2 = f"{base_name2} - {duration2} Days"
+
+    add_success1, _, plan_id1 = app_api.add_plan(name=formatted_name1, duration_days=duration1, price=100, type_text="TypeI")
     assert add_success1 is True and plan_id1 is not None
-    add_success2, _, plan_id2 = app_api.add_plan(name=plan2_name, duration_days=40, price=120, type_text="TypeJ")
+    add_success2, _, plan_id2 = app_api.add_plan(name=formatted_name2, duration_days=duration2, price=120, type_text="TypeJ")
     assert add_success2 is True and plan_id2 is not None
 
     # Attempt to update plan2 to have the same name as plan1
-    success, message = app_api.update_plan(plan_id2, plan1_name, 45, 130, "TypeK")
+    # The duration for plan2 can be different, testing only name collision.
+    duration_for_plan2_update = 45
+    success, message = app_api.update_plan(plan_id2, formatted_name1, duration_for_plan2_update, 130, "TypeK")
     assert success is False
     # AppAPI specific message is "Failed to update plan. New name '...' likely already exists for another plan."
     assert "New name" in message and "likely already exists for another plan" in message
@@ -178,8 +219,10 @@ def test_update_plan_to_duplicate_name(api_db_fixture):
 def test_delete_plan_not_in_use(api_db_fixture):
     app_api, db_mngr = api_db_fixture
     # Add a plan
-    plan_name = "ToDeletePlan"
-    add_plan_success, _, plan_id = app_api.add_plan(name=plan_name, duration_days=30, price=100, type_text="TypeToDelete")
+    base_name = "ToDeletePlan"
+    duration = 30
+    formatted_name = f"{base_name} - {duration} Days"
+    add_plan_success, _, plan_id = app_api.add_plan(name=formatted_name, duration_days=duration, price=100, type_text="TypeToDelete")
     assert add_plan_success is True and plan_id is not None
 
     # Delete (deactivate) the plan
@@ -200,8 +243,10 @@ def test_delete_plan_in_use(api_db_fixture):
     assert add_member_success is True and member_id is not None
 
     # Add a plan
-    plan_name = "UsedPlan"
-    add_plan_success, _, plan_id = app_api.add_plan(name=plan_name, duration_days=30, price=100, type_text="TypeUsed")
+    base_name = "UsedPlan"
+    duration = 30
+    formatted_name = f"{base_name} - {duration} Days"
+    add_plan_success, _, plan_id = app_api.add_plan(name=formatted_name, duration_days=duration, price=100, type_text="TypeUsed")
     assert add_plan_success is True and plan_id is not None
 
     # Add a transaction linking the member and the plan
