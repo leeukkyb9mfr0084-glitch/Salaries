@@ -7,7 +7,7 @@ from dateutil.relativedelta import relativedelta
 import os
 import sys
 
-if __name__ == '__main__' and __package__ is None:
+if __name__ == "__main__" and __package__ is None:
     # Get the directory of the current script (reporter/migrate_data.py)
     script_dir = os.path.dirname(os.path.abspath(__file__))
     # Get the parent directory (Salaries/) and add it to sys.path
@@ -27,50 +27,55 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 
 # Construct absolute paths to the CSV files in the project root
-GC_CSV_PATH = os.path.join(project_root, 'Kranos MMA Members.xlsx - GC.csv')
-PT_CSV_PATH = os.path.join(project_root, 'Kranos MMA Members.xlsx - PT.csv')
+GC_CSV_PATH = os.path.join(project_root, "Kranos MMA Members.xlsx - GC.csv")
+PT_CSV_PATH = os.path.join(project_root, "Kranos MMA Members.xlsx - PT.csv")
+
 
 def parse_date(date_str):
     """Parses DD/MM/YY or DD/MM/YYYY and returns YYYY-MM-DD format."""
     date_str = date_str.strip()
     # Handle YYYY format in the date (e.g., 03/03/2025)
-    if len(date_str.split('/')[-1]) == 4:
+    if len(date_str.split("/")[-1]) == 4:
         try:
-            return datetime.strptime(date_str, '%d/%m/%Y').strftime('%Y-%m-%d')
+            return datetime.strptime(date_str, "%d/%m/%Y").strftime("%Y-%m-%d")
         except ValueError:
             pass
     # Handle YY format (e.g., 13/05/24)
     try:
-        return datetime.strptime(date_str, '%d/%m/%y').strftime('%Y-%m-%d')
+        return datetime.strptime(date_str, "%d/%m/%y").strftime("%Y-%m-%d")
     except ValueError:
         print(f"Warning: Could not parse date '{date_str}' with known formats.")
         return None
+
 
 def parse_amount(amount_str):
     """Removes currency symbols, commas, and whitespace, then converts to float."""
     try:
         # Remove currency symbols, commas, and strip whitespace
-        cleaned_str = amount_str.replace('₹', '').replace(',', '').strip()
-        if cleaned_str in ('-', ''):
+        cleaned_str = amount_str.replace("₹", "").replace(",", "").strip()
+        if cleaned_str in ("-", ""):
             return 0.0
         return float(cleaned_str)
     except (ValueError, AttributeError):
         print(f"Warning: Could not parse amount '{amount_str}'.")
         return None
 
+
 def process_gc_data():
     """Reads the Group Class CSV and populates members and group_memberships tables."""
     print("\nProcessing Group Class data...")
-    conn = sqlite3.connect(DB_FILE) # Connect once
-    db_manager = DatabaseManager(conn) # Create manager
+    conn = sqlite3.connect(DB_FILE)  # Connect once
+    db_manager = DatabaseManager(conn)  # Create manager
 
     try:
-        cursor = db_manager.conn.cursor() # Use manager's connection
+        cursor = db_manager.conn.cursor()  # Use manager's connection
         print("Clearing existing data from tables: transactions, members, plans")
         cursor.execute("DELETE FROM transactions;")
         cursor.execute("DELETE FROM members;")
         cursor.execute("DELETE FROM plans;")
-        cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('members', 'transactions', 'plans');")
+        cursor.execute(
+            "DELETE FROM sqlite_sequence WHERE name IN ('members', 'transactions', 'plans');"
+        )
         db_manager.conn.commit()
         print("Data cleared successfully.")
 
@@ -78,7 +83,9 @@ def process_gc_data():
             print(f"ERROR: GC data file not found at '{GC_CSV_PATH}'")
             return
 
-        with open(GC_CSV_PATH, mode='r', encoding='utf-8-sig') as infile: # Use utf-8-sig to handle BOM
+        with open(
+            GC_CSV_PATH, mode="r", encoding="utf-8-sig"
+        ) as infile:  # Use utf-8-sig to handle BOM
             reader = csv.reader(infile)
             # Read header and strip spaces from each column name
             header = [h.strip() for h in next(reader)]
@@ -91,39 +98,43 @@ def process_gc_data():
         print(f"Database error during GC data processing: {e}")
     finally:
         if conn:
-            conn.close() # Close the single connection at the end
+            conn.close()  # Close the single connection at the end
 
 
 def _process_gc_row(row, db_manager):
     """Processes a single row from the Group Class CSV."""
     try:
-        name = row.get('Client Name', '').strip()
-        phone = row.get('Phone', '').strip()
-        payment_date_raw = row.get('Payment Date', '').strip()
+        name = row.get("Client Name", "").strip()
+        phone = row.get("Phone", "").strip()
+        payment_date_raw = row.get("Payment Date", "").strip()
 
         # New logic for start and end dates
-        plan_start_date_str = row.get('Plan Start Date', '').strip()
-        plan_duration_str = row.get('Plan Duration', '0').strip()
+        plan_start_date_str = row.get("Plan Start Date", "").strip()
+        plan_duration_str = row.get("Plan Duration", "0").strip()
         plan_duration = 0
         if plan_duration_str:
             plan_duration = int(plan_duration_str)
         else:
-            plan_duration = 0 # Or handle as error if empty is not allowed
+            plan_duration = 0  # Or handle as error if empty is not allowed
 
         # This check uses the parsed integer plan_duration
         if not plan_start_date_str or plan_duration <= 0:
-            print(f"Skipping row due to missing Plan Start Date or invalid/zero Plan Duration: {row}")
+            print(
+                f"Skipping row due to missing Plan Start Date or invalid/zero Plan Duration: {row}"
+            )
             return
 
         if not all([name, phone, payment_date_raw]):
-            print(f"Skipping row due to missing essential data (Name, Phone, or Payment Date): {row}")
+            print(
+                f"Skipping row due to missing essential data (Name, Phone, or Payment Date): {row}"
+            )
             return
-    except Exception as e: # This is the new block
+    except Exception as e:  # This is the new block
         print(f"Error during initial row parsing: {e} for row: {row}")
         return
 
     payment_date = parse_date(payment_date_raw)
-    if not payment_date: # Check essential payment_date
+    if not payment_date:  # Check essential payment_date
         print(f"Skipping row due to unparsable Payment Date: {row}")
         return
 
@@ -131,32 +142,36 @@ def _process_gc_row(row, db_manager):
     try:
         # Attempt to parse plan_start_date_str (with fallbacks)
         try:
-            start_dt = datetime.strptime(plan_start_date_str, '%d/%m/%y')
+            start_dt = datetime.strptime(plan_start_date_str, "%d/%m/%y")
         except ValueError:
             try:
                 # Fallback to '%d/%m/%Y' if '%d/%m/%y' fails
-                start_dt = datetime.strptime(plan_start_date_str, '%d/%m/%Y')
+                start_dt = datetime.strptime(plan_start_date_str, "%d/%m/%Y")
             except ValueError:
-                print(f"Skipping row due to unparsable Plan Start Date '{plan_start_date_str}': {row}")
-                return # Important: return here if date is unparsable
+                print(
+                    f"Skipping row due to unparsable Plan Start Date '{plan_start_date_str}': {row}"
+                )
+                return  # Important: return here if date is unparsable
 
         # New end date logic using plan_duration
         # Simplified calculation: end_dt is always start_dt + plan_duration in days.
         end_dt = start_dt + timedelta(days=plan_duration)
-        duration_for_db_days = plan_duration # This is already in days
+        duration_for_db_days = plan_duration  # This is already in days
 
-        plan_end_date_db = end_dt.strftime('%Y-%m-%d')
+        plan_end_date_db = end_dt.strftime("%Y-%m-%d")
 
         # Format start date for DB (already available as start_dt)
-        plan_start_date_db = start_dt.strftime('%Y-%m-%d')
+        plan_start_date_db = start_dt.strftime("%Y-%m-%d")
 
         member_info = db_manager.get_member_by_phone(phone)
         if member_info:
             member_id = member_info[0]
         else:
             # Use plan_start_date_db for join date if creating a new member
-            member_id = db_manager.add_member_with_join_date(name, phone, plan_start_date_db)
-            if not member_id: # If creation failed, try fetching again
+            member_id = db_manager.add_member_with_join_date(
+                name, phone, plan_start_date_db
+            )
+            if not member_id:  # If creation failed, try fetching again
                 member_info = db_manager.get_member_by_phone(phone)
                 if member_info:
                     member_id = member_info[0]
@@ -166,20 +181,24 @@ def _process_gc_row(row, db_manager):
             else:
                 print(f"Created new member: {name} with join date {plan_start_date_db}")
 
-        plan_name = row.get('Plan Type', '').strip()
+        plan_name = row.get("Plan Type", "").strip()
         if not plan_name:
             print(f"Skipping row due to missing Plan Type: {row}")
             return
 
-        price = parse_amount(row.get('Amount', '0'))
+        price = parse_amount(row.get("Amount", "0"))
         # Use duration_for_db_days for plan ID retrieval
-        plan_id = db_manager.get_or_create_plan_id(plan_name, duration_for_db_days, price, 'GC')
+        plan_id = db_manager.get_or_create_plan_id(
+            plan_name, duration_for_db_days, price, "GC"
+        )
 
         if not plan_id:
-            print(f"Could not create or find plan for {plan_name} with duration {duration_for_db_days} days for row: {row}")
+            print(
+                f"Could not create or find plan for {plan_name} with duration {duration_for_db_days} days for row: {row}"
+            )
             return
 
-        amount = parse_amount(row.get('Amount','0'))
+        amount = parse_amount(row.get("Amount", "0"))
         if amount is None:
             print(f"Warning: Skipping row due to invalid amount. Data: {row}")
             return
@@ -188,17 +207,20 @@ def _process_gc_row(row, db_manager):
             transaction_type="Group Class",
             member_id=member_id,
             plan_id=plan_id,
-            transaction_date=payment_date, # This is YYYY-MM-DD from parse_date
-            start_date=plan_start_date_db, # This is YYYY-MM-DD
-            end_date=plan_end_date_db, # This is YYYY-MM-DD
+            transaction_date=payment_date,  # This is YYYY-MM-DD from parse_date
+            start_date=plan_start_date_db,  # This is YYYY-MM-DD
+            end_date=plan_end_date_db,  # This is YYYY-MM-DD
             amount=amount,
-            payment_method=row.get('Payment Mode', '').strip(),
-            sessions=None
+            payment_method=row.get("Payment Mode", "").strip(),
+            sessions=None,
         )
-    except (ValueError, KeyError) as e: # Catches data-related errors from the main block
+    except (
+        ValueError,
+        KeyError,
+    ) as e:  # Catches data-related errors from the main block
         print(f"Skipping row due to data error ('{e}'): {row}")
         return
-    except Exception as e: # Catches any other unexpected errors from the main block
+    except Exception as e:  # Catches any other unexpected errors from the main block
         print(f"An unexpected error occurred on row {row}: {e}")
         return
 
@@ -214,7 +236,7 @@ def process_pt_data():
             print(f"ERROR: PT data file not found at '{PT_CSV_PATH}'")
             return
 
-        with open(PT_CSV_PATH, mode='r', encoding='utf-8-sig') as infile:
+        with open(PT_CSV_PATH, mode="r", encoding="utf-8-sig") as infile:
             reader = csv.reader(infile)
             header = [h.strip() for h in next(reader)]
 
@@ -222,9 +244,9 @@ def process_pt_data():
                 row = dict(zip(header, row_list))
                 # All indentation from here uses 4 spaces per level
                 try:
-                    name = row.get('Client Name', '').strip()
-                    phone = row.get('Phone', '').strip()
-                    start_date_raw = row.get('Start Date', '').strip()
+                    name = row.get("Client Name", "").strip()
+                    phone = row.get("Phone", "").strip()
+                    start_date_raw = row.get("Start Date", "").strip()
 
                     if not name or not phone or not start_date_raw:
                         continue
@@ -238,18 +260,24 @@ def process_pt_data():
                     if member_info:
                         member_id = member_info[0]
                     else:
-                        member_id = db_manager.add_member_with_join_date(name, phone, start_date)
+                        member_id = db_manager.add_member_with_join_date(
+                            name, phone, start_date
+                        )
                         if member_id:
                             print(f"Created new member from PT data: {name}")
                         else:
-                            print(f"Could not create or find member from PT data: {name}")
+                            print(
+                                f"Could not create or find member from PT data: {name}"
+                            )
                             continue
 
-                    amount_paid_raw = row.get('Amount Paid', '0')
-                    sessions_str = row.get('Session Count', '0').strip()
+                    amount_paid_raw = row.get("Amount Paid", "0")
+                    sessions_str = row.get("Session Count", "0").strip()
 
                     amount_paid = parse_amount(amount_paid_raw)
-                    if amount_paid is None or amount_paid <= 0: # PT amount should be positive
+                    if (
+                        amount_paid is None or amount_paid <= 0
+                    ):  # PT amount should be positive
                         print(f"Skipping PT row due to invalid or zero amount: {row}")
                         continue
 
@@ -257,15 +285,21 @@ def process_pt_data():
                     try:
                         sessions_count = int(sessions_str)
                         if sessions_count <= 0:
-                            print(f"Skipping PT row due to invalid or zero session count: {row}")
+                            print(
+                                f"Skipping PT row due to invalid or zero session count: {row}"
+                            )
                             continue
                     except ValueError:
-                        print(f"Skipping PT row due to non-integer session count: {row}")
+                        print(
+                            f"Skipping PT row due to non-integer session count: {row}"
+                        )
                         continue
 
                     # Plan Creation/Retrieval for PT
                     pt_plan_name = "PT Package"
-                    pt_duration_days = 90  # Nominal duration for PT packages, e.g., 90 days
+                    pt_duration_days = (
+                        90  # Nominal duration for PT packages, e.g., 90 days
+                    )
 
                     # Ensure price is an int for get_or_create_plan_id
                     plan_price = int(amount_paid)
@@ -274,36 +308,40 @@ def process_pt_data():
                         name=pt_plan_name,
                         duration=pt_duration_days,
                         price=plan_price,
-                        type_text='PT'
+                        type_text="PT",
                     )
 
                     if not plan_id:
-                        print(f"Error: Could not get or create plan_id for PT row: {row}. Skipping.")
+                        print(
+                            f"Error: Could not get or create plan_id for PT row: {row}. Skipping."
+                        )
                         continue
 
                     # Transaction Addition for PT
-                    transaction_end_date = (datetime.strptime(start_date, '%Y-%m-%d') + timedelta(days=pt_duration_days)).strftime('%Y-%m-%d')
+                    transaction_end_date = (
+                        datetime.strptime(start_date, "%Y-%m-%d")
+                        + timedelta(days=pt_duration_days)
+                    ).strftime("%Y-%m-%d")
                     # The description for add_transaction is now generated within add_transaction itself based on type.
                     # However, the subtask asks to create a description here:
                     description = f"{sessions_count} PT sessions purchased"
 
-
                     success, message = db_manager.add_transaction(
-                        transaction_type="Personal Training", # This will be mapped to 'payment' in add_transaction
+                        transaction_type="Personal Training",  # This will be mapped to 'payment' in add_transaction
                         member_id=member_id,
                         plan_id=plan_id,
-                        transaction_date=start_date, # YYYY-MM-DD
-                        start_date=start_date,       # YYYY-MM-DD
+                        transaction_date=start_date,  # YYYY-MM-DD
+                        start_date=start_date,  # YYYY-MM-DD
                         end_date=transaction_end_date,
-                        amount=amount_paid,          # float/int
-                        sessions=sessions_count,     # Passed for add_transaction's internal logic
+                        amount=amount_paid,  # float/int
+                        sessions=sessions_count,  # Passed for add_transaction's internal logic
                         # description=description # This was requested, but add_transaction now makes its own.
-                                                  # Passing it would override add_transaction's logic.
-                                                  # The prompt for add_transaction said:
-                                                  # "If transaction_type is "Personal Training" and sessions parameter is provided, format it as f"{sessions} PT sessions"."
-                                                  # So, we should rely on add_transaction to build the description from 'sessions'.
-                                                  # If we want to force THIS description, we'd need to change add_transaction.
-                                                  # For now, let add_transaction do its job.
+                        # Passing it would override add_transaction's logic.
+                        # The prompt for add_transaction said:
+                        # "If transaction_type is "Personal Training" and sessions parameter is provided, format it as f"{sessions} PT sessions"."
+                        # So, we should rely on add_transaction to build the description from 'sessions'.
+                        # If we want to force THIS description, we'd need to change add_transaction.
+                        # For now, let add_transaction do its job.
                     )
                     if not success:
                         print(f"Error adding PT transaction for row {row}: {message}")
@@ -318,7 +356,8 @@ def process_pt_data():
         if conn:
             conn.close()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     print("--- Starting Database Migration ---")
     data_dir = os.path.dirname(DB_FILE)
     if not os.path.exists(data_dir):

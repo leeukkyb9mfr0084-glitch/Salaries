@@ -49,14 +49,14 @@
         3.  On the right, display a filterable list of recent transactions.
         4.  At the bottom, add the "Close Books for Month" section with the month/year selection and the "Close Books" button.
 
-* [ ] **Task 2.3: Build "Plans" Tab**
+* [x] **Task 2.3: Build "Plans" Tab**
     * **Context:** This tab needs to be implemented to allow for plan management.
     * **Instructions:**
         1.  Create the specified two-column layout.
         2.  On the left, build the "Add/Edit Plan" form. This should handle both creating new plans and updating existing ones.
         3.  On the right, display a list of all existing plans. Each row must include an "Active" checkbox and "Edit"/"Delete" buttons, and their functionality must be implemented.
 
-* [ ] **Task 2.4: Build "Reporting" Tab**
+* [x] **Task 2.4: Build "Reporting" Tab**
     * **Context:** This tab needs to be implemented to display financial and renewal reports.
     * **Instructions:**
         1.  Create the two vertical sections as per the spec.
@@ -69,14 +69,14 @@
 
 *Goal: Perform comprehensive testing to ensure all features work correctly and the application is stable.*
 
-* [ ] **Task 3.1: CRUD Testing**
+* [x] **Task 3.1: CRUD Testing**
     * **Context:** Once the UI and bug fixes are complete, we need to test all Create, Read, Update, and Delete operations.
     * **Instructions:**
         1.  **Members:** Thoroughly test adding, editing, searching, filtering, and deactivating members.
         2.  **Plans:** Test adding, editing, deleting, and activating/deactivating plans.
         3.  **Memberships:** Test adding and deleting membership transactions for members.
 
-* [ ] **Task 3.2: Functionality Testing**
+* [x] **Task 3.2: Functionality Testing**
     * **Context:** Key application features need to be validated to ensure they work as expected.
     * **Instructions:**
         1.  Verify the member "History" modal displays correct data.

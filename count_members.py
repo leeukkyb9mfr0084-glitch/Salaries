@@ -1,8 +1,9 @@
 import sqlite3
 
+
 def count_member_rows():
     """Connects to the database and prints the number of rows in the members table."""
-    db_path = 'reporter/data/kranos_data.db'
+    db_path = "reporter/data/kranos_data.db"
     conn = None
     try:
         conn = sqlite3.connect(db_path)
@@ -16,5 +17,6 @@ def count_member_rows():
         if conn:
             conn.close()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     count_member_rows()

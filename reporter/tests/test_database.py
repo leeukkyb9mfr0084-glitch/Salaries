@@ -1,25 +1,33 @@
 import sqlite3
 import pytest
-import os # Added os import
-from reporter.database import create_database, seed_initial_plans, initialize_database, DB_FILE as ORIGINAL_DB_FILE # Import initialize_database and original DB_FILE
+import os  # Added os import
+from reporter.database import (
+    create_database,
+    seed_initial_plans,
+    initialize_database,
+    DB_FILE as ORIGINAL_DB_FILE,
+)  # Import initialize_database and original DB_FILE
 
 # Expected table names
 EXPECTED_TABLES = ["members", "plans", "transactions", "monthly_book_status"]
 EXPECTED_INITIAL_PLANS = [
     ("Monthly - Unrestricted", 30),
     ("3 Months - Unrestricted", 90),
-    ("Annual - Unrestricted", 365)
+    ("Annual - Unrestricted", 365),
 ]
+
 
 def test_create_database_tables():
     """
     Tests if create_database function correctly creates all specified tables.
     """
-    db_name = ':memory:'
-    conn = None # Initialize conn here to ensure it's available in finally
+    db_name = ":memory:"
+    conn = None  # Initialize conn here to ensure it's available in finally
     try:
         conn = create_database(db_name)  # Create tables and get connection
-        assert conn is not None, "create_database(':memory:') should return a connection."
+        assert (
+            conn is not None
+        ), "create_database(':memory:') should return a connection."
         cursor = conn.cursor()
 
         # Query sqlite_master table for existing table names
@@ -32,8 +40,12 @@ def test_create_database_tables():
 
         # For good measure, check that no other unexpected tables are present (owned by us)
         # sqlite_sequence is an internal table sqlite creates for AUTOINCREMENT
-        non_expected_tables = [t for t in tables if t not in EXPECTED_TABLES and t != 'sqlite_sequence']
-        assert not non_expected_tables, f"Unexpected tables found: {non_expected_tables}"
+        non_expected_tables = [
+            t for t in tables if t not in EXPECTED_TABLES and t != "sqlite_sequence"
+        ]
+        assert (
+            not non_expected_tables
+        ), f"Unexpected tables found: {non_expected_tables}"
 
     except sqlite3.Error as e:
         pytest.fail(f"Database operation failed: {e}")
@@ -41,31 +53,39 @@ def test_create_database_tables():
         if conn:
             conn.close()
 
+
 def test_seed_initial_plans():
     """
     Tests if seed_initial_plans correctly inserts the default plans.
     """
-    db_name = ':memory:'
-    conn = None # Initialize conn here to ensure it's available in finally
+    db_name = ":memory:"
+    conn = None  # Initialize conn here to ensure it's available in finally
     try:
         conn = create_database(db_name)  # Create tables and get connection
-        assert conn is not None, "create_database(':memory:') should return a connection."
+        assert (
+            conn is not None
+        ), "create_database(':memory:') should return a connection."
 
         # seed_initial_plans expects a connection object
         seed_initial_plans(conn)
 
         cursor = conn.cursor()
-        cursor.execute("SELECT plan_name, duration_days FROM plans ORDER BY duration_days;")
+        cursor.execute(
+            "SELECT plan_name, duration_days FROM plans ORDER BY duration_days;"
+        )
         seeded_plans = cursor.fetchall()
 
-        assert len(seeded_plans) == len(EXPECTED_INITIAL_PLANS), \
-            f"Expected {len(EXPECTED_INITIAL_PLANS)} plans, but found {len(seeded_plans)}."
+        assert len(seeded_plans) == len(
+            EXPECTED_INITIAL_PLANS
+        ), f"Expected {len(EXPECTED_INITIAL_PLANS)} plans, but found {len(seeded_plans)}."
 
         for i, expected_plan in enumerate(EXPECTED_INITIAL_PLANS):
-            assert seeded_plans[i][0] == expected_plan[0], \
-                f"Plan name mismatch: Expected '{expected_plan[0]}', got '{seeded_plans[i][0]}'"
-            assert seeded_plans[i][1] == expected_plan[1], \
-                f"Plan duration mismatch for '{expected_plan[0]}': Expected {expected_plan[1]}, got {seeded_plans[i][1]}"
+            assert (
+                seeded_plans[i][0] == expected_plan[0]
+            ), f"Plan name mismatch: Expected '{expected_plan[0]}', got '{seeded_plans[i][0]}'"
+            assert (
+                seeded_plans[i][1] == expected_plan[1]
+            ), f"Plan duration mismatch for '{expected_plan[0]}': Expected {expected_plan[1]}, got {seeded_plans[i][1]}"
 
     except sqlite3.Error as e:
         pytest.fail(f"Database operation failed during seeding or verification: {e}")
@@ -73,10 +93,12 @@ def test_seed_initial_plans():
         if conn:
             conn.close()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # This allows running tests directly with `python reporter/tests/test_database.py`
     # though `pytest` is the recommended way.
     pytest.main()
+
 
 def test_initialize_database_runs_without_error(monkeypatch, tmp_path):
     """
@@ -85,11 +107,11 @@ def test_initialize_database_runs_without_error(monkeypatch, tmp_path):
     """
     # Define a temporary database path within pytest's tmp_path fixture
     test_db_name = "test_temp_init.db"
-    test_db_dir = tmp_path / "data" # Use a subdirectory within tmp_path
+    test_db_dir = tmp_path / "data"  # Use a subdirectory within tmp_path
     test_db_file = test_db_dir / test_db_name
 
     # Monkeypatch reporter.database.DB_FILE to this test_db_file
-    monkeypatch.setattr('reporter.database.DB_FILE', str(test_db_file))
+    monkeypatch.setattr("reporter.database.DB_FILE", str(test_db_file))
 
     # Ensure the target directory for the test_db_file does not exist initially
     # initialize_database should create it.
@@ -110,7 +132,9 @@ def test_initialize_database_runs_without_error(monkeypatch, tmp_path):
         initialize_database()
 
         # Assert that the test_db_file now exists
-        assert os.path.exists(test_db_file), f"Database file '{test_db_file}' was not created."
+        assert os.path.exists(
+            test_db_file
+        ), f"Database file '{test_db_file}' was not created."
 
         # Connect to test_db_file and verify tables and initial plans
         conn = sqlite3.connect(test_db_file)
@@ -119,20 +143,33 @@ def test_initialize_database_runs_without_error(monkeypatch, tmp_path):
         # Verify tables
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables_in_test_db = [row[0] for row in cursor.fetchall()]
-        for table_name in EXPECTED_TABLES: # Assuming EXPECTED_TABLES is defined globally in this file
-            assert table_name in tables_in_test_db, f"Table '{table_name}' not found in temporary database."
+        for (
+            table_name
+        ) in (
+            EXPECTED_TABLES
+        ):  # Assuming EXPECTED_TABLES is defined globally in this file
+            assert (
+                table_name in tables_in_test_db
+            ), f"Table '{table_name}' not found in temporary database."
 
         # Verify initial plans
-        cursor.execute("SELECT plan_name, duration_days FROM plans ORDER BY duration_days;")
+        cursor.execute(
+            "SELECT plan_name, duration_days FROM plans ORDER BY duration_days;"
+        )
         seeded_plans_in_test_db = cursor.fetchall()
-        assert len(seeded_plans_in_test_db) == len(EXPECTED_INITIAL_PLANS), \
-            f"Expected {len(EXPECTED_INITIAL_PLANS)} plans, but found {len(seeded_plans_in_test_db)}."
+        assert len(seeded_plans_in_test_db) == len(
+            EXPECTED_INITIAL_PLANS
+        ), f"Expected {len(EXPECTED_INITIAL_PLANS)} plans, but found {len(seeded_plans_in_test_db)}."
 
-        for i, expected_plan in enumerate(EXPECTED_INITIAL_PLANS): # Assuming EXPECTED_INITIAL_PLANS is defined
-            assert seeded_plans_in_test_db[i][0] == expected_plan[0], \
-                f"Plan name mismatch: Expected '{expected_plan[0]}', got '{seeded_plans_in_test_db[i][0]}'"
-            assert seeded_plans_in_test_db[i][1] == expected_plan[1], \
-                f"Plan duration mismatch for '{expected_plan[0]}': Expected {expected_plan[1]}, got {seeded_plans_in_test_db[i][1]}"
+        for i, expected_plan in enumerate(
+            EXPECTED_INITIAL_PLANS
+        ):  # Assuming EXPECTED_INITIAL_PLANS is defined
+            assert (
+                seeded_plans_in_test_db[i][0] == expected_plan[0]
+            ), f"Plan name mismatch: Expected '{expected_plan[0]}', got '{seeded_plans_in_test_db[i][0]}'"
+            assert (
+                seeded_plans_in_test_db[i][1] == expected_plan[1]
+            ), f"Plan duration mismatch for '{expected_plan[0]}': Expected {expected_plan[1]}, got {seeded_plans_in_test_db[i][1]}"
 
     except Exception as e:
         pytest.fail(f"initialize_database test failed: {e}")

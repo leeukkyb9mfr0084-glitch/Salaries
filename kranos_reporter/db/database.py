@@ -4,6 +4,7 @@ import os
 DB_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(DB_DIR, "kranos_gym.db")
 
+
 def init_db():
     """Initializes the database and creates tables with the corrected schema."""
     try:
@@ -18,21 +19,25 @@ def init_db():
         cursor.execute("DROP TABLE IF EXISTS book_closing")
 
         # Create members table
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE members (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                join_date TEXT,
+                name TEXT NOT NULL, -- UNIQUE constraint might be too restrictive if names can be non-unique initially
+                email TEXT, -- Making email optional as per testing observations
                 phone TEXT,
-                status TEXT CHECK(status IN ('active', 'inactive'))
+                join_date TEXT,
+                notes TEXT, -- Added notes column
+                is_active BOOLEAN NOT NULL DEFAULT 1 -- Replaced status with is_active
             )
-        """)
-        # Removed: email TEXT UNIQUE NOT NULL - Not in new spec
+        """
+        )
         # Removed: membership_plan_id INTEGER - Not in new spec (handled by transactions)
-        # Removed: is_active BOOLEAN DEFAULT TRUE - Replaced by status TEXT
+        # Retained email as optional. Added notes. Replaced status with is_active.
 
         # Create plans table
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE plans (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL,
@@ -41,44 +46,48 @@ def init_db():
                 is_active BOOLEAN DEFAULT TRUE NOT NULL,
                 type TEXT CHECK(type IN ('GC', 'PT'))
             )
-        """)
+        """
+        )
         # Removed: description TEXT - Not in new spec
         # Changed: price REAL to price INTEGER
         # Added: is_active BOOLEAN DEFAULT TRUE NOT NULL
 
         # Create transactions table
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE transactions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 member_id INTEGER,
                 plan_id INTEGER,
-                transaction_date TEXT NOT NULL,
-                amount INTEGER NOT NULL,
-                type TEXT NOT NULL CHECK(type IN ('renewal', 'payment', 'expense', 'new_subscription')),
-                description TEXT,
-                start_date TEXT,
-                end_date TEXT,
+                transaction_date TEXT NOT NULL, -- Should store ISO date string e.g. YYYY-MM-DD
+                amount INTEGER NOT NULL, -- Storing amount in paisa/cents is an option, but INTEGER for now
+                type TEXT NOT NULL CHECK(type IN ('renewal', 'payment', 'expense', 'new_subscription', 'membership_fee')), -- Added 'membership_fee'
+                notes TEXT, -- Renamed from description
+                payment_method TEXT, -- Added
+                start_date TEXT, -- Should store ISO date string
+                end_date TEXT, -- Should store ISO date string
+                recorded_by TEXT, -- Added
                 FOREIGN KEY (member_id) REFERENCES members(id),
                 FOREIGN KEY (plan_id) REFERENCES plans(id)
             )
-        """)
-        # Removed: payment_method TEXT - Not in new spec
-        # Added: type TEXT (more specific check constraint)
-        # Added: description TEXT
-        # Added: start_date TEXT
-        # Added: end_date TEXT
+        """
+        )
+        # Added payment_method, recorded_by. Renamed description to notes.
+        # Added 'membership_fee' to transaction types.
         # Ensured transaction_date and amount are NOT NULL as they are essential.
         # plan_id can be NULL as per instruction "can be NULL"
 
         # Create book_closing table
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE book_closing (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
                 year INTEGER NOT NULL,
                 closing_date TEXT NOT NULL UNIQUE
             )
-        """)
+        """
+        )
         # Removed: total_revenue REAL NOT NULL - Not in new spec
         # Removed: total_expenses REAL DEFAULT 0 - Not in new spec
         # Removed: net_profit REAL NOT NULL - Not in new spec
@@ -93,8 +102,10 @@ def init_db():
         if conn:
             conn.close()
 
+
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) > 1 and sys.argv[1] == "init_db":
         # Optionally, delete old DB file before initializing
         # if os.path.exists(DB_PATH):
