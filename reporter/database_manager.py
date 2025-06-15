@@ -177,7 +177,7 @@ class DatabaseManager:
             return None
 
     def add_transaction(self, transaction_type: str, member_id: int, start_date: str, amount: float,
-                        plan_id: int = None, sessions: int = None, payment_method: str = None,
+                        plan_id: int = None, sessions: int = None, payment_method: str = None, # payment_method is unused now
                         transaction_date: str = None, end_date: str = None) -> Tuple[bool, str]:
         # Determine book month and status
         effective_date_for_booking = transaction_date if transaction_date else start_date
@@ -185,7 +185,7 @@ class DatabaseManager:
         book_status = "open"
         try:
             transaction_month_key = datetime.strptime(effective_date_for_booking, '%Y-%m-%d').strftime('%Y-%m')
-            book_status = self.get_book_status(transaction_month_key) # Use self.method
+            book_status = self.get_book_status(transaction_month_key)
         except ValueError:
             msg = f"Invalid date format '{effective_date_for_booking}'. Cannot determine book status."
             logging.error(msg)
@@ -196,40 +196,119 @@ class DatabaseManager:
             logging.warning(msg)
             return False, msg
 
-        if amount <= 0:
+        # Validate amount (assuming amount is price, so it can be > 0)
+        # The problem description implies amount is INTEGER in DB, ensure conversion if float is passed.
+        if not isinstance(amount, (int, float)) or amount <= 0:
             return False, "Amount paid must be a positive number."
-        if transaction_type == 'Personal Training' and sessions is not None and sessions <= 0:
+
+        db_amount = int(amount) # Ensure amount is integer for DB
+
+        # Validate sessions for Personal Training
+        if transaction_type == 'Personal Training' and (sessions is None or sessions <= 0):
             return False, "Number of sessions must be a positive number for Personal Training."
+
+        # --- Parameter Mapping ---
+        db_type = ""
+        db_description = ""
+
+        if transaction_type == "Personal Training":
+            db_type = "payment"
+            if sessions:
+                db_description = f"{sessions} PT sessions"
+            else: # Should be caught by above validation, but as a fallback
+                db_description = "Personal Training"
+        elif transaction_type == "Group Class":
+            db_type = "new_subscription" # As per instruction
+            # Try to get plan name for description
+            plan_name_desc = transaction_type # Fallback
+            if plan_id:
+                plan_details_for_desc = self.get_plan_by_id(plan_id)
+                if plan_details_for_desc and plan_details_for_desc[1]: # plan_details_for_desc[1] is name
+                    plan_name_desc = plan_details_for_desc[1]
+            db_description = f"Subscription: {plan_name_desc}"
+        elif transaction_type in ["renewal", "payment", "expense", "new_subscription"]: # If a valid DB type is passed directly
+            db_type = transaction_type
+            db_description = f"Transaction type: {transaction_type}" # Generic description
+        else:
+            # Fallback for unmapped transaction_type
+            logging.warning(f"Unmapped transaction_type '{transaction_type}' received. Storing as 'payment' with original type in description.")
+            db_type = "payment" # Default to 'payment' or choose another appropriate default
+            db_description = f"Original type: {transaction_type}"
+
+        final_transaction_date = transaction_date if transaction_date else start_date
+        final_end_date = end_date
+
+        # Date validation for start_date and final_transaction_date
+        try:
+            datetime.strptime(start_date, '%Y-%m-%d')
+            datetime.strptime(final_transaction_date, '%Y-%m-%d')
+        except ValueError as ve:
+            logging.error(f"Invalid date format for start_date or transaction_date: {ve}", exc_info=True)
+            return False, f"Invalid date format for start_date ('{start_date}') or transaction_date ('{final_transaction_date}')."
+
+        if transaction_type == 'Group Class': # This logic seems to apply to 'new_subscription' or 'renewal' related to plans
+            if final_end_date:
+                try:
+                    datetime.strptime(final_end_date, '%Y-%m-%d')
+                except ValueError:
+                    # If end_date is provided but invalid, it might be better to error out or log
+                    logging.warning(f"Invalid end_date format '{final_end_date}' for Group Class. Will attempt to calculate if possible.")
+                    final_end_date = None # Reset to trigger calculation if plan_id is present
+
+            if not final_end_date: # Calculate if not provided or if it was invalid
+                if not plan_id:
+                    # If it's a group class, it should have a plan_id to calculate duration.
+                    # If not, it's ambiguous how to set end_date.
+                    logging.error("plan_id is required for Group Class if end_date is not supplied or invalid.")
+                    return False, "plan_id is required for Group Class if end_date is not supplied or invalid."
+
+                plan_details = self.get_plan_by_id(plan_id)
+                if not plan_details:
+                    return False, f"Plan with ID {plan_id} not found."
+
+                # plan_details structure: id (0), name (1), duration (2), price (3), type (4)
+                duration_days = plan_details[2]
+                if duration_days is None or not isinstance(duration_days, int) or duration_days <=0:
+                    logging.error(f"Invalid duration ({duration_days}) for plan ID {plan_id}. Cannot calculate end_date.")
+                    return False, f"Invalid duration for plan ID {plan_id}. Cannot calculate end_date."
+
+                try:
+                    final_end_date = (datetime.strptime(start_date, '%Y-%m-%d') + timedelta(days=duration_days)).strftime('%Y-%m-%d')
+                except ValueError as ve: # Catch error from strptime if start_date was somehow bad despite earlier check
+                    logging.error(f"Date calculation error for end_date: {ve}", exc_info=True)
+                    return False, f"Error calculating end_date from start_date '{start_date}'."
+
+        # For other types like 'Personal Training' (payment), 'expense', direct 'payment',
+        # end_date might not be applicable or directly provided.
+        # If final_end_date is still None here for such cases, it will be inserted as NULL.
 
         try:
             cursor = self.conn.cursor()
-            final_transaction_date = transaction_date if transaction_date else start_date
-            final_end_date = end_date
 
-            if transaction_type == 'Group Class':
-                if final_end_date:
-                    try:
-                        datetime.strptime(final_end_date, '%Y-%m-%d')
-                    except ValueError:
-                        final_end_date = None
-                if not final_end_date:
-                    if not plan_id: return False, "plan_id required for Group Class if end_date not supplied."
-                    plan_details = self.get_plan_by_id(plan_id) # Use self.method
-                    if not plan_details: return False, f"Plan with ID {plan_id} not found."
-                    duration_days = plan_details[2]
-                    final_end_date = (datetime.strptime(start_date, '%Y-%m-%d') + timedelta(days=duration_days)).strftime('%Y-%m-%d')
-
-            cursor.execute(
-                "INSERT INTO transactions (member_id, transaction_type, plan_id, transaction_date, start_date, amount, payment_method, sessions) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (member_id, transaction_type, plan_id, final_transaction_date, start_date, amount, payment_method, sessions)
+            sql = """
+                INSERT INTO transactions
+                (member_id, plan_id, transaction_date, amount, type, description, start_date, end_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """
+            params = (
+                member_id,
+                plan_id,
+                final_transaction_date,
+                db_amount, # Use integer amount
+                db_type,
+                db_description,
+                start_date,
+                final_end_date
             )
-            self._update_member_join_date_if_earlier(member_id, start_date, cursor) # Use self.method
+
+            cursor.execute(sql, params)
+            self._update_member_join_date_if_earlier(member_id, start_date, cursor)
             self.conn.commit()
-            # Update member status after successful transaction
-            self._update_member_status(member_id)
+            self._update_member_status(member_id) # Update member status after successful transaction
             return True, "Transaction added successfully."
-        except ValueError as ve: # Should be caught by earlier checks mostly
+        except ValueError as ve:
             logging.error(f"Data validation or date parsing error in add_transaction: {ve}", exc_info=True)
+            # It's possible some specific ValueError was not caught by earlier checks, e.g. if a date format was missed.
             return False, f"Data validation or date parsing error: {ve}"
         except sqlite3.Error as e:
             logging.error(f"Database error while adding transaction: {e}", exc_info=True)

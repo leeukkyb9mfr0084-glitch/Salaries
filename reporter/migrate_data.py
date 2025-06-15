@@ -245,20 +245,69 @@ def process_pt_data():
                             print(f"Could not create or find member from PT data: {name}")
                             continue
 
-                    amount_paid = parse_amount(row.get('Amount Paid', '0'))
+                    amount_paid_raw = row.get('Amount Paid', '0')
                     sessions_str = row.get('Session Count', '0').strip()
-                    sessions_count = int(sessions_str) if sessions_str else 0
 
-                    db_manager.add_transaction(
-                        transaction_type="Personal Training",
-                        member_id=member_id,
-                        start_date=start_date,
-                        amount=amount_paid,
-                        sessions=sessions_count,
-                        plan_id=None,
-                        payment_method=None,
-                        transaction_date=start_date
+                    amount_paid = parse_amount(amount_paid_raw)
+                    if amount_paid is None or amount_paid <= 0: # PT amount should be positive
+                        print(f"Skipping PT row due to invalid or zero amount: {row}")
+                        continue
+
+                    sessions_count = 0
+                    try:
+                        sessions_count = int(sessions_str)
+                        if sessions_count <= 0:
+                            print(f"Skipping PT row due to invalid or zero session count: {row}")
+                            continue
+                    except ValueError:
+                        print(f"Skipping PT row due to non-integer session count: {row}")
+                        continue
+
+                    # Plan Creation/Retrieval for PT
+                    pt_plan_name = "PT Package"
+                    pt_duration_days = 90  # Nominal duration for PT packages, e.g., 90 days
+
+                    # Ensure price is an int for get_or_create_plan_id
+                    plan_price = int(amount_paid)
+
+                    plan_id = db_manager.get_or_create_plan_id(
+                        name=pt_plan_name,
+                        duration=pt_duration_days,
+                        price=plan_price,
+                        type_text='PT'
                     )
+
+                    if not plan_id:
+                        print(f"Error: Could not get or create plan_id for PT row: {row}. Skipping.")
+                        continue
+
+                    # Transaction Addition for PT
+                    transaction_end_date = (datetime.strptime(start_date, '%Y-%m-%d') + timedelta(days=pt_duration_days)).strftime('%Y-%m-%d')
+                    # The description for add_transaction is now generated within add_transaction itself based on type.
+                    # However, the subtask asks to create a description here:
+                    description = f"{sessions_count} PT sessions purchased"
+
+
+                    success, message = db_manager.add_transaction(
+                        transaction_type="Personal Training", # This will be mapped to 'payment' in add_transaction
+                        member_id=member_id,
+                        plan_id=plan_id,
+                        transaction_date=start_date, # YYYY-MM-DD
+                        start_date=start_date,       # YYYY-MM-DD
+                        end_date=transaction_end_date,
+                        amount=amount_paid,          # float/int
+                        sessions=sessions_count,     # Passed for add_transaction's internal logic
+                        # description=description # This was requested, but add_transaction now makes its own.
+                                                  # Passing it would override add_transaction's logic.
+                                                  # The prompt for add_transaction said:
+                                                  # "If transaction_type is "Personal Training" and sessions parameter is provided, format it as f"{sessions} PT sessions"."
+                                                  # So, we should rely on add_transaction to build the description from 'sessions'.
+                                                  # If we want to force THIS description, we'd need to change add_transaction.
+                                                  # For now, let add_transaction do its job.
+                    )
+                    if not success:
+                        print(f"Error adding PT transaction for row {row}: {message}")
+
                 except (ValueError, KeyError) as e:
                     print(f"Skipping PT row due to data error ('{e}'): {row}")
                 except Exception as e:
