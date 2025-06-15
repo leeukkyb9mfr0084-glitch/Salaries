@@ -171,8 +171,9 @@ def _process_gc_row(row, db_manager):
             print(f"Skipping row due to missing Plan Type: {row}")
             return
 
+        price = parse_amount(row.get('Amount', '0'))
         # Use duration_for_db_days for plan ID retrieval
-        plan_id = db_manager.get_or_create_plan_id(plan_name, duration_for_db_days)
+        plan_id = db_manager.get_or_create_plan_id(plan_name, duration_for_db_days, price, 'GC')
 
         if not plan_id:
             print(f"Could not create or find plan for {plan_name} with duration {duration_for_db_days} days for row: {row}")

@@ -231,8 +231,8 @@ class DatabaseManager:
                     final_end_date = (datetime.strptime(start_date, '%Y-%m-%d') + timedelta(days=duration_days)).strftime('%Y-%m-%d')
 
             cursor.execute(
-                "INSERT INTO transactions (member_id, transaction_type, plan_id, transaction_date, start_date, end_date, amount, payment_method, sessions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (member_id, transaction_type, plan_id, final_transaction_date, start_date, final_end_date, amount, payment_method, sessions)
+                "INSERT INTO transactions (member_id, transaction_type, plan_id, transaction_date, start_date, amount, payment_method, sessions) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (member_id, transaction_type, plan_id, final_transaction_date, start_date, amount, payment_method, sessions)
             )
             self._update_member_join_date_if_earlier(member_id, start_date, cursor) # Use self.method
             self.conn.commit()
