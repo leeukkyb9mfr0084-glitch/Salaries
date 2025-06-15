@@ -146,7 +146,7 @@ class AppAPI:
     def get_all_plans(self) -> List[tuple]:
         """
         Retrieves all plans from the database, including their active status.
-        Each plan is a tuple: (id, name, duration, price, type, is_active).
+        Each plan is a tuple: (id, name, default_duration, price, type, is_active).
 
         Returns:
             A list of tuples representing all plans.
@@ -161,7 +161,7 @@ class AppAPI:
 
         Args:
             name: The name of the plan.
-            duration_days: The duration of the plan in days.
+            duration_days: The duration of the plan in days (maps to default_duration).
             price: The price of the plan.
             type_text: The type or category of the plan (e.g., 'GC', 'PT').
 
@@ -171,6 +171,7 @@ class AppAPI:
             - str: Success or error message.
             - Optional[int]: The new plan's ID if successful, else None.
         """
+        # duration_days from API maps to default_duration in db_manager.add_plan
         return self.db_manager.add_plan(name, duration_days, price, type_text)
 
     def update_plan(
@@ -182,7 +183,7 @@ class AppAPI:
         Args:
             plan_id: The ID of the plan to update.
             name: The new name for the plan.
-            duration_days: The new duration in days.
+            duration_days: The new duration in days (maps to default_duration).
             price: The new price for the plan.
             type_text: The new type for the plan.
             is_active: Optional. The new active status for the plan (True or False).
@@ -190,6 +191,7 @@ class AppAPI:
         Returns:
             A tuple (success_status, message).
         """
+        # duration_days from API maps to default_duration in db_manager.update_plan
         return self.db_manager.update_plan(
             plan_id, name, duration_days, price, type_text, is_active
         )
@@ -197,7 +199,7 @@ class AppAPI:
     def get_plan_by_id(self, plan_id: int) -> Optional[tuple]:
         """
         Retrieves a specific plan by its ID.
-        The plan tuple includes: (id, name, duration, price, type, is_active).
+        The plan tuple includes: (id, name, default_duration, price, type, is_active).
 
         Args:
             plan_id: The ID of the plan.
@@ -219,154 +221,27 @@ class AppAPI:
         """
         return self.db_manager.delete_plan(plan_id)
 
-    # --- Transaction Methods ---
-    def add_transaction(
-        self,
-        transaction_type: str,
-        member_id: int,
-        start_date: str,
-        amount_paid: float,
-        plan_id: Optional[int] = None,
-        sessions: Optional[int] = None,
-        payment_method: Optional[str] = None,
-        payment_date: Optional[str] = None,  # This is the transaction_date
-        end_date: Optional[str] = None,
-    ) -> Tuple[bool, str]:
-        """
-        Adds a new transaction.
-
-        Args:
-            transaction_type: Type of transaction (e.g., 'new_subscription', 'renewal', 'payment', 'expense').
-            member_id: ID of the member associated with the transaction.
-            start_date: Start date of the service or subscription (YYYY-MM-DD).
-            amount_paid: The amount paid for the transaction.
-            plan_id: Optional ID of the plan, if applicable.
-            sessions: Optional number of sessions, if applicable (e.g. for some types of plans or legacy data).
-            payment_method: Optional method of payment.
-            payment_date: Optional date of payment (YYYY-MM-DD). If None, start_date is used. This is treated as transaction_date.
-            end_date: Optional end date of the service or subscription (YYYY-MM-DD). Calculated if not provided for new_subscription/renewal with a plan.
-
-        Returns:
-            A tuple (success_status, message).
-        """
-        return self.db_manager.add_transaction(
-            transaction_type=transaction_type,
-            member_id=member_id,
-            start_date=start_date,
-            amount=amount_paid,  # Renamed argument
-            plan_id=plan_id,
-            sessions=sessions,
-            payment_method=payment_method,
-            transaction_date=payment_date,  # Renamed argument
-            end_date=end_date,
-        )
-
+    # --- Membership Activity Methods (Previously Transaction Methods) ---
     def get_all_activity_for_member(self, member_id: int) -> List[tuple]:
         """
-        Retrieves all transaction activities for a specific member.
-        Each activity is a tuple: (transaction_id, transaction_type, description,
-        transaction_date, start_date, end_date, amount, plan_name, payment_method, sessions).
+        Retrieves all membership activities for a specific member.
+        Each activity is a tuple from the memberships table, joined with plan details:
+        (membership_id, plan_name, start_date, end_date, amount_paid, purchase_date, membership_type, is_active).
 
         Args:
             member_id: The ID of the member.
 
         Returns:
-            A list of tuples representing member activities.
+            A list of tuples representing member membership activities.
         """
         return self.db_manager.get_all_activity_for_member(member_id)
 
-    def get_transactions_with_member_details(
-        self,
-        name_filter: Optional[str] = None,
-        phone_filter: Optional[str] = None,
-        join_date_filter: Optional[str] = None,
-    ) -> List[tuple]:
-        """
-        Retrieves transactions joined with member details, with optional filters.
-
-        Args:
-            name_filter: Optional filter for member name (case-insensitive, partial match).
-            phone_filter: Optional filter for member phone (partial match).
-            join_date_filter: Optional filter for member join date (exact match YYYY-MM-DD).
-
-        Returns:
-            A list of tuples, each representing a transaction with member details.
-        """
-        return self.db_manager.get_transactions_with_member_details(
-            name_filter, phone_filter, join_date_filter
-        )
-
-    def get_transactions_for_month(self, year: int, month: int) -> List[tuple]:
-        """
-        Retrieves all transactions for a specific month and year.
-        Each transaction tuple includes: (transaction_id, client_name, transaction_date,
-        start_date, end_date, amount, transaction_type, description, plan_name,
-        payment_method, sessions).
-
-        Args:
-            year: The year (e.g., 2023).
-            month: The month (1-12).
-
-        Returns:
-            A list of transaction tuples for the specified month.
-        """
-        return self.db_manager.get_transactions_for_month(year, month)
-
-    def delete_transaction(self, transaction_id: int) -> Tuple[bool, str]:
-        """
-        Deletes a transaction.
-
-        Args:
-            transaction_id: The ID of the transaction to delete.
-
-        Returns:
-            A tuple (success_status, message).
-        """
-        return self.db_manager.delete_transaction(transaction_id)
-
-    def get_member_id_from_transaction(self, transaction_id: int) -> Optional[int]:
-        """
-        Retrieves the member_id associated with a given transaction_id.
-
-        Args:
-            transaction_id: The ID of the transaction.
-
-        Returns:
-            The member_id if found, else None.
-        """
-        return self.db_manager.get_member_id_from_transaction(transaction_id)
-
-    def get_transactions_filtered(
-        self,
-        member_id: Optional[int] = None,
-        plan_id: Optional[int] = None,
-        start_date_filter: Optional[str] = None,
-        end_date_filter: Optional[str] = None,
-        limit: int = 50,
-    ) -> List[tuple]:
-        """
-        Retrieves transactions with optional filters.
-
-        Args:
-            member_id: Optional member ID to filter by.
-            plan_id: Optional plan ID to filter by.
-            start_date_filter: Optional start date for transaction date range (YYYY-MM-DD).
-            end_date_filter: Optional end date for transaction date range (YYYY-MM-DD).
-            limit: Maximum number of transactions to return.
-
-        Returns:
-            A list of transaction tuples.
-            Each tuple: (transaction_id, transaction_date, member_name, plan_name, amount, payment_method, description, start_date, end_date)
-        """
-        return self.db_manager.get_transactions_filtered(
-            member_id, plan_id, start_date_filter, end_date_filter, limit
-        )
-
     # --- Reporting & Book Status Methods ---
-    def get_pending_renewals(self, year: int, month: int) -> List[tuple]:
+    def get_renewal_report(self, year: int, month: int) -> List[tuple]: # Renamed from get_pending_renewals for clarity if needed, or keep as is. Assuming this is the target for "get_renewal_report"
         """
         Retrieves pending renewals for a specific month and year.
         Each renewal is a tuple: (client_name, phone, plan_name, end_date).
+        This calls the underlying db_manager.get_pending_renewals which queries memberships.
 
         Args:
             year: The year.
@@ -377,16 +252,17 @@ class AppAPI:
         """
         return self.db_manager.get_pending_renewals(year, month)
 
-    def get_finance_report(self, year: int, month: int) -> Optional[float]:
+    def get_financial_report(self, year: int, month: int) -> Optional[float]: # Renamed from get_finance_report for clarity if needed, or keep as is. Assuming this is the target for "get_financial_report"
         """
-        Calculates the total income for a specific month and year.
+        Calculates the total income from memberships for a specific month and year.
+        This calls the underlying db_manager.get_finance_report which sums amount_paid from memberships.
 
         Args:
             year: The year.
             month: The month (1-12).
 
         Returns:
-            The total income as a float, or None if an error occurs. Returns 0.0 if no transactions.
+            The total income as a float, or None if an error occurs. Returns 0.0 if no memberships found.
         """
         return self.db_manager.get_finance_report(year, month)
 
@@ -428,28 +304,28 @@ class AppAPI:
 # The 'sessions' parameter in add_transaction is passed through; its deprecation is a broader issue.
 # The 'is_active' flag for plans is handled in DBManager and data flows to AppAPI.
 # Parameter name mismatches between AppAPI.add_transaction and DBManager.add_transaction call were fixed.
-# Corrected INSERT statement in DBManager.add_transaction to include payment_method and sessions.
-# Refactored queries in DBManager (get_all_activity_for_member, get_transactions_for_month, get_pending_renewals)
-# to remove outdated 'Group Class'/'Personal Training' transaction_type logic and use t.description or p.name.
-# Corrected join conditions from p.plan_id to p.id in DBManager queries.
-# Updated DBManager.get_plan_by_id and get_all_plans to select is_active from plans table.
-# Removed PT-specific validation and logic from DBManager.add_transaction.
-# Standardized transaction_type handling in DBManager.add_transaction.
-# Generalized end_date calculation in DBManager.add_transaction.
+    # Corrected INSERT statement in DBManager.add_transaction to include payment_method and sessions. # This comment is now outdated
+    # Refactored queries in DBManager (get_all_activity_for_member, get_transactions_for_month, get_pending_renewals) # This comment is now outdated for transactions
+    # to remove outdated 'Group Class'/'Personal Training' transaction_type logic and use t.description or p.name. # This comment is now outdated
+    # Corrected join conditions from p.plan_id to p.id in DBManager queries. # This comment is now outdated
+    # Updated DBManager.get_plan_by_id and get_all_plans to select is_active from plans table. # This comment is now outdated for duration
+    # Removed PT-specific validation and logic from DBManager.add_transaction. # This comment is now outdated
+    # Standardized transaction_type handling in DBManager.add_transaction. # This comment is now outdated
+    # Generalized end_date calculation in DBManager.add_transaction. # This comment is now outdated
 
 import sqlite3
 from datetime import datetime, timedelta
 
 def create_membership(db_path: str, member_id: int, plan_id: int, transaction_amount: float, start_date_str: str) -> Tuple[bool, str]:
     """
-    Creates a new membership, deactivates existing ones, and records the transaction.
+    Creates a new membership, deactivates existing active ones for the member.
 
     Args:
         db_path: Path to the SQLite database file.
         member_id: The ID of the member.
         plan_id: The ID of the plan.
-        transaction_amount: The amount paid for the transaction.
-        start_date_str: The start date of the membership (YYYY-MM-DD).
+        transaction_amount: The amount paid for this membership.
+        start_date_str: The start date of the membership (YYYY-MM-DD), also used as purchase_date.
 
     Returns:
         A tuple (success_status, message).
@@ -459,60 +335,63 @@ def create_membership(db_path: str, member_id: int, plan_id: int, transaction_am
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
-        # 1. Fetch plan duration
-        cursor.execute("SELECT duration FROM plans WHERE id = ?", (plan_id,))
+        # 1. Fetch plan's default_duration
+        cursor.execute("SELECT default_duration FROM plans WHERE id = ?", (plan_id,))
         plan_row = cursor.fetchone()
         if not plan_row:
             return False, "Plan not found."
-        plan_duration_days = plan_row[0]
+        plan_default_duration_days = plan_row[0]
+        if not isinstance(plan_default_duration_days, int) or plan_default_duration_days <= 0:
+            return False, "Invalid plan duration."
 
-        # 2. Determine transaction_type
-        cursor.execute("SELECT 1 FROM memberships WHERE member_id = ? AND is_active = 1", (member_id,))
+        # 2. Determine membership_type ('New' or 'Renewal')
+        # A membership is 'New' if there are no prior *active* memberships for this member.
+        # Otherwise, it's a 'Renewal'. This logic might need refinement based on business rules
+        # (e.g., considering only recent past memberships, or any past membership).
+        # For now, checking for any currently active one before deactivation.
+        cursor.execute("SELECT 1 FROM memberships WHERE member_id = ? AND is_active = 1 LIMIT 1", (member_id,))
         existing_active_membership = cursor.fetchone()
-        transaction_type = 'Renewal' if existing_active_membership else 'New'
+        membership_type = 'Renewal' if existing_active_membership else 'New'
 
-        # 3. Deactivate existing active memberships for this member
+        # 3. Deactivate all other existing active memberships for this member
+        # This ensures only the new/renewed membership is active.
         cursor.execute("UPDATE memberships SET is_active = 0 WHERE member_id = ? AND is_active = 1", (member_id,))
 
         # 4. Calculate end_date
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
-        end_date = start_date + timedelta(days=plan_duration_days)
+        end_date = start_date + timedelta(days=plan_default_duration_days)
         end_date_str = end_date.strftime("%Y-%m-%d")
 
         # 5. Insert into memberships table
+        # Assuming start_date_str also serves as the purchase_date for simplicity.
+        # A separate purchase_date parameter could be added if they can differ.
+        purchase_date_str = start_date_str
+
         cursor.execute(
             """
-            INSERT INTO memberships (member_id, plan_id, start_date, end_date, is_active)
-            VALUES (?, ?, ?, ?, 1)
+            INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1)
             """,
-            (member_id, plan_id, start_date_str, end_date_str),
+            (member_id, plan_id, start_date_str, end_date_str, transaction_amount, purchase_date_str, membership_type),
         )
         if cursor.rowcount == 0:
             conn.rollback()
             return False, "Failed to create new membership entry."
 
-        # 6. Insert into transactions table
-        # transaction_date is the start_date_str for new memberships/renewals
-        cursor.execute(
-            """
-            INSERT INTO transactions (member_id, plan_id, transaction_type, amount, transaction_date, start_date, end_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (member_id, plan_id, transaction_type, transaction_amount, start_date_str, start_date_str, end_date_str),
-        )
-        if cursor.rowcount == 0:
-            conn.rollback() # Rollback if transaction insert fails
-            return False, "Failed to create transaction entry."
+        # After successfully creating the membership, update the member's overall status
+        # This requires a DatabaseManager instance or moving _update_member_status to a shared location/utility
+        # For now, this step is omitted from this standalone function as it depends on DatabaseManager context.
+        # Caller (e.g., UI layer) might need to trigger a status update separately if required immediately.
 
         conn.commit()
-        return True, f"Membership created successfully. Type: {transaction_type}."
+        return True, f"Membership ({membership_type}) created successfully starting {start_date_str}."
 
     except sqlite3.Error as e:
         if conn:
             conn.rollback()
         return False, f"Database error: {e}"
-    except ValueError as e: # For date parsing errors
-        return False, f"Date error: {e}"
+    except ValueError as e: # For date parsing errors or invalid duration
+        return False, f"Data error: {e}"
     finally:
         if conn:
             conn.close()
