@@ -110,20 +110,20 @@ Goal: Implement the "Memberships," "Plans," and "Reporting" tabs.
 
 [x] Build the "Add/Edit Plan" form on the left.
 
-[ ] Build the plans list on the right, including the "Active" checkbox and "Edit"/"Delete" buttons.
+[x] Build the plans list on the right, including the "Active" checkbox and "Edit"/"Delete" buttons.
 
 [ ] "Reporting" Tab:
 
-[ ] Implement the two vertical sections.
+[x] Implement the two vertical sections.
 
-[ ] Build the "Monthly Report" section with a table of transactions.
+[x] Build the "Monthly Report" section with a table of transactions.
 
-[ ] Build the "Upcoming Renewals" section with its corresponding table.
+[x] Build the "Upcoming Renewals" section with its corresponding table.
 
 Phase 6: Final Validation
 Goal: Ensure the entire application works as expected.
 
-[ ] Full Data Migration Test: Delete the reporter.db file and run the migrate_data.py script from scratch. Verify that all GC and PT data is correctly imported into the transactions table.
+[x] Full Data Migration Test: Delete the reporter.db file and run the migrate_data.py script from scratch. Verify that all GC and PT data is correctly imported into the transactions table.
 
 [ ] CRUD Testing - Members: Test adding, editing, searching, filtering, and deleting members.
 

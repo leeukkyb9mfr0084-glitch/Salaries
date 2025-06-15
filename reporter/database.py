@@ -28,10 +28,11 @@ def create_database(db_name: str):
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS plans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
             duration INTEGER NOT NULL,
             price INTEGER,
-            type TEXT
+            type TEXT,
+            UNIQUE(name, duration, type)
         );
         """)
 
@@ -43,10 +44,12 @@ def create_database(db_name: str):
             transaction_type TEXT NOT NULL,
             plan_id INTEGER,
             start_date TEXT NOT NULL,
+            end_date TEXT, -- Added missing column
             transaction_date TEXT,
             amount REAL,
             payment_method TEXT,
             sessions INTEGER,
+            description TEXT,
             FOREIGN KEY (member_id) REFERENCES members (member_id),
             FOREIGN KEY (plan_id) REFERENCES plans (plan_id)
         );

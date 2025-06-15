@@ -287,9 +287,13 @@ class DatabaseManager:
 
             sql = """
                 INSERT INTO transactions
-                (member_id, plan_id, transaction_date, amount, type, description, start_date, end_date)
+                (member_id, plan_id, transaction_date, amount, transaction_type, description, start_date, end_date)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """
+            # Ensure 'type' in the SQL query above is changed to 'transaction_type'
+            # if that's the actual column name in the transactions table.
+            # Based on database.py, the column is 'transaction_type'.
+            # The variable db_type should map to this column.
             params = (
                 member_id,
                 plan_id,
