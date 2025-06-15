@@ -1,7 +1,8 @@
 import sqlite3
 import os
 
-DB_FILE = 'reporter/data/kranos_data.db'
+DB_FILE = "reporter/data/kranos_data.db"
+
 
 def create_database(db_name: str):
     """
@@ -14,7 +15,8 @@ def create_database(db_name: str):
         cursor = conn.cursor()
 
         # Create members table
-        cursor.execute("""
+        cursor.execute(
+            """
         CREATE TABLE IF NOT EXISTS members (
             member_id INTEGER PRIMARY KEY AUTOINCREMENT,
             client_name TEXT NOT NULL,
@@ -22,10 +24,12 @@ def create_database(db_name: str):
     join_date TEXT,
     is_active INTEGER NOT NULL DEFAULT 1 -- << ADD THIS COLUMN
         );
-        """)
+        """
+        )
 
         # Create plans table
-        cursor.execute("""
+        cursor.execute(
+            """
         CREATE TABLE IF NOT EXISTS plans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -34,10 +38,12 @@ def create_database(db_name: str):
             type TEXT,
             UNIQUE(name, duration, type)
         );
-        """)
+        """
+        )
 
         # Create transactions table
-        cursor.execute("""
+        cursor.execute(
+            """
         CREATE TABLE IF NOT EXISTS transactions (
             transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
             member_id INTEGER NOT NULL,
@@ -53,26 +59,30 @@ def create_database(db_name: str):
             FOREIGN KEY (member_id) REFERENCES members (member_id),
             FOREIGN KEY (plan_id) REFERENCES plans (plan_id)
         );
-        """)
+        """
+        )
 
         # Create monthly_book_status table
-        cursor.execute("""
+        cursor.execute(
+            """
         CREATE TABLE IF NOT EXISTS monthly_book_status (
             month_key TEXT PRIMARY KEY, -- e.g., "2025-06"
             status TEXT NOT NULL CHECK(status IN ('open', 'closed')),
             closed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
-        """)
+        """
+        )
         conn.commit()
         print(f"Database '{db_name}' created and tables ensured.")
     except sqlite3.Error as e:
         print(f"Error creating database or tables: {e}")
     finally:
-        if conn and db_name != ':memory:': # Only close if it's a file-based DB
+        if conn and db_name != ":memory:":  # Only close if it's a file-based DB
             conn.close()
-        elif db_name == ':memory:':
-            return conn # Return the connection for in-memory DBs
-    return None # Explicitly return None for file-based DBs after closing
+        elif db_name == ":memory:":
+            return conn  # Return the connection for in-memory DBs
+    return None  # Explicitly return None for file-based DBs after closing
+
 
 def seed_initial_plans(conn: sqlite3.Connection):
     """
@@ -81,18 +91,27 @@ def seed_initial_plans(conn: sqlite3.Connection):
         conn (sqlite3.Connection): The database connection object.
     """
     plans_to_seed = [
-        ("Monthly - Unrestricted", 30, 100, "Standard"), # Example price and type
-        ("3 Months - Unrestricted", 90, 270, "Standard"), # Example price and type
-        ("Annual - Unrestricted", 365, 1000, "Standard") # Example price and type
+        ("Monthly - Unrestricted", 30, 100, "Standard"),  # Example price and type
+        ("3 Months - Unrestricted", 90, 270, "Standard"),  # Example price and type
+        ("Annual - Unrestricted", 365, 1000, "Standard"),  # Example price and type
     ]
     try:
         cursor = conn.cursor()
-        for plan_name, duration_days, price, type_text in plans_to_seed: # Added price and type
-            cursor.execute("INSERT OR IGNORE INTO plans (name, duration, price, type) VALUES (?, ?, ?, ?)", (plan_name, duration_days, price, type_text)) # Updated column names and added new ones
+        for (
+            plan_name,
+            duration_days,
+            price,
+            type_text,
+        ) in plans_to_seed:  # Added price and type
+            cursor.execute(
+                "INSERT OR IGNORE INTO plans (name, duration, price, type) VALUES (?, ?, ?, ?)",
+                (plan_name, duration_days, price, type_text),
+            )  # Updated column names and added new ones
         conn.commit()
         print(f"Seeded {len(plans_to_seed)} initial plans.")
     except sqlite3.Error as e:
         print(f"Error seeding initial plans: {e}")
+
 
 def initialize_database():
     """
@@ -108,7 +127,7 @@ def initialize_database():
             print(f"Created directory: {data_dir}")
         except OSError as e:
             print(f"Error creating directory {data_dir}: {e}")
-            return # Stop if directory creation fails
+            return  # Stop if directory creation fails
 
     # Call create_database(DB_FILE)
     # This function already prints success or error messages.
@@ -129,6 +148,7 @@ def initialize_database():
         if conn:
             conn.close()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     initialize_database()
     print("Database setup complete.")

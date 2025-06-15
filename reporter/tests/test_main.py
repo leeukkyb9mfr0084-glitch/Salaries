@@ -1,13 +1,13 @@
 import os
 import sys
 import subprocess
-import pytest # Using pytest for consistency if other tests use it, can also use unittest.mock
+import pytest  # Using pytest for consistency if other tests use it, can also use unittest.mock
 from unittest.mock import patch, MagicMock
 
 # Add project root to sys.path to allow direct import of reporter.main
 # This might be needed if running pytest from the root or if PYTHONPATH isn't set up
 # Adjust path as necessary based on your test execution environment
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 # Now we can import the function from reporter.main
 try:
@@ -15,7 +15,9 @@ try:
 except ImportError as e:
     # This might happen if the path isn't set correctly or if there's an issue in main.py
     # For testing purposes, we'll raise a more informative error.
-    raise ImportError(f"Could not import handle_database_migration from reporter.main. Error: {e}. Check sys.path and reporter/main.py.")
+    raise ImportError(
+        f"Could not import handle_database_migration from reporter.main. Error: {e}. Check sys.path and reporter/main.py."
+    )
 
 
 # Determine the expected path to migrate_data.py relative to main.py
@@ -38,10 +40,13 @@ except ImportError as e:
 # The key is that `patch` targets names in the module where they are looked up.
 # `handle_database_migration` looks up `os.path.exists` in `reporter.main`'s scope.
 
-EXPECTED_MIGRATE_SCRIPT_PATH_IN_MAIN = 'reporter/migrate_data.py' # This needs to be accurate based on main.py's __file__
+EXPECTED_MIGRATE_SCRIPT_PATH_IN_MAIN = (
+    "reporter/migrate_data.py"  # This needs to be accurate based on main.py's __file__
+)
 
-@patch('reporter.main.subprocess.run')
-@patch('reporter.main.os.path.exists')
+
+@patch("reporter.main.subprocess.run")
+@patch("reporter.main.os.path.exists")
 def test_migration_runs_if_script_exists(mock_exists, mock_run):
     """
     Tests that the migration script is run if it exists and returns success.
@@ -54,7 +59,9 @@ def test_migration_runs_if_script_exists(mock_exists, mock_run):
     # The assertion for mock_exists.assert_called_with(...) will verify this.
 
     mock_exists.return_value = True
-    mock_run.return_value = MagicMock(returncode=0, stdout="Migration successful", stderr="")
+    mock_run.return_value = MagicMock(
+        returncode=0, stdout="Migration successful", stderr=""
+    )
 
     handle_database_migration()
 
@@ -68,44 +75,51 @@ def test_migration_runs_if_script_exists(mock_exists, mock_run):
     mock_exists.assert_called_once()
     # The first argument of the first call to mock_exists:
     called_path_for_exists = mock_exists.call_args[0][0]
-    assert called_path_for_exists.endswith('reporter/migrate_data.py'), \
-        f"os.path.exists called with unexpected path: {called_path_for_exists}"
-
+    assert called_path_for_exists.endswith(
+        "reporter/migrate_data.py"
+    ), f"os.path.exists called with unexpected path: {called_path_for_exists}"
 
     mock_run.assert_called_once_with(
-        [sys.executable, '-m', 'reporter.migrate_data'],
-        capture_output=True, text=True, check=False
+        [sys.executable, "-m", "reporter.migrate_data"],
+        capture_output=True,
+        text=True,
+        check=False,
     )
 
-@patch('reporter.main.subprocess.run')
-@patch('reporter.main.os.path.exists')
+
+@patch("reporter.main.subprocess.run")
+@patch("reporter.main.os.path.exists")
 def test_migration_handles_failure(mock_exists, mock_run, capsys):
     """
     Tests that a failure in the migration script (non-zero return code) is handled.
     """
     mock_exists.return_value = True
-    mock_run.return_value = MagicMock(returncode=1, stdout="Output before error", stderr="Migration error details")
+    mock_run.return_value = MagicMock(
+        returncode=1, stdout="Output before error", stderr="Migration error details"
+    )
 
     handle_database_migration()
 
     mock_exists.assert_called_once()
     called_path_for_exists = mock_exists.call_args[0][0]
-    assert called_path_for_exists.endswith('reporter/migrate_data.py')
-
+    assert called_path_for_exists.endswith("reporter/migrate_data.py")
 
     mock_run.assert_called_once_with(
-        [sys.executable, '-m', 'reporter.migrate_data'],
-        capture_output=True, text=True, check=False
+        [sys.executable, "-m", "reporter.migrate_data"],
+        capture_output=True,
+        text=True,
+        check=False,
     )
 
     # Check if error messages were printed (optional, but good for CLI tools)
     captured = capsys.readouterr()
     assert "Data migration script failed with error" in captured.out
     assert "Migration error details" in captured.out
-    assert "Output before error" in captured.out # stdout should also be printed
+    assert "Output before error" in captured.out  # stdout should also be printed
 
-@patch('reporter.main.subprocess.run')
-@patch('reporter.main.os.path.exists')
+
+@patch("reporter.main.subprocess.run")
+@patch("reporter.main.os.path.exists")
 def test_migration_skipped_if_script_missing(mock_exists, mock_run, capsys):
     """
     Tests that the migration script is skipped if it does not exist.
@@ -116,13 +130,14 @@ def test_migration_skipped_if_script_missing(mock_exists, mock_run, capsys):
 
     mock_exists.assert_called_once()
     called_path_for_exists = mock_exists.call_args[0][0]
-    assert called_path_for_exists.endswith('reporter/migrate_data.py')
+    assert called_path_for_exists.endswith("reporter/migrate_data.py")
 
     mock_run.assert_not_called()
 
     # Check if skipping message was printed
     captured = capsys.readouterr()
     assert "not found. Skipping migration" in captured.out
+
 
 # To run these tests with pytest, navigate to the directory containing 'reporter'
 # and run `pytest`. Ensure __init__.py files are in 'reporter' and 'reporter/tests'.
@@ -133,5 +148,7 @@ def test_migration_skipped_if_script_missing(mock_exists, mock_run, capsys):
 # The test file should be named test_*.py or *_test.py for pytest to discover it.
 # This file is named test_main.py, so it should be discovered.
 # Adding a simple `if __name__ == '__main__': pytest.main()` is also possible for direct run.
-if __name__ == '__main__':
-    pytest.main([__file__]) # Allows running this test file directly using pytest engine
+if __name__ == "__main__":
+    pytest.main(
+        [__file__]
+    )  # Allows running this test file directly using pytest engine

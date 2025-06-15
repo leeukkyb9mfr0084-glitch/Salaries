@@ -1,7 +1,8 @@
 from .database_manager import DatabaseManager
 from typing import Tuple, Optional
 
-import sqlite3 # Required for type hinting Connection
+import sqlite3  # Required for type hinting Connection
+
 
 class AppAPI:
     def __init__(self, db_connection: sqlite3.Connection):
@@ -42,10 +43,12 @@ class AppAPI:
         return self.db_manager.get_member_by_phone(phone)
 
     # --- Plan Methods ---
-    def get_all_plans(self): # Active plans
+    def get_all_plans(self):  # Active plans
         return self.db_manager.get_all_plans()
 
-    def add_plan(self, name: str, duration_days: int, price: int, type_text: str) -> Tuple[bool, str, Optional[int]]:
+    def add_plan(
+        self, name: str, duration_days: int, price: int, type_text: str
+    ) -> Tuple[bool, str, Optional[int]]:
         """
         Adds a new plan by calling the DatabaseManager.
 
@@ -77,22 +80,41 @@ class AppAPI:
         return self.db_manager.delete_plan(plan_id)
 
     # --- Transaction Methods ---
-    def add_transaction(self, transaction_type: str, member_id: int, start_date: str,
-                        amount_paid: float, plan_id: int = None, sessions: int = None,
-                        payment_method: str = None, payment_date: str = None, end_date: str = None):
+    def add_transaction(
+        self,
+        transaction_type: str,
+        member_id: int,
+        start_date: str,
+        amount_paid: float,
+        plan_id: int = None,
+        sessions: int = None,
+        payment_method: str = None,
+        payment_date: str = None,
+        end_date: str = None,
+    ):
         # DatabaseManager.add_transaction returns Tuple[bool, str]
         return self.db_manager.add_transaction(
-            transaction_type, member_id, start_date, amount_paid, plan_id,
-            sessions, payment_method, payment_date, end_date
+            transaction_type,
+            member_id,
+            start_date,
+            amount_paid,
+            plan_id,
+            sessions,
+            payment_method,
+            payment_date,
+            end_date,
         )
 
     def get_all_activity_for_member(self, member_id: int):
         # DatabaseManager.get_all_activity_for_member returns list
         return self.db_manager.get_all_activity_for_member(member_id)
 
-    def get_transactions_with_member_details(self, name_filter: str = None,
-                                             phone_filter: str = None,
-                                             join_date_filter: str = None):
+    def get_transactions_with_member_details(
+        self,
+        name_filter: str = None,
+        phone_filter: str = None,
+        join_date_filter: str = None,
+    ):
         # DatabaseManager.get_transactions_with_member_details returns list
         return self.db_manager.get_transactions_with_member_details(
             name_filter, phone_filter, join_date_filter
@@ -119,11 +141,11 @@ class AppAPI:
         # DatabaseManager.get_finance_report returns float | None
         return self.db_manager.get_finance_report(year, month)
 
-    def get_book_status(self, month_key: str): # YYYY-MM
+    def get_book_status(self, month_key: str):  # YYYY-MM
         # DatabaseManager.get_book_status returns str
         return self.db_manager.get_book_status(month_key)
 
-    def set_book_status(self, month_key: str, status: str): # YYYY-MM
+    def set_book_status(self, month_key: str, status: str):  # YYYY-MM
         # DatabaseManager.set_book_status returns bool
         return self.db_manager.set_book_status(month_key, status)
 
