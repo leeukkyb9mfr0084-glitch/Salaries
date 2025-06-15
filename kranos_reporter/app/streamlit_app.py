@@ -91,7 +91,7 @@ def main():
     # # etc. for other tabs
 
     # Directly calling the reporting tab function for this subtask
-    display_reporting_tab()
+    # display_reporting_tab() # Comment out for now to focus on plans
 
     # You could add other sections/tabs here as they are developed.
     # For example:
@@ -99,6 +99,72 @@ def main():
     # st.write("Content for members management will go here.")
     # st.header("Settings")
     # st.write("App settings will go here.")
+
+def display_plans_tab():
+    """Displays the Plans Tab content."""
+    st.header("Manage Plans")
+
+    st.subheader("Add New Plan")
+    with st.form("add_plan_form"):
+        plan_name = st.text_input("Plan Name", key="plan_name")
+        plan_price = st.number_input("Price (INR)", min_value=0, step=1, key="plan_price")
+        plan_duration_days = st.number_input("Duration (Days)", min_value=1, step=1, key="plan_duration")
+        plan_type = st.selectbox("Plan Type", ["GC", "PT"], key="plan_type") # GC: Group Class, PT: Personal Training
+
+        submitted = st.form_submit_button("Add Plan")
+        if submitted:
+            if not plan_name:
+                st.error("Plan Name cannot be empty.")
+            else:
+                payload = {
+                    "name": plan_name,
+                    "price": plan_price,
+                    "duration_days": plan_duration_days,
+                    "type": plan_type
+                }
+                url = f"{API_BASE_URL}/plans"
+                try:
+                    response = requests.post(url, json=payload, timeout=10)
+                    response.raise_for_status()
+                    response_data = response.json()
+                    st.success(f"Plan '{plan_name}' added successfully! Plan ID: {response_data.get('plan_id')}")
+                    # Clear form by resetting session state for these keys
+                    st.session_state.plan_name = ""
+                    st.session_state.plan_price = 0
+                    st.session_state.plan_duration = 1
+                    st.session_state.plan_type = "GC" # Reset to default
+                except requests.exceptions.HTTPError as http_err:
+                    try:
+                        error_detail = response.json().get("error", str(http_err))
+                    except ValueError:
+                        error_detail = response.text if response.text else str(http_err)
+                    st.error(f"Error adding plan: {error_detail}")
+                except requests.exceptions.ConnectionError:
+                    st.error(f"Connection error: Could not connect to the API at {url}.")
+                except requests.exceptions.Timeout:
+                    st.error(f"Timeout error: The request to {url} timed out.")
+                except requests.exceptions.RequestException as req_err:
+                    st.error(f"Request error: {req_err}")
+                except ValueError as json_err: # Catch JSON decoding errors
+                    st.error(f"JSON decode error: Could not parse API response. {json_err}")
+
+
+def main():
+    """Main function to run the Streamlit app."""
+    st.set_page_config(page_title="Kranos MMA Reporter", layout="wide")
+    st.title("Kranos MMA Reporter")
+
+    tab_titles = ["Reporting", "Plans"] # Add other tabs as needed
+    # Default to "Plans" for now, can be changed later
+    selected_tab = st.sidebar.radio("Navigation", tab_titles, index=1)
+
+    if selected_tab == "Reporting":
+        display_reporting_tab()
+    elif selected_tab == "Plans":
+        display_plans_tab()
+    # Add other tabs here
+    # elif selected_tab == "Members":
+    #     st.write("Members section (To be implemented)")
 
 
 if __name__ == '__main__':

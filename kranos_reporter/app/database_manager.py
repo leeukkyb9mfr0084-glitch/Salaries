@@ -114,6 +114,41 @@ class DatabaseManager:
         #     return None
         pass
 
+    def add_plan(self, name, price, duration_days, type, is_active=True):
+        """
+        Adds a new plan to the database.
+
+        Args:
+            name (str): The name of the plan.
+            price (int): The price of the plan.
+            duration_days (int): The duration of the plan in days.
+            type (str): The type of the plan (e.g., 'GC', 'PT').
+            is_active (bool): Whether the plan is active. Defaults to True.
+
+        Returns:
+            int: The ID of the newly added plan, or None if an error occurs.
+        """
+        if not self.conn:
+            print("Database connection not established.")
+            return None
+
+        query = """
+            INSERT INTO plans (name, price, duration_days, type, is_active)
+            VALUES (?, ?, ?, ?, ?)
+        """
+        params = (name, price, duration_days, type, is_active)
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(query, params)
+            self.conn.commit()
+            return cursor.lastrowid
+        except sqlite3.Error as e:
+            print(f"Error adding plan: {e}")
+            # Rollback in case of error
+            if self.conn:
+                self.conn.rollback()
+            return None
+
     def add_renewal_transaction(self, member_id, plan_id, transaction_date, amount, payment_method):
         """
         Placeholder for adding a renewal transaction.

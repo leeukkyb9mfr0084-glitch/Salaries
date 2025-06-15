@@ -82,6 +82,49 @@ def get_renewal_report():
         app.logger.error(f"Error generating renewal report: {e}")
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
+@app.route('/api/plans', methods=['POST'])
+def add_plan_api():
+    if not db_manager:
+        return jsonify({"error": "Database service not available"}), 503
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid input: No JSON data provided."}), 400
+
+    name = data.get('name')
+    price_str = data.get('price')
+    duration_days_str = data.get('duration_days')
+    plan_type = data.get('type')
+
+    if not all([name, price_str is not None, duration_days_str is not None, plan_type]):
+        return jsonify({"error": "Missing required fields: name, price, duration_days, type"}), 400
+
+    try:
+        price = int(price_str)
+        duration_days = int(duration_days_str)
+        if price < 0 or duration_days <= 0:
+            return jsonify({"error": "Invalid input: Price must be non-negative and duration must be positive."}), 400
+    except ValueError:
+        return jsonify({"error": "Invalid input: price and duration_days must be integers."}), 400
+
+    if plan_type not in ['GC', 'PT']: # Assuming these are the only valid types from schema
+        return jsonify({"error": "Invalid input: type must be 'GC' or 'PT'."}), 400
+
+    try:
+        plan_id = db_manager.add_plan(name, price, duration_days, plan_type)
+        if plan_id is not None:
+            return jsonify({"message": "Plan added successfully", "plan_id": plan_id}), 201
+        else:
+            # Check if the error was due to UNIQUE constraint (e.g., plan name already exists)
+            # This requires more specific error handling in db_manager or assumptions here
+            # For now, a generic 500, but could be 409 Conflict if uniqueness is the issue.
+            # db_manager.add_plan prints "Error adding plan: UNIQUE constraint failed: plans.name"
+            # We can't directly access that message here without more complex error propagation.
+            return jsonify({"error": "Failed to add plan. Possible duplicate name or database issue."}), 500
+    except Exception as e:
+        app.logger.error(f"Error in add_plan_api: {e}")
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
 if __name__ == '__main__':
     # For direct execution, ensure Python can find 'database_manager'
     # If kranos_reporter/app/api.py and kranos_reporter/app/database_manager.py,

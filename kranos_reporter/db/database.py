@@ -38,13 +38,13 @@ def init_db():
                 name TEXT UNIQUE NOT NULL,
                 price INTEGER NOT NULL,
                 duration_days INTEGER NOT NULL,
-                is_active BOOLEAN DEFAULT TRUE,
+                is_active BOOLEAN DEFAULT TRUE NOT NULL,
                 type TEXT CHECK(type IN ('GC', 'PT'))
             )
         """)
         # Removed: description TEXT - Not in new spec
         # Changed: price REAL to price INTEGER
-        # Added: is_active BOOLEAN DEFAULT TRUE
+        # Added: is_active BOOLEAN DEFAULT TRUE NOT NULL
 
         # Create transactions table
         cursor.execute("""
