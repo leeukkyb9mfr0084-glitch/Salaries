@@ -293,6 +293,160 @@ class DatabaseManager:
             print(f"An unexpected error occurred while fetching plans for selection: {e}")
             return []
 
+    def get_member_transaction_history(self, member_id):
+        """
+        Fetches the transaction history for a specific member.
+
+        Args:
+            member_id (int): The ID of the member.
+
+        Returns:
+            pandas.DataFrame: A DataFrame containing the member's transaction history,
+                              or an empty DataFrame if an error occurs or no transactions found.
+        """
+        if not self.conn:
+            print("Database connection not established.")
+            return pd.DataFrame()
+
+        query = """
+            SELECT
+                t.id AS transaction_id,
+                t.transaction_date,
+                t.type AS transaction_type,
+                p.name AS plan_name,
+                t.amount,
+                t.payment_method,
+                t.start_date,
+                t.end_date
+            FROM
+                transactions t
+            JOIN
+                plans p ON t.plan_id = p.id
+            WHERE
+                t.member_id = ?
+            ORDER BY
+                t.transaction_date DESC;
+        """
+        try:
+            df = pd.read_sql_query(query, self.conn, params=(member_id,))
+            return df
+        except sqlite3.Error as e:
+            print(f"Error fetching transaction history for member ID {member_id}: {e}")
+            return pd.DataFrame()
+        except Exception as e:
+            print(f"An unexpected error occurred while fetching transaction history for member ID {member_id}: {e}")
+            return pd.DataFrame()
+
+    def get_filtered_transactions(self, start_date=None, end_date=None, member_name_search=None, transaction_type=None):
+        """
+        Fetches transactions based on provided filter criteria.
+
+        Args:
+            start_date (str, optional): Start date for filtering (YYYY-MM-DD).
+            end_date (str, optional): End date for filtering (YYYY-MM-DD).
+            member_name_search (str, optional): Term to search for in member names.
+            transaction_type (str, optional): Filter by transaction type (e.g., 'New Subscription', 'Renewal').
+
+        Returns:
+            pandas.DataFrame: A DataFrame containing filtered transaction data,
+                              or an empty DataFrame if an error occurs or no transactions match.
+        """
+        if not self.conn:
+            print("Database connection not established.")
+            return pd.DataFrame()
+
+        query_params = []
+        base_query = """
+            SELECT
+                t.id AS transaction_id,
+                m.name AS member_name,
+                p.name AS plan_name,
+                t.transaction_date,
+                t.amount,
+                t.type AS transaction_type,
+                t.payment_method,
+                t.start_date AS membership_start_date,
+                t.end_date AS membership_end_date
+            FROM
+                transactions t
+            JOIN
+                members m ON t.member_id = m.id
+            JOIN
+                plans p ON t.plan_id = p.id
+        """
+        conditions = []
+
+        if start_date:
+            conditions.append("t.transaction_date >= ?")
+            query_params.append(start_date)
+        if end_date:
+            conditions.append("t.transaction_date <= ?")
+            query_params.append(end_date)
+        if member_name_search:
+            conditions.append("m.name LIKE ?")
+            query_params.append(f"%{member_name_search}%")
+        if transaction_type and transaction_type.lower() != 'all':
+            conditions.append("t.type = ?")
+            query_params.append(transaction_type)
+
+        if conditions:
+            base_query += " WHERE " + " AND ".join(conditions)
+
+        base_query += " ORDER BY t.transaction_date DESC;"
+
+        try:
+            df = pd.read_sql_query(base_query, self.conn, params=tuple(query_params))
+            return df
+        except sqlite3.Error as e:
+            print(f"Error fetching filtered transactions: {e}")
+            return pd.DataFrame()
+        except Exception as e:
+            print(f"An unexpected error occurred while fetching filtered transactions: {e}")
+            return pd.DataFrame()
+
+    def perform_book_closing(self, month, year):
+        """
+        Placeholder for performing the book closing operations for a given month and year.
+        Actual financial logic for summarizing transactions, generating reports,
+        or marking a period as closed would go here.
+
+        Args:
+            month (int): The month (1-12) for which to close books.
+            year (int): The year for which to close books.
+
+        Returns:
+            bool: True if the operation was notionally successful, False otherwise.
+        """
+        if not self.conn:
+            print("Database connection not established.")
+            return False
+
+        print(f"Attempting to close books for {month:02d}-{year}.")
+        # In a real implementation, this would involve:
+        # 1. Querying transactions for the given month and year.
+        # 2. Calculating summaries (total revenue, new members, renewals, etc.).
+        # 3. Storing these summaries in a dedicated table (e.g., monthly_financial_summary).
+        # 4. Potentially marking transactions as "closed" or "accounted_for".
+        # 5. Error handling and transaction management (commit/rollback).
+
+        # For this placeholder, we'll just log the action.
+        # We could simulate creating a dummy record or performing a simple check.
+        try:
+            # Example: Log to a hypothetical table or just print
+            # cursor = self.conn.cursor()
+            # cursor.execute("INSERT INTO monthly_closures (year, month, status) VALUES (?, ?, ?)", (year, month, 'CLOSED'))
+            # self.conn.commit()
+            print(f"Successfully closed books for {month:02d}-{year} (Placeholder Action).")
+            return True
+        except sqlite3.Error as e:
+            print(f"Error during book closing for {month:02d}-{year}: {e}")
+            if self.conn:
+                self.conn.rollback()
+            return False
+        except Exception as e:
+            print(f"An unexpected error occurred during book closing for {month:02d}-{year}: {e}")
+            return False
+
     def add_renewal_transaction(self, member_id, plan_id, transaction_date, amount, payment_method):
         """
         Placeholder for adding a renewal transaction.

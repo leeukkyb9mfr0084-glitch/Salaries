@@ -85,7 +85,7 @@ Goal: Implement the full functionality of the "Members" tab.
 
 [x] Wire the "Delete" button to the corresponding API function.
 
-[ ] Implement "History" Modal:
+[x] Implement "History" Modal:
 
 [x] On "History" button click, open a modal window.
 
@@ -100,15 +100,15 @@ Goal: Implement the "Memberships," "Plans," and "Reporting" tabs.
 
 [x] Build the "Add Membership" form on the left.
 
-[ ] Build the recent transactions list with filters on the right.
+[x] Build the recent transactions list with filters on the right.
 
-[ ] Add the "Close Books for Month" section at the bottom.
+[x] Add the "Close Books for Month" section at the bottom.
 
 [ ] "Plans" Tab:
 
-[ ] Implement the two-column layout.
+[x] Implement the two-column layout.
 
-[ ] Build the "Add/Edit Plan" form on the left.
+[x] Build the "Add/Edit Plan" form on the left.
 
 [ ] Build the plans list on the right, including the "Active" checkbox and "Edit"/"Delete" buttons.
 

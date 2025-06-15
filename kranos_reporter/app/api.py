@@ -95,6 +95,11 @@ def add_plan_api():
     price_str = data.get('price')
     duration_days_str = data.get('duration_days')
     plan_type = data.get('type')
+    # is_active is boolean, default to True if not provided or if None
+    is_active = data.get('is_active', True)
+    if is_active is None: # Ensure None is treated as True for the db default
+        is_active = True
+
 
     if not all([name, price_str is not None, duration_days_str is not None, plan_type]):
         return jsonify({"error": "Missing required fields: name, price, duration_days, type"}), 400
@@ -111,7 +116,8 @@ def add_plan_api():
         return jsonify({"error": "Invalid input: type must be 'GC' or 'PT'."}), 400
 
     try:
-        plan_id = db_manager.add_plan(name, price, duration_days, plan_type)
+        # Pass is_active to the database manager method
+        plan_id = db_manager.add_plan(name, price, duration_days, plan_type, is_active=is_active)
         if plan_id is not None:
             return jsonify({"message": "Plan added successfully", "plan_id": plan_id}), 201
         else:
@@ -184,6 +190,88 @@ def get_plans_list_api():
         return jsonify(plans_json)
     except Exception as e:
         app.logger.error(f"Error in get_plans_list_api: {e}")
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
+@app.route('/api/member/<int:member_id>/transactions', methods=['GET'])
+def get_member_transactions_api(member_id):
+    if not db_manager:
+        return jsonify({"error": "Database service not available"}), 503
+    try:
+        transactions_df = db_manager.get_member_transaction_history(member_id)
+        if transactions_df is None: # Should return empty df on error, but for safety
+            return jsonify({"error": "Failed to retrieve transactions due to an internal issue."}), 500
+
+        transactions_json = transactions_df.to_dict(orient='records')
+        return jsonify(transactions_json)
+    except Exception as e:
+        app.logger.error(f"Error in get_member_transactions_api for member ID {member_id}: {e}")
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
+@app.route('/api/transactions/filtered', methods=['GET'])
+def get_filtered_transactions_api():
+    if not db_manager:
+        return jsonify({"error": "Database service not available"}), 503
+
+    try:
+        # Extract filter parameters from request arguments
+        start_date = request.args.get('start_date', None)
+        end_date = request.args.get('end_date', None)
+        member_name_search = request.args.get('member_name_search', None)
+        transaction_type = request.args.get('transaction_type', None)
+
+        # Validate date formats if provided (optional, but good practice)
+        # For simplicity, assuming dates are in YYYY-MM-DD from client
+
+        transactions_df = db_manager.get_filtered_transactions(
+            start_date=start_date,
+            end_date=end_date,
+            member_name_search=member_name_search,
+            transaction_type=transaction_type
+        )
+
+        if transactions_df is None: # Should return empty df on error, but for safety
+            return jsonify({"error": "Failed to retrieve transactions due to an internal issue."}), 500
+
+        transactions_json = transactions_df.to_dict(orient='records')
+        return jsonify(transactions_json)
+
+    except Exception as e:
+        app.logger.error(f"Error in get_filtered_transactions_api: {e}")
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
+@app.route('/api/books/close', methods=['POST'])
+def close_books_api():
+    if not db_manager:
+        return jsonify({"error": "Database service not available"}), 503
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid input: No JSON data provided."}), 400
+
+    month_str = data.get('month')
+    year_str = data.get('year')
+
+    if not month_str or not year_str:
+        return jsonify({"error": "Missing required fields: month, year"}), 400
+
+    try:
+        month = int(month_str)
+        year = int(year_str)
+        if not (1 <= month <= 12 and year > 2000 and year < 2100): # Basic validation
+             return jsonify({"error": "Invalid month or year provided."}), 400
+    except ValueError:
+        return jsonify({"error": "Invalid input: month and year must be integers."}), 400
+
+    try:
+        success = db_manager.perform_book_closing(month, year)
+        if success:
+            return jsonify({"message": f"Books successfully closed for {month:02d}-{year}."}), 200
+        else:
+            # This generic message is used because the db_manager placeholder
+            # doesn't give specific reasons for failure yet.
+            return jsonify({"error": f"Failed to close books for {month:02d}-{year}. Check server logs."}), 500
+    except Exception as e:
+        app.logger.error(f"Error in close_books_api for {month:02d}-{year}: {e}")
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 if __name__ == '__main__':
