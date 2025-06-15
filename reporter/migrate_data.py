@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 
 # Make sure the main database file is initialized
-from reporter.database import create_database
-from reporter.database_manager import DB_FILE, DatabaseManager # Updated import
+from .database import create_database
+from .database_manager import DB_FILE, DatabaseManager
 
 # Determine the directory of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
