@@ -321,7 +321,7 @@ class DatabaseManager:
         try:
             cursor = self.conn.cursor()
             cursor.execute(
-                "SELECT id, name, duration, price, type, is_active FROM plans WHERE id = ?",
+                "SELECT id, name, default_duration, price, type, is_active FROM plans WHERE id = ?", # Changed duration to default_duration
                 (plan_id,),
             )
             return cursor.fetchone()
@@ -337,7 +337,7 @@ class DatabaseManager:
             # Selects all plans, including their is_active status.
             # Callers can filter based on is_active if needed.
             cursor.execute(
-                "SELECT id, name, duration, price, type, is_active FROM plans ORDER BY name ASC"
+                "SELECT id, name, default_duration, price, type, is_active FROM plans ORDER BY name ASC" # Changed duration to default_duration
             )
             return cursor.fetchall()
         except sqlite3.Error as e:
@@ -346,249 +346,45 @@ class DatabaseManager:
             )  # Updated log message
             return []
 
-    def get_member_id_from_transaction(self, transaction_id: int) -> Optional[int]:
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute(
-                "SELECT member_id FROM transactions WHERE transaction_id = ?",
-                (transaction_id,),
-            )
-            result = cursor.fetchone()
-            return result[0] if result else None
-        except sqlite3.Error as e:
-            logging.error(
-                f"Database error fetching member_id for transaction {transaction_id}: {e}",
-                exc_info=True,
-            )
-            return None
-
-    def add_transaction(
-        self,
-        transaction_type: str,
-        member_id: int,
-        start_date: str,
-        amount: float,
-        plan_id: int = None,
-        sessions: int = None,
-        payment_method: str = None,  # payment_method is unused now
-        transaction_date: str = None,
-        end_date: str = None,
-    ) -> Tuple[bool, str]:
-        # Determine book month and status
-        effective_date_for_booking = (
-            transaction_date if transaction_date else start_date
-        )
-        transaction_month_key = "N/A"
-        book_status = "open"
-        try:
-            transaction_month_key = datetime.strptime(
-                effective_date_for_booking, "%Y-%m-%d"
-            ).strftime("%Y-%m")
-            book_status = self.get_book_status(transaction_month_key)
-        except ValueError:
-            msg = f"Invalid date format '{effective_date_for_booking}'. Cannot determine book status."
-            logging.error(msg)
-            return False, msg
-
-        if book_status == "closed":
-            msg = (
-                f"Cannot add transaction. Books for {transaction_month_key} are closed."
-            )
-            logging.warning(msg)
-            return False, msg
-
-        # Validate amount (assuming amount is price, so it can be > 0)
-        # The problem description implies amount is INTEGER in DB, ensure conversion if float is passed.
-        if not isinstance(amount, (int, float)) or amount <= 0:
-            return False, "Amount paid must be a positive number."
-
-        db_amount = int(amount)  # Ensure amount is integer for DB
-
-        # --- Parameter Mapping ---
-        db_type = ""
-        db_description = ""
-
-        # transaction_type should be one of the canonical types.
-        if transaction_type not in ['new_subscription', 'renewal', 'payment', 'expense']:
-            logging.error(
-                f"Invalid transaction_type '{transaction_type}' received."
-            )
-            return False, f"Invalid transaction_type: {transaction_type}. Must be one of ['new_subscription', 'renewal', 'payment', 'expense']."
-
-        db_type = transaction_type
-
-        # Generate a generic description. If a plan is linked, use its name.
-        if plan_id:
-            plan_details = self.get_plan_by_id(plan_id)
-            if plan_details and plan_details[1]: # plan_details[1] is name
-                db_description = f"{transaction_type.capitalize()}: {plan_details[1]}"
-            else:
-                # Plan details not found, or name is missing. Fallback.
-                db_description = f"{transaction_type.capitalize()}: Plan ID {plan_id}"
-        else:
-            # No plan_id, use a generic description based on transaction type.
-            # For 'expense' or 'payment', a more specific description might be passed
-            # via the 'description' parameter in the future if needed, but current signature doesn't have it.
-            # For now, this is a basic generic description.
-            db_description = f"{transaction_type.capitalize()}"
-            if transaction_type == "expense" and sessions: # 'sessions' might be repurposed or come from elsewhere
-                logging.warning("The 'sessions' parameter was provided for an 'expense' transaction. This may need review.")
-                # Potentially add sessions to description if relevant for some expenses, though this is unlikely.
-                # db_description += f" (Sessions: {sessions})" # Example, if sessions were to be used generically
-
-        final_transaction_date = transaction_date if transaction_date else start_date
-        final_end_date = end_date
-
-        # Date validation for start_date and final_transaction_date
-        try:
-            datetime.strptime(start_date, "%Y-%m-%d")
-            datetime.strptime(final_transaction_date, "%Y-%m-%d")
-        except ValueError as ve:
-            logging.error(
-                f"Invalid date format for start_date or transaction_date: {ve}",
-                exc_info=True,
-            )
-            return (
-                False,
-                f"Invalid date format for start_date ('{start_date}') or transaction_date ('{final_transaction_date}').",
-            )
-
-        # Generic end_date calculation for transactions linked to a plan
-        # This applies if transaction_type is 'new_subscription' or 'renewal' and plan_id is provided
-        if transaction_type in ["new_subscription", "renewal"] and plan_id:
-            if final_end_date:
-                try:
-                    datetime.strptime(final_end_date, "%Y-%m-%d")
-                except ValueError:
-                    logging.warning(
-                        f"Invalid end_date format '{final_end_date}' for transaction type {transaction_type}. Will attempt to calculate."
-                    )
-                    final_end_date = None # Reset to trigger calculation
-
-            if not final_end_date:
-                plan_details = self.get_plan_by_id(plan_id)
-                if not plan_details:
-                    return False, f"Plan with ID {plan_id} not found for end_date calculation."
-
-                duration_days = plan_details[2] # Assuming plan_details[2] is duration
-                if not isinstance(duration_days, int) or duration_days <= 0:
-                    logging.error(
-                        f"Invalid duration ({duration_days}) for plan ID {plan_id}. Cannot calculate end_date."
-                    )
-                    return False, f"Invalid duration for plan ID {plan_id} for end_date calculation."
-
-                try:
-                    final_end_date = (
-                        datetime.strptime(start_date, "%Y-%m-%d") + timedelta(days=duration_days)
-                    ).strftime("%Y-%m-%d")
-                except ValueError as ve:
-                    logging.error(f"Date calculation error for end_date: {ve}", exc_info=True)
-                    return False, f"Error calculating end_date from start_date '{start_date}'."
-
-        # For other types like 'payment', 'expense', end_date might not be applicable
-        # or should be directly provided if needed. If final_end_date is still None, it will be NULL.
-
-        try:
-            cursor = self.conn.cursor()
-
-            sql = """
-                INSERT INTO transactions
-                (member_id, plan_id, transaction_date, amount, transaction_type, description, start_date, end_date, payment_method, sessions)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """
-            # Ensure 'type' in the SQL query above is changed to 'transaction_type'
-            # if that's the actual column name in the transactions table.
-            # Based on database.py, the column is 'transaction_type'.
-            # The variable db_type should map to this column.
-            params = (
-                member_id,
-                plan_id,
-                final_transaction_date,
-                db_amount,  # Use integer amount
-                db_type,
-                db_description,
-                start_date,
-                final_end_date,
-                payment_method, # Added payment_method
-                sessions        # Added sessions
-            )
-
-            cursor.execute(sql, params)
-            self._update_member_join_date_if_earlier(member_id, start_date, cursor)
-            self.conn.commit()
-            self._update_member_status(
-                member_id
-            )  # Update member status after successful transaction
-            return True, "Transaction added successfully."
-        except ValueError as ve:
-            logging.error(
-                f"Data validation or date parsing error in add_transaction: {ve}",
-                exc_info=True,
-            )
-            # It's possible some specific ValueError was not caught by earlier checks, e.g. if a date format was missed.
-            return False, f"Data validation or date parsing error: {ve}"
-        except sqlite3.Error as e:
-            logging.error(
-                f"Database error while adding transaction: {e}", exc_info=True
-            )
-            return False, f"Database error while adding transaction: {e}"
-
     def _update_member_status(self, member_id: int):
         """
-        Updates the is_active status of a member based on their transactions.
-        A member is active if they have any transaction whose end_date (calculated
-        from start_date and plan_duration) is after the current date.
+        Updates the is_active status of a member based on their memberships.
+        A member is active if they have at least one active membership
+        where the current date is between the start_date and end_date.
         """
         try:
             cursor = self.conn.cursor()
             query = """
-                SELECT t.start_date, p.duration
-                FROM transactions t
-                JOIN plans p ON t.plan_id = p.id
-                WHERE t.member_id = ? AND t.plan_id IS NOT NULL
+                SELECT start_date, end_date
+                FROM memberships
+                WHERE member_id = ? AND is_active = 1
             """
-            # Note: The original instructions mentioned p.duration_days, but the plans table schema
-            # in the provided code uses 'duration'. Assuming 'duration' stores days.
-            # Removed filter on transaction_type to consider all transactions with a valid plan.
-            # Added 't.plan_id IS NOT NULL' to ensure only transactions linked to a plan are considered,
-            # as transactions like direct PT session entries might not have a plan_id and thus no duration.
-
             cursor.execute(query, (member_id,))
-            transactions = cursor.fetchall()
+            memberships = cursor.fetchall()
 
             today = date.today()
             is_currently_active = False
 
-            for transaction_start_date_str, duration_days in transactions:
-                if not transaction_start_date_str or duration_days is None:
+            for start_date_str, end_date_str in memberships:
+                if not start_date_str or not end_date_str:
                     logging.warning(
-                        f"Skipping transaction for member {member_id} due to missing start_date or duration_days."
+                        f"Skipping membership for member {member_id} due to missing start_date or end_date."
                     )
                     continue
                 try:
-                    start_date_obj = datetime.strptime(
-                        transaction_start_date_str, "%Y-%m-%d"
-                    ).date()
-                    end_date_obj = start_date_obj + timedelta(days=duration_days)
-                    if end_date_obj > today:
+                    start_date_obj = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                    end_date_obj = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                    if start_date_obj <= today <= end_date_obj:
                         is_currently_active = True
-                        break  # Found an active transaction, no need to check further
+                        break  # Found an active membership
                 except ValueError as ve:
                     logging.error(
-                        f"Date parsing error for member {member_id}, start_date '{transaction_start_date_str}': {ve}",
-                        exc_info=True,
-                    )
-                except TypeError as te:  # Handles if duration_days is not an int/float
-                    logging.error(
-                        f"Duration calculation error for member {member_id}, duration '{duration_days}': {te}",
+                        f"Date parsing error for member {member_id}, start_date '{start_date_str}', end_date '{end_date_str}': {ve}",
                         exc_info=True,
                     )
 
-            # Update member's status
             update_status_query = "UPDATE members SET is_active = ? WHERE member_id = ?"
-            cursor.execute(
-                update_status_query, (1 if is_currently_active else 0, member_id)
-            )
+            cursor.execute(update_status_query, (1 if is_currently_active else 0, member_id))
             self.conn.commit()
             logging.info(
                 f"Member {member_id} status updated to {'active' if is_currently_active else 'inactive'}."
@@ -599,8 +395,7 @@ class DatabaseManager:
                 f"Database error in _update_member_status for member {member_id}: {e}",
                 exc_info=True,
             )
-            # Optionally, re-raise or handle so the caller knows the update might have failed.
-        except Exception as ex:  # Catch any other unexpected errors
+        except Exception as ex:
             logging.error(
                 f"Unexpected error in _update_member_status for member {member_id}: {ex}",
                 exc_info=True,
@@ -609,27 +404,21 @@ class DatabaseManager:
     def get_all_activity_for_member(self, member_id: int) -> list:
         try:
             cursor = self.conn.cursor()
-            # Refactored query to return more direct data, reducing complex CASE statements.
-            # The UI or calling layer can format this data as needed.
-            # t.description should now contain a good summary of the transaction.
-            # p.name is the plan name if a plan is linked.
-            # t.sessions is included; its relevance may diminish over time.
             query = """
                 SELECT
-                    t.transaction_id,
-                    t.transaction_type,
-                    t.description,
-                    t.transaction_date,
-                    t.start_date,
-                    t.end_date,
-                    t.amount,
+                    ms.id AS membership_id,
                     p.name AS plan_name,
-                    t.payment_method,
-                    t.sessions
-                FROM transactions t
-                LEFT JOIN plans p ON t.plan_id = p.id
-                WHERE t.member_id = ?
-                ORDER BY t.start_date DESC, t.transaction_id DESC;
+                    ms.start_date,
+                    ms.end_date,
+                    ms.amount_paid,
+                    ms.purchase_date,
+                    ms.membership_type,
+                    ms.is_active
+                FROM memberships ms
+                JOIN members m ON ms.member_id = m.member_id
+                JOIN plans p ON ms.plan_id = p.id
+                WHERE ms.member_id = ?
+                ORDER BY ms.purchase_date DESC, ms.start_date DESC;
             """
             cursor.execute(query, (member_id,))
             return cursor.fetchall()
@@ -643,24 +432,36 @@ class DatabaseManager:
     def get_pending_renewals(self, year: int, month: int) -> list:
         if not (1 <= month <= 12):
             return []
-        year_month_str = f"{year:04d}-{month:02d}"
+        # Ensure month is zero-padded
+        month_str = f"{month:02d}"
+        # Construct the first and last day of the target month for accurate date range filtering
+        first_day_of_month = f"{year:04d}-{month_str}-01"
+        # To get the last day, add one month to the first day, then subtract one day.
+        # This handles varying month lengths and leap years correctly.
+        try:
+            next_month_first_day = (datetime.strptime(first_day_of_month, "%Y-%m-%d") + timedelta(days=32)).replace(day=1)
+            last_day_of_month_obj = next_month_first_day - timedelta(days=1)
+            last_day_of_month = last_day_of_month_obj.strftime("%Y-%m-%d")
+        except ValueError: # Should not happen with validated year/month
+            logging.error(f"Date calculation error for pending renewals {year}-{month_str}.")
+            return []
+
         try:
             cursor = self.conn.cursor()
             query = """
-                SELECT m.client_name, m.phone, p.name AS plan_name, t.end_date
-                FROM transactions t
-                JOIN members m ON t.member_id = m.member_id
-                JOIN plans p ON t.plan_id = p.id -- Corrected join condition and selected p.name
-                WHERE strftime('%Y-%m', t.end_date) = ?
-                  AND m.is_active = 1
-                  AND t.transaction_type IN ('new_subscription', 'renewal') -- Changed from 'Group Class'
-                ORDER BY t.end_date ASC, m.client_name ASC;
+                SELECT m.client_name, m.phone, p.name AS plan_name, ms.end_date
+                FROM memberships ms
+                JOIN members m ON ms.member_id = m.member_id
+                JOIN plans p ON ms.plan_id = p.id
+                WHERE ms.end_date BETWEEN ? AND ?
+                  AND ms.is_active = 1
+                ORDER BY ms.end_date ASC, m.client_name ASC;
             """
-            cursor.execute(query, (year_month_str,))
+            cursor.execute(query, (first_day_of_month, last_day_of_month))
             return cursor.fetchall()
         except sqlite3.Error as e:
             logging.error(
-                f"Database error fetching pending renewals for {year_month_str}: {e}",
+                f"Database error fetching pending renewals for {year}-{month_str}: {e}",
                 exc_info=True,
             )
             return []
@@ -668,11 +469,15 @@ class DatabaseManager:
     def get_finance_report(self, year: int, month: int) -> float | None:
         if not (1 <= month <= 12):
             return None
-        year_month_str = f"{year:04d}-{month:02d}"
+        # Ensure month is zero-padded
+        month_str = f"{month:02d}"
+        year_month_str = f"{year:04d}-{month_str}" # Used for strftime filtering
+
         try:
             cursor = self.conn.cursor()
+            # Filters by the 'YYYY-MM' part of purchase_date
             cursor.execute(
-                "SELECT SUM(amount) FROM transactions WHERE strftime('%Y-%m', transaction_date) = ?",
+                "SELECT SUM(amount_paid) FROM memberships WHERE strftime('%Y-%m', purchase_date) = ?",
                 (year_month_str,),
             )
             result = cursor.fetchone()
@@ -718,44 +523,42 @@ class DatabaseManager:
             )
             return None
 
-    def get_plan_by_name_and_duration(
-        self, name: str, duration: int
-    ) -> tuple | None:  # Parameters renamed
-        # duration_days = duration_months * 30 # Assuming duration is now directly in days as per schema
+    def get_plan_by_name_and_duration( # Changed duration to default_duration
+        self, name: str, default_duration: int
+    ) -> tuple | None:
         try:
             cursor = self.conn.cursor()
             cursor.execute(
-                # Column names updated, is_active removed
-                "SELECT id, name, duration, price, type FROM plans WHERE name = ? AND duration = ?",
-                (name, duration),  # Parameters match updated column names
+                "SELECT id, name, default_duration, price, type FROM plans WHERE name = ? AND default_duration = ?",
+                (name, default_duration),
             )
             return cursor.fetchone()
         except sqlite3.Error as e:
             logging.error(
-                f"DB error fetching plan '{name}' dur {duration} days: {e}",
+                f"DB error fetching plan '{name}' dur {default_duration} days: {e}", # Changed duration to default_duration
                 exc_info=True,
-            )  # Log updated
+            )
             return None
 
-    def get_or_create_plan_id(
-        self, name: str, duration: int, price: int, type_text: str
+    def get_or_create_plan_id( # Changed duration to default_duration
+        self, name: str, default_duration: int, price: int, type_text: str
     ) -> Optional[int]:
         """
         Retrieves the ID of an existing plan or creates a new one.
 
         The method first queries the database for a plan with the specified 'name'
-        and 'duration'.
-        - If a plan with the same name and duration is found, its ID is returned.
+        and 'default_duration'.
+        - If a plan with the same name and default_duration is found, its ID is returned.
         - If no such plan exists, a new plan is created with the provided 'name',
-          'duration', 'price', and 'type_text', and the ID of the new plan is returned.
+          'default_duration', 'price', and 'type_text', and the ID of the new plan is returned.
 
         This approach helps prevent "UNIQUE constraint failed" errors when data migration
         or other processes attempt to add plans, assuming the relevant unique constraint
-        involves at least 'name' and 'duration'.
+        involves at least 'name' and 'default_duration'.
 
         Args:
             name: The name of the plan.
-            duration: The duration of the plan in days.
+            default_duration: The default_duration of the plan in days.
             price: The price of the plan. Used if creating a new plan.
             type_text: The type of the plan (e.g., 'GC', 'PT'). Used if creating a new plan.
 
@@ -764,29 +567,29 @@ class DatabaseManager:
         """
         cursor = self.conn.cursor()
         try:
-            # Check if a plan with the same name and duration already exists
+            # Check if a plan with the same name and default_duration already exists
             cursor.execute(
-                "SELECT id FROM plans WHERE name = ? AND duration = ?", (name, duration)
+                "SELECT id FROM plans WHERE name = ? AND default_duration = ?", (name, default_duration)
             )
             result = cursor.fetchone()
             if result:
                 logging.debug(
-                    f"Found existing plan for name='{name}', duration={duration}. ID: {result[0]}"
+                    f"Found existing plan for name='{name}', default_duration={default_duration}. ID: {result[0]}"
                 )
                 return result[0]
             else:
                 # If it doesn't exist, insert the new plan
                 logging.info(
-                    f"Creating new plan: name='{name}', duration={duration}, price={price}, type='{type_text}'"
+                    f"Creating new plan: name='{name}', default_duration={default_duration}, price={price}, type='{type_text}'"
                 )
                 cursor.execute(
-                    "INSERT INTO plans (name, duration, price, type) VALUES (?, ?, ?, ?)",
-                    (name, duration, price, type_text),
+                    "INSERT INTO plans (name, default_duration, price, type) VALUES (?, ?, ?, ?)",
+                    (name, default_duration, price, type_text),
                 )
                 self.conn.commit()
                 new_plan_id = cursor.lastrowid
                 logging.info(
-                    f"Created new plan with ID: {new_plan_id} (Name: '{name}', Duration: {duration} days)"
+                    f"Created new plan with ID: {new_plan_id} (Name: '{name}', Default Duration: {default_duration} days)"
                 )
                 return new_plan_id
         except sqlite3.IntegrityError as ie:
@@ -795,7 +598,7 @@ class DatabaseManager:
             # and the initial check passed.
             self.conn.rollback()  # Rollback any pending transaction
             logging.error(
-                f"Integrity error in get_or_create_plan_id for name='{name}', duration={duration}: {ie}. "
+                f"Integrity error in get_or_create_plan_id for name='{name}', default_duration={default_duration}: {ie}. "
                 "This might indicate a conflict with an existing plan not caught by the initial check.",
                 exc_info=True,
             )
@@ -803,17 +606,17 @@ class DatabaseManager:
             # This is an optimistic recovery for race conditions.
             try:
                 cursor.execute(
-                    "SELECT id FROM plans WHERE name = ? AND duration = ?",
-                    (name, duration),
+                    "SELECT id FROM plans WHERE name = ? AND default_duration = ?",
+                    (name, default_duration),
                 )
                 result = cursor.fetchone()
                 if result:
                     logging.warning(
-                        f"Found plan ID {result[0]} for name='{name}', duration={duration} after initial IntegrityError."
+                        f"Found plan ID {result[0]} for name='{name}', default_duration={default_duration} after initial IntegrityError."
                     )
                     return result[0]
                 logging.error(
-                    f"Still no plan found for name='{name}', duration={duration} after IntegrityError and re-check."
+                    f"Still no plan found for name='{name}', default_duration={default_duration} after IntegrityError and re-check."
                 )
                 return None
             except sqlite3.Error as final_e:
@@ -826,84 +629,10 @@ class DatabaseManager:
         except sqlite3.Error as e:
             self.conn.rollback()  # Rollback any pending transaction
             logging.error(
-                f"General SQLite error in get_or_create_plan_id for name='{name}', duration={duration}: {e}",
+                f"General SQLite error in get_or_create_plan_id for name='{name}', default_duration={default_duration}: {e}",
                 exc_info=True,
             )
             return None
-
-    def get_transactions_with_member_details(
-        self,
-        name_filter: str = None,
-        phone_filter: str = None,
-        join_date_filter: str = None,
-    ) -> list:
-        try:
-            cursor = self.conn.cursor()
-            query_params = []
-            sql = """
-                SELECT t.transaction_id, t.member_id, t.transaction_type, t.plan_id, t.transaction_date, t.start_date, t.end_date, t.amount, t.payment_method, t.sessions, m.client_name, m.phone, m.join_date, p.plan_name FROM transactions t JOIN members m ON t.member_id = m.member_id LEFT JOIN plans p ON t.plan_id = p.plan_id
-            """
-            conditions = []
-            if name_filter:
-                conditions.append("m.client_name LIKE ?")
-                query_params.append(f"%{name_filter}%")
-            if phone_filter:
-                conditions.append("m.phone LIKE ?")
-                query_params.append(f"%{phone_filter}%")
-            if join_date_filter:
-                try:
-                    datetime.strptime(join_date_filter, "%Y-%m-%d")
-                    conditions.append("m.join_date = ?")
-                    query_params.append(join_date_filter)
-                except ValueError:
-                    logging.warning(
-                        f"Invalid join_date_filter format '{join_date_filter}'. Filter ignored."
-                    )
-            if conditions:
-                sql += " WHERE " + " AND ".join(conditions)
-            sql += " ORDER BY t.transaction_id DESC"
-            cursor.execute(sql, query_params)
-            return cursor.fetchall()
-        except sqlite3.Error as e:
-            logging.error(
-                f"DB error fetching transactions with member details: {e}",
-                exc_info=True,
-            )
-            return []
-
-    def get_transactions_for_month(self, year: int, month: int) -> list:
-        if not (1 <= month <= 12):
-            return []
-        year_str, month_str = str(year), f"{month:02d}"
-        try:
-            cursor = self.conn.cursor()
-            query = """
-                SELECT
-                    t.transaction_id,
-                    m.client_name,
-                    t.transaction_date,
-                    t.start_date,
-                    t.end_date,
-                    t.amount,
-                    t.transaction_type,
-                    t.description,      -- Use the stored transaction description
-                    p.name AS plan_name, -- Also provide plan name if available
-                    t.payment_method,
-                    t.sessions          -- Include sessions, its utility might vary
-                FROM transactions t
-                JOIN members m ON t.member_id = m.member_id
-                LEFT JOIN plans p ON t.plan_id = p.id -- Corrected join condition
-                WHERE strftime('%Y', t.transaction_date) = ? AND strftime('%m', t.transaction_date) = ?
-                ORDER BY t.transaction_date ASC, t.transaction_id ASC;
-            """
-            cursor.execute(query, (year_str, month_str))
-            return cursor.fetchall()
-        except sqlite3.Error as e:
-            logging.error(
-                f"DB error in get_transactions_for_month for {year_str}-{month_str}: {e}",
-                exc_info=True,
-            )
-            return []
 
     def get_book_status(self, month_key: str) -> str:  # YYYY-MM
         try:
@@ -955,85 +684,19 @@ class DatabaseManager:
             )
             return False, f"Database error while deactivating member {member_id}: {e}"
 
-    def delete_transaction(self, transaction_id: int) -> Tuple[bool, str]:
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute(
-                "SELECT member_id, transaction_date FROM transactions WHERE transaction_id = ?",
-                (transaction_id,),
-            )
-            transaction_info = cursor.fetchone()
-            if not transaction_info:
-                return False, f"Transaction with ID {transaction_id} not found."
-
-            # Existing code to get transaction_info...
-            transaction_date_str = transaction_info[
-                1
-            ]  # Assuming transaction_date is at index 1
-            transaction_month_key = datetime.strptime(
-                transaction_date_str, "%Y-%m-%d"
-            ).strftime("%Y-%m")
-            if self.get_book_status(transaction_month_key) == "closed":
-                return (
-                    False,
-                    f"Cannot delete transaction. Books for {transaction_month_key} are closed.",
-                )
-
-            member_id_for_log, transaction_date_str_log = (
-                transaction_info  # Renamed transaction_date_str to avoid conflict
-            )
-            book_status_for_log, transaction_month_key_for_log = "open", "N/A"
-            if transaction_date_str_log:
-                try:
-                    transaction_month_key_for_log = datetime.strptime(
-                        transaction_date_str_log, "%Y-%m-%d"
-                    ).strftime("%Y-%m")
-                    # We already know the status if it was closed, this log is for other cases or if logic changes
-                    book_status_for_log = self.get_book_status(
-                        transaction_month_key_for_log
-                    )
-                except ValueError:
-                    logging.warning(
-                        f"Invalid transaction_date format '{transaction_date_str_log}' for tx {transaction_id}. Cannot determine book status for logging."
-                    )
-
-            cursor.execute(
-                "DELETE FROM transactions WHERE transaction_id = ?", (transaction_id,)
-            )
-            self.conn.commit()
-
-            if cursor.rowcount > 0:
-                if book_status_for_log == "closed" and transaction_date_str:
-                    logging.info(
-                        f"Transaction {transaction_id} (member_id: {member_id_for_log}) deleted from a closed period: {transaction_month_key_for_log}"
-                    )
-                return True, "Transaction deleted successfully."
-            return (
-                False,
-                f"Transaction with ID {transaction_id} not found or already deleted (zero rows affected).",
-            )
-        except sqlite3.Error as e:
-            logging.error(
-                f"Database error deleting transaction {transaction_id}: {e}",
-                exc_info=True,
-            )
-            return (
-                False,
-                f"Database error while deleting transaction {transaction_id}: {e}",
-            )
-
     def delete_plan(self, plan_id: int) -> tuple[bool, str]:
         try:
             cursor = self.conn.cursor()
+            # Check if the plan is used in any memberships
             cursor.execute(
-                "SELECT 1 FROM transactions WHERE plan_id = ? LIMIT 1", (plan_id,)
-            )  # Assuming plan_id in transactions still refers to id in plans
+                "SELECT 1 FROM memberships WHERE plan_id = ? LIMIT 1", (plan_id,)
+            )
             if cursor.fetchone():
-                return False, "Plan is in use and cannot be deleted."
+                return False, "Plan is in use by a membership and cannot be deleted."
 
             cursor.execute(
                 "DELETE FROM plans WHERE id = ?", (plan_id,)
-            )  # Changed plan_id to id
+            )
             self.conn.commit()
             if cursor.rowcount > 0:
                 return True, "Plan deleted successfully."
@@ -1041,78 +704,6 @@ class DatabaseManager:
         except sqlite3.Error as e:
             logging.error(f"Database error deleting plan {plan_id}: {e}", exc_info=True)
             return False, f"Database error while deleting plan {plan_id}: {e}"
-
-    def get_transactions_filtered(
-        self,
-        member_id: Optional[int] = None,
-        plan_id: Optional[int] = None,
-        start_date_filter: Optional[str] = None,
-        end_date_filter: Optional[str] = None,
-        limit: int = 50,
-    ) -> list:
-        """
-        Fetches transactions with optional filters, joining with members and plans.
-        Returns columns: (transaction_id, transaction_date, member_name, plan_name, amount, payment_method).
-        """
-        try:
-            cursor = self.conn.cursor()
-
-            sql = """
-                SELECT
-                    t.transaction_id,
-                    t.transaction_date,
-                    m.client_name AS member_name,
-                    p.name AS plan_name,
-                    t.amount,
-                    t.payment_method,
-                    t.description,
-                    t.start_date,
-                    t.end_date
-                FROM transactions t
-                LEFT JOIN members m ON t.member_id = m.member_id
-                LEFT JOIN plans p ON t.plan_id = p.id
-            """
-            conditions = []
-            params = []
-
-            if member_id is not None:
-                conditions.append("t.member_id = ?")
-                params.append(member_id)
-
-            if plan_id is not None:
-                conditions.append("t.plan_id = ?")
-                params.append(plan_id)
-
-            if start_date_filter:
-                # Ensure date is in YYYY-MM-DD format, basic validation
-                datetime.strptime(start_date_filter, "%Y-%m-%d")
-                conditions.append("t.transaction_date >= ?")
-                params.append(start_date_filter)
-
-            if end_date_filter:
-                datetime.strptime(end_date_filter, "%Y-%m-%d")
-                conditions.append("t.transaction_date <= ?")
-                params.append(end_date_filter)
-
-            if conditions:
-                sql += " WHERE " + " AND ".join(conditions)
-
-            sql += " ORDER BY t.transaction_date DESC, t.transaction_id DESC"
-
-            if limit > 0:
-                sql += f" LIMIT ?"
-                params.append(limit)
-
-            cursor.execute(sql, params)
-            return cursor.fetchall()
-        except ValueError:
-            logging.error("Invalid date format provided to get_transactions_filtered.", exc_info=True)
-            return [] # Or raise error
-        except sqlite3.Error as e:
-            logging.error(
-                f"Database error while fetching filtered transactions: {e}", exc_info=True
-            )
-            return []
 
 
 # Removed module-level get_db_connection and _TEST_IN_MEMORY_CONNECTION as connection is now managed externally.

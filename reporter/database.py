@@ -21,6 +21,7 @@ def create_database(db_name: str):
             member_id INTEGER PRIMARY KEY AUTOINCREMENT,
             client_name TEXT NOT NULL,
             phone TEXT UNIQUE,
+            email TEXT,
     join_date TEXT,
     is_active INTEGER NOT NULL DEFAULT 1 -- << ADD THIS COLUMN
         );
@@ -37,7 +38,10 @@ def create_database(db_name: str):
             start_date TEXT,
             end_date TEXT,
             is_active BOOLEAN,
-            FOREIGN KEY (member_id) REFERENCES members(id),
+            amount_paid REAL,
+            purchase_date TEXT,
+            membership_type TEXT,
+            FOREIGN KEY (member_id) REFERENCES members(member_id),
             FOREIGN KEY (plan_id) REFERENCES plans(id)
         );
         """
@@ -49,32 +53,11 @@ def create_database(db_name: str):
         CREATE TABLE IF NOT EXISTS plans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            duration INTEGER NOT NULL,
+            default_duration INTEGER NOT NULL,
             price INTEGER,
             type TEXT,
             is_active INTEGER NOT NULL DEFAULT 1,
-            UNIQUE(name, duration, type)
-        );
-        """
-        )
-
-        # Create transactions table
-        cursor.execute(
-            """
-        CREATE TABLE IF NOT EXISTS transactions (
-            transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            member_id INTEGER NOT NULL,
-            transaction_type TEXT NOT NULL,
-            plan_id INTEGER,
-            start_date TEXT NOT NULL,
-            end_date TEXT, -- Added missing column
-            transaction_date TEXT,
-            amount REAL,
-            payment_method TEXT,
-            sessions INTEGER,
-            description TEXT,
-            FOREIGN KEY (member_id) REFERENCES members (member_id),
-            FOREIGN KEY (plan_id) REFERENCES plans (plan_id)
+            UNIQUE(name, default_duration, type)
         );
         """
         )
@@ -121,7 +104,7 @@ def seed_initial_plans(conn: sqlite3.Connection):
             type_text,
         ) in plans_to_seed:  # Added price and type
             cursor.execute(
-                "INSERT OR IGNORE INTO plans (name, duration, price, type) VALUES (?, ?, ?, ?)",
+                "INSERT OR IGNORE INTO plans (name, default_duration, price, type) VALUES (?, ?, ?, ?)",
                 (plan_name, duration_days, price, type_text),
             )  # Updated column names and added new ones
         conn.commit()
