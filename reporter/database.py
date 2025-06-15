@@ -36,6 +36,7 @@ def create_database(db_name: str):
             duration INTEGER NOT NULL,
             price INTEGER,
             type TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
             UNIQUE(name, duration, type)
         );
         """
