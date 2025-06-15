@@ -1,39 +1,82 @@
 
+# Project Remediation and Cleanup Plan
 
-**Objective:** To complete the application by first resolving critical structural issues and then implementing the refined specifications for the backend and user interface.
+**Objective:** To align the entire application with the `app_specs.md` and `Developers_Guide.md`, fix critical bugs, and establish a stable, testable, and maintainable codebase.
 
------
+**Instructions for Developer:**
+- Follow the phases in order, from 1 to 4. Do not skip steps.
+- Mark the checkbox `[x]` as you complete each task.
+- The `app_specs.md` is our single source of truth. When in doubt, refer to it.
 
-### **Phase 1: Foundational Cleanup & Critical Fixes (Must be completed first)**
+---
 
-**Goal:** Stabilize the codebase. A clean foundation prevents future bugs and makes development faster. Do not skip these steps.
+### Phase 1: Foundation and Schema Alignment (The Great Cleanup)
 
-| Task ID | Task Description | Instructions for Junior Developer | Status |
-| :--- | :--- | :--- | :--- |
-| **P1-T1** | Consolidate Project Structure | **Why:** We have two code folders (`reporter`, `reporter`). This is confusing and will lead to errors. We need one source of truth. \<br\> **How:** \<br\> 1. In your file explorer, delete the entire `reporter` folder. \<br\> 2. In your code editor, do a project-wide search for "reporter" to find any leftover imports. Change them all to import from `reporter`. | `[ ]` |
-| **P1-T2** | Clean Up Root Directory | **Why:** The main project folder is cluttered with dozens of old, single-purpose scripts. They are not part of the final application and create confusion. \<br\> **How:** Delete all the standalone Python scripts from the root directory (e.g., `add_and_verify_member.py`, `manage_plan_lifecycle.py`, all the `simulate_...` files). Their logic will be properly implemented in the main application. | `[ ]` |
-| **P1-T3** | Fix Missing Dependency | **Why:** The application will crash when a user tries to download an Excel report because a required library is missing. \<br\> **How:** \<br\> 1. Open the `requirements.txt` file. \<br\> 2. On a new line, add the word `openpyxl`. | `[ ]` |
+*Goal: Establish a single, correct database schema and remove all outdated code, tests, and documentation that contradict the `app_specs.md`. This is the most critical phase.*
 
------
+- [ ] **1.1: Align `plans` Table with Spec**
+  - **Why:** The spec states that a plan's duration is flexible and should be decided when a membership is created, not fixed to the plan itself. The `default_duration` column contradicts this fundamental requirement.
+  - **Action:** In `reporter/database.py`, find the `create_plans_table` function. Delete the line that adds the `default_duration` column to the SQL `CREATE TABLE` statement.
 
-### **Phase 2: Backend & Database Overhaul**
+- [ ] **1.2: Delete Outdated Project Documentation**
+  - **Why:** The old `project_management.md` contains outdated information about a `transactions` table that confuses the project's direction.
+  - **Action:** Delete the old `project_management.md` file from the project. This new file is its replacement.
 
-**Goal:** Rebuild the backend to perfectly support the logic from our wireframe and specs.
+- [ ] **1.3: Update Core Documentation**
+  - **Why:** The `README.md` is the first thing a new developer sees. It must reflect the current architecture.
+  - **Action:** In `README.md`, read through the file and remove any sentences or sections that talk about a `transactions` table. Ensure it correctly refers to the `memberships` table as the core data store.
 
-| Task ID | Task Description | Instructions for Junior Developer | Status |
-| :--- | :--- | :--- | :--- |
-| **P2-T1** | Implement New Database Schema | **Why:** Our current database tables cannot support the features we need, like tracking memberships or renewal types. \<br\> **How:** Open `reporter/database.py` and modify the `CREATE TABLE` statements: \<br\> 1. **`memberships` table:** This is new. It needs columns for `id`, `member_id`, `plan_id`, `start_date`, `end_date`, and `is_active`. \<br\> 2. **`transactions` table:** Add a `transaction_type TEXT` column. This will store 'New' or 'Renewal'. \<br\> 3. **`plans` table:** Add an `is_active BOOLEAN` column. | `[ ]` |
-| **P2-T2** | Build Membership Creation Logic | **Why:** We need a single, smart function to handle the creation of a new membership, as per the wireframe's `SAVE` button logic. \<br\> **How:** In `reporter/app_api.py`, create a new function `create_membership(...)`. This function will take all the form data (member\_id, plan\_id, duration, amount, start\_date). Inside this function: \<br\> 1. Check if the member has any existing memberships to determine if the `transaction_type` is 'New' or 'Renewal'. \<br\> 2. Calculate the `end_date` using the `start_date` and `plan_duration`. \<br\> 3. Perform two database inserts: one into the `memberships` table and one into the `transactions` table. | `[ ]` |
-| **P2-T3** | Build Membership Viewing Logic | **Why:** The UI needs an efficient way to get all the data for the membership list on the right side of the wireframe. \<br\> **How:** In `reporter/app_api.py`, create a function `get_all_memberships_for_view(...)`. This function should perform a database `JOIN` across the `members`, `memberships`, and `plans` tables to return all the columns needed for the display table in one go. | `[ ]` |
+- [ ] **1.4: Fix Broken Data Migration Script**
+  - **Why:** This script is essential for loading initial data, but it's completely broken because it's trying to write to a `transactions` table that doesn't exist.
+  - **Action:** In `reporter/migrate_data.py`, modify the script. Change all SQL queries that `INSERT` into or `DELETE` from the `transactions` table to target the `memberships` table instead. You will also need to adjust the columns in the `INSERT` statement to match the columns in the `memberships` table.
 
------
+- [ ] **1.5: Delete Unusable Tests**
+  - **Why:** These tests are worse than useless; they are misleading. They test for functionality and tables that no longer exist and cannot be salvaged.
+  - **Action:** Delete the following three test files entirely:
+    - `reporter/tests/test_book_closing.py`
+    - `reporter/tests/test_business_logic.py`
+    - `reporter/tests/test_migrate_data.py`
 
-### **Phase 3: UI Implementation from Wireframe**
+---
 
-**Goal:** Build the `Memberships` tab exactly as designed.
+### Phase 2: Fix Core Business Logic
 
-| Task ID | Task Description | Instructions for Junior Developer | Status |
-| :--- | :--- | :--- | :--- |
-| **P3-T1** | Build the Two-Panel Layout | **Why:** We need the visual structure in place before adding functionality. \<br\> **How:** In `reporter/streamlit_ui/app.py`, use `st.columns(2)` to create the left and right panels. Build the form widgets on the left and the filter/table placeholders on the right. | `[ ]` |
-| **P3-T2** | Implement the "Create Membership" Form | **Why:** To enable the primary data entry workflow. \<br\> **How:** \<br\> 1. In the left panel, populate the 'Member Name' and 'Plan Name' dropdowns by calling the appropriate API functions. \<br\> 2. Connect the `SAVE` button to call the `api.create_membership` function you built in Phase 2, passing it the data from all the form fields. \<br\> 3. Connect the `CLEAR` button to reset all the form fields. | `[ ]` |
-| **P3-T3** | Implement the "View/Manage" Panel | **Why:** To allow users to see, filter, and manage existing memberships. \<br\> **How:** \<br\> 1. In the right panel, implement the filters (`Name`, `Phone`, `Status`). When they change, re-call the `api.get_all_memberships_for_view` function with the filter values. \<br\> 2. Display the returned data in an `st.dataframe`. \<br\> 3. **For selection:** Add an `st.selectbox` above the table, listing the displayed memberships. When a user selects one, display its details and the `EDIT` and `DELETE` buttons below the table. \<br\> 4. Wire up the `EDIT` and `DELETE` buttons to perform their respective actions on the *selected* membership. | `[ ]` |
+*Goal: Ensure the API, business logic, and UI are correctly wired together and handle data as expected.*
+
+- [ ] **2.1: Fix API Function Signature Mismatch**
+  - **Why:** The UI (`streamlit_ui/app.py`) calls the API with a single dictionary object, but the business logic layer (`database_manager.py`) expects multiple, separate arguments. This will cause a `TypeError` and crash the application. The API layer must correctly translate requests from the client.
+  - **Action:** In `reporter/database_manager.py`, modify the `create_membership_record` function signature. Change it from `def create_membership_record(self, member_id, plan_id, ...)` to `def create_membership_record(self, data)`. Then, inside the function, unpack the dictionary to get your variables (e.g., `member_id = data['member_id']`, `plan_id = data['plan_id']`, etc.).
+
+- [ ] **2.2: Add Missing Dependency**
+  - **Why:** The `reporter/main.py` file imports the `flet` library, but this is not declared in `requirements.txt`. The application will fail to start in any new environment where dependencies are installed from this file.
+  - **Action:** Open the `requirements.txt` file and add `flet` on a new line.
+
+---
+
+### Phase 3: Align User Interface with Specs
+
+*Goal: Correct the UI workflows to match the `app_specs.md` precisely.*
+
+- [ ] **3.1: Fix Membership Selection**
+  - **Why:** The `app_specs.md` requires a more intuitive workflow where users click directly on a table row to select it for editing or deletion. The current dropdown is less user-friendly and violates the spec.
+  - **Action:** In `reporter/streamlit_ui/app.py`, remove the `st.selectbox` currently used for selecting a membership to edit/delete. The goal is to make the rows of the main membership dataframe selectable. You will need to find a method to capture a click event on the dataframe to get the ID of the selected row and store it in the session state for the `EDIT` and `DELETE` buttons to use.
+
+- [ ] **3.2: Correct Renewals Report Logic**
+  - **Why:** The spec requires a dynamic, rolling 30-day view of upcoming renewals, which is more useful for proactive management. The current monthly view is static and doesn't meet this requirement. The backend logic is already correct; the UI just needs to use it properly.
+  - **Action:** In `reporter/streamlit_ui/app.py`, go to the "Reporting" tab's "Renewals Report" section. Remove the date and month selector widgets. Modify the logic so that the `api.generate_renewal_report_data()` function is called *without* any date arguments. This will allow the backend to correctly use its default logic of finding renewals in the next 30 days.
+
+---
+
+### Phase 4: Re-establish Testing Foundation
+
+*Goal: Create a baseline of useful tests that reflect the current, correct state of the application.*
+
+- [ ] **4.1: Write New `test_database_manager.py`**
+  - **Why:** Having deleted the old, broken tests, we now have zero test coverage for our core business logic. We need to create new tests to ensure the `DatabaseManager` functions work correctly with the proper `memberships` schema. This is critical for preventing future bugs.
+  - **Action:** Create a new file: `reporter/tests/test_database_manager.py`. In this file, write new `pytest` functions that specifically test the main business logic: `create_membership_record`, `generate_financial_report_data`, and `generate_renewal_report_data`. Use `pytest` fixtures to manage a temporary test database.
+
+- [ ] **4.2: Write New `test_plan_management.py`**
+  - **Why:** We need to ensure that the basic operations for managing plans are working correctly after our schema changes in Phase 1.
+  - **Action:** In the existing file `reporter/tests/test_plan_management.py`, review and update the tests to align with the corrected schema (i.e., no `default_duration`). Add simple tests to verify the creation and retrieval of plans.
+
+```
