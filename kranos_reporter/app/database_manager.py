@@ -149,6 +149,150 @@ class DatabaseManager:
                 self.conn.rollback()
             return None
 
+    def get_filtered_members(self, search_term=None, plan_type=None, status=None):
+        """
+        Fetches members based on provided filter criteria.
+
+        Args:
+            search_term (str, optional): Term to search for in member names.
+            plan_type (str, optional): Filter by plan type (e.g., 'GC', 'PT'). 'All' means no filter.
+            status (str, optional): Filter by member status ('Active', 'Inactive'). 'All' means no filter.
+
+        Returns:
+            pandas.DataFrame: A DataFrame containing filtered member data,
+                              or an empty DataFrame if an error occurs or no members match.
+        """
+        if not self.conn:
+            print("Database connection not established.")
+            return pd.DataFrame()
+
+        query_params = []
+        # Base query joining members and plans table
+        # Assuming members table has current_plan_id that is a FOREIGN KEY to plans.id
+        # Assuming members table has is_active (INTEGER/BOOLEAN) and plans table has type (TEXT)
+        base_query = """
+            SELECT
+                m.id AS member_id,
+                m.name AS member_name,
+                m.email AS member_email,
+                m.phone AS member_phone,
+                m.join_date,
+                m.is_active,
+                p.name AS plan_name,
+                p.type AS plan_type,
+                p.price AS plan_price,
+                p.duration_days AS plan_duration
+            FROM
+                members m
+            LEFT JOIN
+                plans p ON m.current_plan_id = p.id
+        """
+
+        conditions = []
+
+        if search_term:
+            conditions.append("m.name LIKE ?")
+            query_params.append(f"%{search_term}%")
+
+        if plan_type and plan_type.lower() != 'all':
+            conditions.append("p.type = ?")
+            query_params.append(plan_type)
+
+        if status and status.lower() != 'all':
+            if status.lower() == 'active':
+                conditions.append("m.is_active = 1")
+            elif status.lower() == 'inactive':
+                conditions.append("m.is_active = 0")
+            # No else needed, if status is something else and not 'all', it's ignored.
+            # Or, you could add validation for status values.
+
+        if conditions:
+            base_query += " WHERE " + " AND ".join(conditions)
+
+        base_query += " ORDER BY m.name ASC;"
+
+        try:
+            df = pd.read_sql_query(base_query, self.conn, params=tuple(query_params))
+            return df
+        except sqlite3.Error as e:
+            print(f"Error fetching filtered members: {e}")
+            return pd.DataFrame() # Return empty DataFrame on error
+        except Exception as e: # Catch other potential errors, e.g. with pandas
+            print(f"An unexpected error occurred while fetching filtered members: {e}")
+            return pd.DataFrame()
+
+    def get_member_details(self, member_id):
+        """
+        Fetches all details for a specific member.
+
+        Args:
+            member_id (int): The ID of the member.
+
+        Returns:
+            pandas.Series: A Series containing the member's details,
+                           or None if an error occurs or member not found.
+        """
+        if not self.conn:
+            print("Database connection not established.")
+            return None
+
+        # Fetch member details, including current_plan_id
+        # The actual plan name can be fetched separately if needed or joined here
+        query = """
+            SELECT
+                m.id AS member_id,
+                m.name AS member_name,
+                m.email,
+                m.phone,
+                m.join_date,
+                m.current_plan_id,
+                m.is_active,
+                p.name AS plan_name
+            FROM
+                members m
+            LEFT JOIN
+                plans p ON m.current_plan_id = p.id
+            WHERE
+                m.id = ?;
+        """
+        try:
+            df = pd.read_sql_query(query, self.conn, params=(member_id,))
+            if not df.empty:
+                return df.iloc[0]  # Return the first row as a Series
+            else:
+                return None
+        except sqlite3.Error as e:
+            print(f"Error fetching member details for ID {member_id}: {e}")
+            return None
+        except Exception as e:
+            print(f"An unexpected error occurred while fetching member details for ID {member_id}: {e}")
+            return None
+
+    def get_all_plans_for_selection(self):
+        """
+        Fetches all active plans for display in a selection widget.
+
+        Returns:
+            list: A list of tuples (plan_id, plan_name),
+                  or an empty list if an error occurs or no active plans found.
+        """
+        if not self.conn:
+            print("Database connection not established.")
+            return []
+
+        query = "SELECT id, name FROM plans WHERE is_active = 1 ORDER BY name ASC;"
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(query)
+            plans = cursor.fetchall() # Returns list of tuples
+            return plans
+        except sqlite3.Error as e:
+            print(f"Error fetching plans for selection: {e}")
+            return []
+        except Exception as e:
+            print(f"An unexpected error occurred while fetching plans for selection: {e}")
+            return []
+
     def add_renewal_transaction(self, member_id, plan_id, transaction_date, amount, payment_method):
         """
         Placeholder for adding a renewal transaction.

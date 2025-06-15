@@ -125,6 +125,67 @@ def add_plan_api():
         app.logger.error(f"Error in add_plan_api: {e}")
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
+@app.route('/api/members/filtered/', methods=['GET'])
+def get_filtered_members_api():
+    if not db_manager:
+        return jsonify({"error": "Database service not available"}), 503
+
+    # Get query parameters
+    search_term = request.args.get('search_term', None)
+    plan_type = request.args.get('plan_type', None) # e.g., 'GC', 'PT', 'All'
+    status = request.args.get('status', None)       # e.g., 'Active', 'Inactive', 'All'
+
+    try:
+        # Call the DatabaseManager method
+        members_df = db_manager.get_filtered_members(
+            search_term=search_term,
+            plan_type=plan_type,
+            status=status
+        )
+
+        if members_df is None: # Should ideally not happen if db_manager returns empty df on error
+            return jsonify({"error": "Failed to retrieve members due to an internal issue."}), 500
+
+        # Convert DataFrame to JSON records
+        members_json = members_df.to_dict(orient='records')
+        return jsonify(members_json)
+
+    except Exception as e:
+        app.logger.error(f"Error in get_filtered_members_api: {e}")
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
+@app.route('/api/member/<int:member_id>', methods=['GET'])
+def get_member_details_api(member_id):
+    if not db_manager:
+        return jsonify({"error": "Database service not available"}), 503
+    try:
+        member_details_series = db_manager.get_member_details(member_id)
+        if member_details_series is not None:
+            # Convert Pandas Series to dictionary for JSON response
+            member_details_dict = member_details_series.to_dict()
+            # Ensure date is in ISO format if it's a date object, though pandas might handle it.
+            if 'join_date' in member_details_dict and hasattr(member_details_dict['join_date'], 'isoformat'):
+                 member_details_dict['join_date'] = member_details_dict['join_date'].isoformat()
+            return jsonify(member_details_dict)
+        else:
+            return jsonify({"error": f"Member with ID {member_id} not found"}), 404
+    except Exception as e:
+        app.logger.error(f"Error in get_member_details_api for ID {member_id}: {e}")
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
+@app.route('/api/plans/list', methods=['GET'])
+def get_plans_list_api():
+    if not db_manager:
+        return jsonify({"error": "Database service not available"}), 503
+    try:
+        plans_list = db_manager.get_all_plans_for_selection() # Returns list of tuples (id, name)
+        # Convert list of tuples to list of dicts for easier JSON consumption
+        plans_json = [{"id": plan_id, "name": plan_name} for plan_id, plan_name in plans_list]
+        return jsonify(plans_json)
+    except Exception as e:
+        app.logger.error(f"Error in get_plans_list_api: {e}")
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
 if __name__ == '__main__':
     # For direct execution, ensure Python can find 'database_manager'
     # If kranos_reporter/app/api.py and kranos_reporter/app/database_manager.py,

@@ -69,19 +69,19 @@ Goal: Implement the full functionality of the "Members" tab.
 
 [x] Build Left Form: Create the "Add/Edit Member" form with "Save" and "Clear" buttons.
 
-[ ] Build Right Table & Filters:
+[x] Build Right Table & Filters:
 
-[ ] Add all specified filter widgets above the table.
+[x] Add all specified filter widgets above the table.
 
-[ ] Create a new backend function get_filtered_members(...) that uses the filter values to query the database.
+[x] Create a new backend function get_filtered_members(...) that uses the filter values to query the database.
 
-[ ] Call the new backend function and display the results in a dataframe.
+[x] Call the new backend function and display the results in a dataframe.
 
 [ ] Implement Row Actions:
 
-[ ] Add "History," "Edit," and "Delete" buttons to each row of the members table.
+[x] Add "History," "Edit," and "Delete" buttons to each row of the members table.
 
-[ ] Wire the "Edit" button to populate the left form with the selected member's data.
+[x] Wire the "Edit" button to populate the left form with the selected member's data.
 
 [ ] Wire the "Delete" button to the corresponding API function.
 
