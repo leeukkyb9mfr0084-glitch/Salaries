@@ -83,22 +83,22 @@ Goal: Implement the full functionality of the "Members" tab.
 
 [x] Wire the "Edit" button to populate the left form with the selected member's data.
 
-[ ] Wire the "Delete" button to the corresponding API function.
+[x] Wire the "Delete" button to the corresponding API function.
 
 [ ] Implement "History" Modal:
 
-[ ] On "History" button click, open a modal window.
+[x] On "History" button click, open a modal window.
 
-[ ] Inside the modal, display the selected member's transaction history with a total amount paid.
+[x] Inside the modal, display the selected member's transaction history with a total amount paid.
 
 Phase 5: UI Build - Remaining Tabs
 Goal: Implement the "Memberships," "Plans," and "Reporting" tabs.
 
 [ ] "Memberships" Tab:
 
-[ ] Implement the two-column layout.
+[x] Implement the two-column layout.
 
-[ ] Build the "Add Membership" form on the left.
+[x] Build the "Add Membership" form on the left.
 
 [ ] Build the recent transactions list with filters on the right.
 
