@@ -1,4 +1,5 @@
 from .database_manager import DatabaseManager
+from typing import Tuple, Optional
 
 import sqlite3 # Required for type hinting Connection
 
