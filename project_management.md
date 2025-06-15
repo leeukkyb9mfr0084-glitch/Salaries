@@ -16,7 +16,7 @@ Goal: Stabilize the current application before starting major refactoring.
 
 [x] Fix UI Startup Crash: In reporter/streamlit_ui/app.py, update the plan_display_list list comprehension to correctly unpack the 5 columns now returned by the plan query, resolving the ValueError.
 
-[ ] Clean Up Dead Code:
+[x] Clean Up Dead Code:
 
 [x] Delete the set_plan_active_status method from database_manager.py.
 
@@ -24,7 +24,7 @@ Goal: Stabilize the current application before starting major refactoring.
 
 [x] Delete the corresponding API endpoints for the above methods in app_api.py.
 
-[ ] Fix "Add Plan" Feature:
+[x] Fix "Add Plan" Feature:
 
 [x] Add price and type input fields to the "Add New Plan" form in streamlit_ui/app.py.
 
@@ -35,19 +35,19 @@ Goal: Stabilize the current application before starting major refactoring.
 Phase 2: Backend & Data Model Refactoring
 Goal: Align the backend with the simplified v2.0 data model.
 
-[ ] Update Database Schema:
+[x] Update Database Schema:
 
 [x] In database.py, delete the CREATE TABLE pt_records statement.
 
 [x] In database.py, add the is_active (BOOLEAN) column to the plans table definition.
 
-[ ] Remove Obsolete PT Logic:
+[x] Remove Obsolete PT Logic:
 
 [x] In database_manager.py, delete all methods related to the pt_records table (e.g., add_pt_transaction). Ensure all associated comments are also removed.
 
 [x] In app_api.py, delete the API endpoints that called the obsolete PT methods.
 
-[ ] Update Data Migration Script:
+[x] Update Data Migration Script:
 
 [x] In migrate_data.py, modify process_pt_data to treat PT sessions as standard transactions.
 
