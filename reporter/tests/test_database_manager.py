@@ -350,11 +350,15 @@ def test_get_all_plans_with_inactive_only_inactive(
     cursor.execute("DELETE FROM plans")
     db_manager_fixture.conn.commit()  # Use db_manager_fixture.conn
 
+    plan_name1 = "Inactive Plan 1 - 10 Days"
+    duration1 = 10
     add_success1, _, plan_id1 = db_manager_fixture.add_plan(
-        "Inactive Plan 1", 10, is_active=False
+        plan_name1, duration1, is_active=False
     )  # Use db_manager_fixture
+    plan_name2 = "Inactive Plan 2 - 20 Days"
+    duration2 = 20
     add_success2, _, plan_id2 = db_manager_fixture.add_plan(
-        "Inactive Plan 2", 20, is_active=False
+        plan_name2, duration2, is_active=False
     )  # Use db_manager_fixture
     assert add_success1 and plan_id1 is not None, "Failed to add Inactive Plan 1"
     assert add_success2 and plan_id2 is not None, "Failed to add Inactive Plan 2"
@@ -371,18 +375,27 @@ def test_get_all_plans_with_inactive_mixed(db_manager_fixture):  # Use new fixtu
     cursor.execute("DELETE FROM plans")
     db_manager_fixture.conn.commit()  # Use db_manager_fixture.conn
 
+    plan_name_active1 = "Active Plan Mix - 30 Days"
+    duration_active1 = 30
     s1, _, _ = db_manager_fixture.add_plan(
-        "Active Plan Mix", 30, is_active=True
+        plan_name_active1, duration_active1, is_active=True
     )  # Use db_manager_fixture
+
+    plan_name_inactive1 = "Inactive Plan Mix - 60 Days"
+    duration_inactive1 = 60
     s2, _, _ = db_manager_fixture.add_plan(
-        "Inactive Plan Mix", 60, is_active=False
+        plan_name_inactive1, duration_inactive1, is_active=False
     )  # Use db_manager_fixture
+
+    plan_name_active2 = "Another Active Mix - 90 Days"
+    duration_active2 = 90
     s3, _, _ = db_manager_fixture.add_plan(
-        "Another Active Mix", 90, is_active=True
+        plan_name_active2, duration_active2, is_active=True
     )  # Use db_manager_fixture
-    assert s1, "Failed to add Active Plan Mix"
-    assert s2, "Failed to add Inactive Plan Mix"
-    assert s3, "Failed to add Another Active Mix"
+
+    assert s1, f"Failed to add {plan_name_active1}"
+    assert s2, f"Failed to add {plan_name_inactive1}"
+    assert s3, f"Failed to add {plan_name_active2}"
 
     plans = db_manager_fixture.get_all_plans_with_inactive()  # Use db_manager_fixture
     assert len(plans) == 3
@@ -393,8 +406,10 @@ def test_get_all_plans_with_inactive_mixed(db_manager_fixture):  # Use new fixtu
     assert active_count == 2
     assert inactive_count == 1
 
-    plan_names = [p[1] for p in plans]
-    assert plan_names == ["Active Plan Mix", "Another Active Mix", "Inactive Plan Mix"]
+    # Ensure order for assertion if it's not guaranteed by SQL (it is by name here)
+    plan_names = sorted([p[1] for p in plans])
+    expected_plan_names = sorted([plan_name_active1, plan_name_active2, plan_name_inactive1])
+    assert plan_names == expected_plan_names
 
 
 # --- Tests for get_plan_by_name_and_duration ---
@@ -402,13 +417,16 @@ def test_get_all_plans_with_inactive_mixed(db_manager_fixture):  # Use new fixtu
 
 def test_get_plan_by_name_and_duration_exists(db_manager_fixture):  # Use new fixture
     """Tests get_plan_by_name_and_duration for an existing plan."""
+    # Seeded plan "Monthly - Unrestricted" has duration 30
+    plan_name_seeded = "Monthly - Unrestricted"
+    plan_duration_seeded = 30
     plan = db_manager_fixture.get_plan_by_name_and_duration(
-        "Monthly - Unrestricted", 1
+        plan_name_seeded, plan_duration_seeded
     )  # Use db_manager_fixture
-    assert plan is not None
-    assert plan[1] == "Monthly - Unrestricted"
-    assert plan[2] == 30
-    assert plan[3] == 1
+    assert plan is not None, f"Plan '{plan_name_seeded}' with duration {plan_duration_seeded} not found."
+    assert plan[1] == plan_name_seeded
+    assert plan[2] == plan_duration_seeded
+    assert plan[3] == 1 # is_active
 
 
 def test_get_plan_by_name_and_duration_not_exists(
@@ -456,15 +474,16 @@ def test_get_or_create_plan_id_get_existing(db_manager_fixture):  # Use new fixt
 
 def test_get_or_create_plan_id_create_new(db_manager_fixture):  # Use new fixture
     """Tests get_or_create_plan_id for creating a new plan."""
-    new_plan_name = "Super Duper Plan"
+    base_plan_name = "Super Duper Plan"
     new_plan_duration = 45
+    formatted_new_plan_name = f"{base_plan_name} - {new_plan_duration} Days"
 
     cursor = db_manager_fixture.conn.cursor()  # Use db_manager_fixture.conn
-    cursor.execute("SELECT plan_id FROM plans WHERE plan_name = ?", (new_plan_name,))
-    assert cursor.fetchone() is None
+    cursor.execute("SELECT plan_id FROM plans WHERE plan_name = ?", (formatted_new_plan_name,))
+    assert cursor.fetchone() is None, f"Plan '{formatted_new_plan_name}' should not exist yet."
 
     new_plan_id = db_manager_fixture.get_or_create_plan_id(
-        new_plan_name, new_plan_duration
+        formatted_new_plan_name, new_plan_duration
     )  # Use db_manager_fixture
     assert new_plan_id is not None
 
@@ -474,7 +493,7 @@ def test_get_or_create_plan_id_create_new(db_manager_fixture):  # Use new fixtur
     )
     created_plan = cursor.fetchone()
     assert created_plan is not None
-    assert created_plan[0] == new_plan_name
+    assert created_plan[0] == formatted_new_plan_name
     assert created_plan[1] == new_plan_duration
     assert created_plan[2] == 1
 
@@ -1488,10 +1507,11 @@ def test_delete_plan(db_manager_fixture):  # Use new fixture
     """Tests deleting a plan, including cases where it's in use."""
     cursor = db_manager_fixture.conn.cursor()  # Use db_manager_fixture.conn
 
-    plan_name_unused = "Temporary Test Plan Unused"
+    base_plan_name_unused = "Temporary Test Plan Unused"
     plan_duration_unused = 15
+    formatted_plan_name_unused = f"{base_plan_name_unused} - {plan_duration_unused} Days"
     add_s_unused, msg_unused_add, unused_plan_id_val = db_manager_fixture.add_plan(
-        plan_name_unused, plan_duration_unused, is_active=True
+        formatted_plan_name_unused, plan_duration_unused, is_active=True
     )  # Use db_manager_fixture
     assert (
         add_s_unused and unused_plan_id_val is not None
@@ -1512,14 +1532,15 @@ def test_delete_plan(db_manager_fixture):  # Use new fixture
         cursor.fetchone() is None
     ), "Unused plan was not actually deleted from the database."
 
-    plan_name_used = "Temporary Test Plan Used"
+    base_plan_name_used = "Temporary Test Plan Used"
     plan_duration_used = 45
+    formatted_plan_name_used = f"{base_plan_name_used} - {plan_duration_used} Days"
     add_s_used, msg_used_add, used_plan_id_val = db_manager_fixture.add_plan(
-        plan_name_used, plan_duration_used, is_active=True
+        formatted_plan_name_used, plan_duration_used, is_active=True
     )  # Use db_manager_fixture
     assert (
         add_s_used and used_plan_id_val is not None
-    ), f"Failed to add used plan for deletion test: {msg_used_add}"
+    ), f"Failed to add used plan '{formatted_plan_name_used}' for deletion test: {msg_used_add}"
 
     member_name = "Plan User"
     member_phone = "PLANUSER01"
@@ -2028,3 +2049,105 @@ def test_delete_transaction_when_books_open(db_manager_fixture):  # Use new fixt
     )
     count = cursor.fetchone()[0]
     assert count == 0, "Transaction was not deleted even though books were open."
+
+
+# --- Tests for Plan Name Formatting in get_or_create_plan_id ---
+
+def test_get_or_create_plan_id_basic_creation_formatted_name(db_manager_fixture):
+    """Scenario 1: Basic new plan creation with formatted name."""
+    db_mngr = db_manager_fixture
+    base_name = "Basic Plan"
+    duration = 30
+    price = 100
+    plan_type = "GC"
+    expected_formatted_name = f"{base_name} - {duration} Days"
+
+    plan_id = db_mngr.get_or_create_plan_id(expected_formatted_name, duration, price, plan_type)
+    assert plan_id is not None
+
+    # Verify in DB
+    cursor = db_mngr.conn.cursor()
+    cursor.execute("SELECT plan_name, duration_days FROM plans WHERE plan_id = ?", (plan_id,))
+    db_plan = cursor.fetchone()
+    assert db_plan is not None
+    assert db_plan[0] == expected_formatted_name
+    assert db_plan[1] == duration
+
+def test_get_or_create_plan_id_name_with_hyphens_numbers(db_manager_fixture):
+    """Scenario 2: Plan name with existing hyphens or numbers."""
+    db_mngr = db_manager_fixture
+    base_name = "Special Plan - Tier 1" # This is treated as the full base name for formatting
+    duration = 60
+    price = 200
+    plan_type = "GC"
+    # The 'name' passed to get_or_create_plan_id IS the final name.
+    # The formatting `f"{base} - {duration} Days"` happens *before* calling this method,
+    # as per migrate_data.py changes.
+    # So, this test should reflect that the formatted name is passed directly.
+    formatted_name_to_pass = f"{base_name} - {duration} Days" # e.g., "Special Plan - Tier 1 - 60 Days"
+
+    plan_id = db_mngr.get_or_create_plan_id(formatted_name_to_pass, duration, price, plan_type)
+    assert plan_id is not None
+
+    # Verify in DB
+    cursor = db_mngr.conn.cursor()
+    cursor.execute("SELECT plan_name, duration_days FROM plans WHERE plan_id = ?", (plan_id,))
+    db_plan = cursor.fetchone()
+    assert db_plan is not None
+    assert db_plan[0] == formatted_name_to_pass
+    assert db_plan[1] == duration
+
+def test_get_or_create_plan_id_recall_same_formatted_name_and_duration(db_manager_fixture):
+    """Scenario 4: Re-calling with the same formatted name and duration."""
+    db_mngr = db_manager_fixture
+    base_name = "Recall Plan"
+    duration = 90
+    price = 150
+    plan_type = "PT"
+    formatted_name = f"{base_name} - {duration} Days"
+
+    plan_id1 = db_mngr.get_or_create_plan_id(formatted_name, duration, price, plan_type)
+    assert plan_id1 is not None
+
+    plan_id2 = db_mngr.get_or_create_plan_id(formatted_name, duration, price, plan_type)
+    assert plan_id2 is not None
+    assert plan_id1 == plan_id2, "Should retrieve the same plan ID on recall."
+
+    # Verify only one such plan exists
+    cursor = db_mngr.conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM plans WHERE plan_name = ? AND duration_days = ?", (formatted_name, duration))
+    count = cursor.fetchone()[0]
+    assert count == 1
+
+def test_get_or_create_plan_id_same_base_different_durations(db_manager_fixture):
+    """Scenario 5: Creating plans with the same base name but different durations."""
+    db_mngr = db_manager_fixture
+    base_name = "MultiDur Plan"
+    price = 100
+    plan_type = "GC"
+
+    duration1 = 30
+    formatted_name1 = f"{base_name} - {duration1} Days"
+    plan_id1 = db_mngr.get_or_create_plan_id(formatted_name1, duration1, price, plan_type)
+    assert plan_id1 is not None
+
+    duration2 = 60
+    formatted_name2 = f"{base_name} - {duration2} Days"
+    plan_id2 = db_mngr.get_or_create_plan_id(formatted_name2, duration2, price, plan_type)
+    assert plan_id2 is not None
+
+    assert plan_id1 != plan_id2, "Plans with different durations (and thus different formatted names) should have different IDs."
+
+    # Verify both exist with correct details
+    cursor = db_mngr.conn.cursor()
+    cursor.execute("SELECT plan_name, duration_days FROM plans WHERE plan_id = ?", (plan_id1,))
+    db_plan1 = cursor.fetchone()
+    assert db_plan1 is not None
+    assert db_plan1[0] == formatted_name1
+    assert db_plan1[1] == duration1
+
+    cursor.execute("SELECT plan_name, duration_days FROM plans WHERE plan_id = ?", (plan_id2,))
+    db_plan2 = cursor.fetchone()
+    assert db_plan2 is not None
+    assert db_plan2[0] == formatted_name2
+    assert db_plan2[1] == duration2

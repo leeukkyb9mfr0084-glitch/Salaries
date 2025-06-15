@@ -187,9 +187,11 @@ def _process_gc_row(row, db_manager):
             return
 
         price = parse_amount(row.get("Amount", "0"))
+        # Format plan name
+        formatted_plan_name = f"{plan_name} - {duration_for_db_days} Days"
         # Use duration_for_db_days for plan ID retrieval
         plan_id = db_manager.get_or_create_plan_id(
-            plan_name, duration_for_db_days, price, "GC"
+            formatted_plan_name, duration_for_db_days, price, "GC"
         )
 
         if not plan_id:
@@ -304,8 +306,11 @@ def process_pt_data():
                     # Ensure price is an int for get_or_create_plan_id
                     plan_price = int(amount_paid)
 
+                    # Format PT plan name
+                    formatted_pt_plan_name = f"{pt_plan_name} - {pt_duration_days} Days"
+
                     plan_id = db_manager.get_or_create_plan_id(
-                        name=pt_plan_name,
+                        name=formatted_pt_plan_name, # Use formatted name
                         duration=pt_duration_days,
                         price=plan_price,
                         type_text="PT",

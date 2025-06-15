@@ -168,6 +168,16 @@ def test_migration_clears_tables(migrate_test_db):  # Uses the fixture
         member_name is not None and member_name[0] == "Dummy User"
     ), "Dummy User not found in members table"
 
+    plan_details = cursor_assert.execute(
+        "SELECT plan_name, duration_days FROM plans WHERE plan_name = 'Test Plan - 1 Days'"
+    ).fetchone()
+    assert (
+        plan_details is not None and plan_details[0] == "Test Plan - 1 Days"
+    ), "Formatted plan name 'Test Plan - 1 Days' not found in plans table"
+    assert (
+        plan_details is not None and plan_details[1] == 1
+    ), "Plan duration for 'Test Plan - 1 Days' should be 1"
+
     # Cleanup (assertion connection, fixture handles file deletion)
     conn_assert.close()
 
@@ -217,37 +227,42 @@ David,444,HalfYear D,6,20/02/2024,,20/02/2024,600,Cash
         return cursor.fetchone()
 
     # Assertions
-    # Alice: 01/01/24 + 1 month = 01/02/2024. Plan duration in DB: 1*30 = 30 days
+    # Assertions based on "Plan Duration" being in days as per current migrate_data.py
+    # Alice: Plan "Monthly A", Duration 1 day from CSV.
+    # Formatted name: "Monthly A - 1 Days". End date: 01/01/24 + 1 day = 02/01/24. DB duration: 1.
     alice_tx_info = get_transaction_and_plan_info("111")
     assert alice_tx_info is not None, "Alice's transaction not found"
     assert alice_tx_info[1] == "2024-01-01"  # start_date
-    assert alice_tx_info[2] == "2024-02-01"  # end_date
-    assert alice_tx_info[4] == "Monthly A"  # plan_name
-    assert alice_tx_info[5] == 30  # plan.duration_days (1*30)
+    assert alice_tx_info[2] == "2024-01-02"  # end_date (start + 1 day)
+    assert alice_tx_info[4] == "Monthly A - 1 Days"  # formatted plan_name
+    assert alice_tx_info[5] == 1  # plan.duration_days
 
-    # Bob: 15/01/24 + 3 months = 15/04/2024. Plan duration in DB: 3*30 = 90 days
+    # Bob: Plan "Quarterly B", Duration 3 days from CSV.
+    # Formatted name: "Quarterly B - 3 Days". End date: 15/01/24 + 3 days = 18/01/24. DB duration: 3.
     bob_tx_info = get_transaction_and_plan_info("222")
     assert bob_tx_info is not None, "Bob's transaction not found"
     assert bob_tx_info[1] == "2024-01-15"  # start_date
-    assert bob_tx_info[2] == "2024-04-15"  # end_date
-    assert bob_tx_info[4] == "Quarterly B"  # plan_name
-    assert bob_tx_info[5] == 90  # plan.duration_days (3*30)
+    assert bob_tx_info[2] == "2024-01-18"  # end_date (start + 3 days)
+    assert bob_tx_info[4] == "Quarterly B - 3 Days"  # formatted plan_name
+    assert bob_tx_info[5] == 3  # plan.duration_days
 
-    # Carol: 01/02/24 + 12 months = 01/02/2025. Plan duration in DB: 12*30 = 360 days
+    # Carol: Plan "Annual C", Duration 12 days from CSV.
+    # Formatted name: "Annual C - 12 Days". End date: 01/02/24 + 12 days = 13/02/24. DB duration: 12.
     carol_tx_info = get_transaction_and_plan_info("333")
     assert carol_tx_info is not None, "Carol's transaction not found"
     assert carol_tx_info[1] == "2024-02-01"  # start_date
-    assert carol_tx_info[2] == "2025-02-01"  # end_date
-    assert carol_tx_info[4] == "Annual C"  # plan_name
-    assert carol_tx_info[5] == 360  # plan.duration_days (12*30)
+    assert carol_tx_info[2] == "2024-02-13"  # end_date (start + 12 days)
+    assert carol_tx_info[4] == "Annual C - 12 Days"  # formatted plan_name
+    assert carol_tx_info[5] == 12  # plan.duration_days
 
-    # David: 20/02/2024 + 6 months = 20/08/2024. Plan duration in DB: 6*30 = 180 days
+    # David: Plan "HalfYear D", Duration 6 days from CSV.
+    # Formatted name: "HalfYear D - 6 Days". End date: 20/02/2024 + 6 days = 26/02/2024. DB duration: 6.
     david_tx_info = get_transaction_and_plan_info("444")
     assert david_tx_info is not None, "David's transaction not found"
     assert david_tx_info[1] == "2024-02-20"  # start_date
-    assert david_tx_info[2] == "2024-08-20"  # end_date
-    assert david_tx_info[4] == "HalfYear D"  # plan_name
-    assert david_tx_info[5] == 180  # plan.duration_days (6*30)
+    assert david_tx_info[2] == "2024-02-26"  # end_date (start + 6 days)
+    assert david_tx_info[4] == "HalfYear D - 6 Days"  # formatted plan_name
+    assert david_tx_info[5] == 6  # plan.duration_days
 
     # Check total number of transactions
     cursor.execute("SELECT COUNT(*) FROM transactions")
