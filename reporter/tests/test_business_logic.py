@@ -1,5 +1,4 @@
 import pytest
-from unittest.mock import patch, MagicMock
 import os
 import sys
 import sqlite3
