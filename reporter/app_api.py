@@ -96,6 +96,52 @@ class AppAPI:
         """
         return self.db_manager.get_member_by_phone(phone)
 
+    def get_member_by_id(self, member_id: int) -> Optional[tuple]:
+        """
+        Retrieves a specific member by their ID.
+        The member tuple includes: (member_id, client_name, phone, join_date, is_active (bool)).
+
+        Args:
+            member_id: The ID of the member.
+
+        Returns:
+            A tuple representing the member if found, else None.
+        """
+        return self.db_manager.get_member_by_id(member_id)
+
+    def update_member(
+        self, member_id: int, name: str, phone: str, join_date: str, is_active: bool
+    ) -> Tuple[bool, str]:
+        """
+        Updates an existing member's details.
+
+        Args:
+            member_id: The ID of the member to update.
+            name: The new name for the member.
+            phone: The new phone number for the member.
+            join_date: The new join date for the member (YYYY-MM-DD).
+            is_active: The new active status for the member (True or False).
+
+        Returns:
+            A tuple (success_status, message).
+        """
+        return self.db_manager.update_member(member_id, name, phone, join_date, is_active)
+
+    def get_filtered_members(
+        self, name_query: Optional[str] = None, status: Optional[str] = None
+    ) -> List[tuple]:
+        """
+        Retrieves members, optionally filtered by name and status.
+
+        Args:
+            name_query: Optional partial name to filter by.
+            status: Optional status to filter by ("Active" or "Inactive").
+
+        Returns:
+            A list of member tuples (member_id, client_name, phone, join_date, is_active (bool)).
+        """
+        return self.db_manager.get_filtered_members(name_query, status)
+
     # --- Plan Methods ---
     def get_all_plans(self) -> List[tuple]:
         """
@@ -128,7 +174,7 @@ class AppAPI:
         return self.db_manager.add_plan(name, duration_days, price, type_text)
 
     def update_plan(
-        self, plan_id: int, name: str, duration_days: int, price: int, type_text: str
+        self, plan_id: int, name: str, duration_days: int, price: int, type_text: str, is_active: Optional[bool] = None
     ) -> Tuple[bool, str]:
         """
         Updates an existing plan.
@@ -139,12 +185,13 @@ class AppAPI:
             duration_days: The new duration in days.
             price: The new price for the plan.
             type_text: The new type for the plan.
+            is_active: Optional. The new active status for the plan (True or False).
 
         Returns:
             A tuple (success_status, message).
         """
         return self.db_manager.update_plan(
-            plan_id, name, duration_days, price, type_text
+            plan_id, name, duration_days, price, type_text, is_active
         )
 
     def get_plan_by_id(self, plan_id: int) -> Optional[tuple]:
@@ -288,6 +335,32 @@ class AppAPI:
             The member_id if found, else None.
         """
         return self.db_manager.get_member_id_from_transaction(transaction_id)
+
+    def get_transactions_filtered(
+        self,
+        member_id: Optional[int] = None,
+        plan_id: Optional[int] = None,
+        start_date_filter: Optional[str] = None,
+        end_date_filter: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[tuple]:
+        """
+        Retrieves transactions with optional filters.
+
+        Args:
+            member_id: Optional member ID to filter by.
+            plan_id: Optional plan ID to filter by.
+            start_date_filter: Optional start date for transaction date range (YYYY-MM-DD).
+            end_date_filter: Optional end date for transaction date range (YYYY-MM-DD).
+            limit: Maximum number of transactions to return.
+
+        Returns:
+            A list of transaction tuples.
+            Each tuple: (transaction_id, transaction_date, member_name, plan_name, amount, payment_method, description, start_date, end_date)
+        """
+        return self.db_manager.get_transactions_filtered(
+            member_id, plan_id, start_date_filter, end_date_filter, limit
+        )
 
     # --- Reporting & Book Status Methods ---
     def get_pending_renewals(self, year: int, month: int) -> List[tuple]:

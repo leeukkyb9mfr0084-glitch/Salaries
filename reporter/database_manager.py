@@ -107,6 +107,103 @@ class DatabaseManager:
             logging.error(f"Database error while fetching members: {e}", exc_info=True)
             return []
 
+    def get_member_by_id(self, member_id: int) -> Optional[tuple]:
+        """Fetches a member's details by their ID."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "SELECT member_id, client_name, phone, join_date, is_active FROM members WHERE member_id = ?",
+                (member_id,),
+            )
+            member_data = cursor.fetchone()
+            if member_data:
+                # Convert is_active from integer (0 or 1) to boolean
+                data_list = list(member_data)
+                data_list[4] = bool(data_list[4])
+                return tuple(data_list)
+            return None
+        except sqlite3.Error as e:
+            logging.error(
+                f"Database error while fetching member by ID {member_id}: {e}",
+                exc_info=True,
+            )
+            return None
+
+    def update_member(
+        self, member_id: int, name: str, phone: str, join_date: str, is_active: bool
+    ) -> Tuple[bool, str]:
+        """Updates an existing member's details."""
+        if not name or not phone:
+            logging.error("Member name and phone number cannot be empty for update.")
+            return False, "Error: Member name and phone number cannot be empty."
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "UPDATE members SET client_name = ?, phone = ?, join_date = ?, is_active = ? WHERE member_id = ?",
+                (name, phone, join_date, 1 if is_active else 0, member_id),
+            )
+            self.conn.commit()
+            if cursor.rowcount > 0:
+                # After updating member details, especially status, recalculate overall status.
+                self._update_member_status(member_id)
+                return True, "Member updated successfully."
+            return False, "Failed to update member. Member not found or data unchanged."
+        except sqlite3.IntegrityError:
+            logging.warning(
+                f"Error updating member {member_id}: Phone number '{phone}' likely already exists for another member."
+            )
+            return (
+                False,
+                f"Error updating member: Phone number '{phone}' likely already exists for another member.",
+            )
+        except sqlite3.Error as e:
+            logging.error(
+                f"Database error while updating member {member_id}: {e}", exc_info=True
+            )
+            return False, f"Database error while updating member: {e}"
+
+    def get_filtered_members(
+        self, name_query: Optional[str] = None, status: Optional[str] = None
+    ) -> list:
+        """
+        Fetches members, optionally filtered by name (partial match) and status.
+        Status can be "Active" or "Inactive".
+        Returns list of tuples: (member_id, client_name, phone, join_date, is_active (bool)).
+        """
+        try:
+            cursor = self.conn.cursor()
+            base_query = "SELECT member_id, client_name, phone, join_date, is_active FROM members"
+            conditions = []
+            params = []
+
+            if name_query:
+                conditions.append("client_name LIKE ?")
+                params.append(f"%{name_query}%")
+
+            if status:
+                if status.lower() == "active":
+                    conditions.append("is_active = 1")
+                elif status.lower() == "inactive":
+                    conditions.append("is_active = 0")
+                # If status is something else, it's ignored, or you could log a warning.
+
+            if conditions:
+                base_query += " WHERE " + " AND ".join(conditions)
+
+            base_query += " ORDER BY client_name ASC"
+
+            cursor.execute(base_query, params)
+            rows = cursor.fetchall()
+            # Convert is_active from integer (0 or 1) to boolean for each row
+            return [
+                tuple(list(row[:4]) + [bool(row[4])]) for row in rows
+            ]
+        except sqlite3.Error as e:
+            logging.error(
+                f"Database error while fetching filtered members: {e}", exc_info=True
+            )
+            return []
+
     def add_plan(
         self, name: str, duration: int, price: int, type_text: str
     ) -> Tuple[bool, str, Optional[int]]:
@@ -160,7 +257,7 @@ class DatabaseManager:
             return False, f"Database error while adding plan: {e}", None
 
     def update_plan(
-        self, plan_id: int, name: str, duration: int, price: int, type_text: str
+        self, plan_id: int, name: str, duration: int, price: int, type_text: str, is_active: Optional[bool] = None
     ) -> Tuple[bool, str]:
         if duration <= 0:
             logging.error("Plan duration must be a positive number of days.")
@@ -171,14 +268,37 @@ class DatabaseManager:
         if not type_text:  # Assuming type cannot be empty
             logging.error("Plan type cannot be empty.")
             return False, "Error: Plan type cannot be empty."
+
         try:
             cursor = self.conn.cursor()
-            cursor.execute(
-                "UPDATE plans SET name = ?, duration = ?, price = ?, type = ? WHERE id = ?",
-                (name, duration, price, type_text, plan_id),
-            )
+
+            fields_to_update = {
+                "name": name,
+                "duration": duration,
+                "price": price,
+                "type": type_text,
+            }
+            if is_active is not None:
+                fields_to_update["is_active"] = 1 if is_active else 0
+
+            set_clause = ", ".join([f"{key} = ?" for key in fields_to_update])
+            params = list(fields_to_update.values())
+            params.append(plan_id)
+
+            sql = f"UPDATE plans SET {set_clause} WHERE id = ?"
+
+            cursor.execute(sql, params)
             self.conn.commit()
+
             if cursor.rowcount > 0:
+                # If plan status is changed, members' overall status might change.
+                # This is a potentially heavy operation if done here directly.
+                # Consider if _update_member_status should be called for all affected members.
+                # For now, focusing on plan update. The _update_member_status is typically called
+                # after a transaction, or for a specific member.
+                # If a plan deactivation should immediately make all members on that plan inactive
+                # (if it's their only active plan), that logic would be more involved.
+                # The current _update_member_status is member-centric.
                 return True, "Plan updated successfully."
             return False, "Failed to update plan. Plan not found or data unchanged."
         except (
@@ -921,6 +1041,78 @@ class DatabaseManager:
         except sqlite3.Error as e:
             logging.error(f"Database error deleting plan {plan_id}: {e}", exc_info=True)
             return False, f"Database error while deleting plan {plan_id}: {e}"
+
+    def get_transactions_filtered(
+        self,
+        member_id: Optional[int] = None,
+        plan_id: Optional[int] = None,
+        start_date_filter: Optional[str] = None,
+        end_date_filter: Optional[str] = None,
+        limit: int = 50,
+    ) -> list:
+        """
+        Fetches transactions with optional filters, joining with members and plans.
+        Returns columns: (transaction_id, transaction_date, member_name, plan_name, amount, payment_method).
+        """
+        try:
+            cursor = self.conn.cursor()
+
+            sql = """
+                SELECT
+                    t.transaction_id,
+                    t.transaction_date,
+                    m.client_name AS member_name,
+                    p.name AS plan_name,
+                    t.amount,
+                    t.payment_method,
+                    t.description,
+                    t.start_date,
+                    t.end_date
+                FROM transactions t
+                LEFT JOIN members m ON t.member_id = m.member_id
+                LEFT JOIN plans p ON t.plan_id = p.id
+            """
+            conditions = []
+            params = []
+
+            if member_id is not None:
+                conditions.append("t.member_id = ?")
+                params.append(member_id)
+
+            if plan_id is not None:
+                conditions.append("t.plan_id = ?")
+                params.append(plan_id)
+
+            if start_date_filter:
+                # Ensure date is in YYYY-MM-DD format, basic validation
+                datetime.strptime(start_date_filter, "%Y-%m-%d")
+                conditions.append("t.transaction_date >= ?")
+                params.append(start_date_filter)
+
+            if end_date_filter:
+                datetime.strptime(end_date_filter, "%Y-%m-%d")
+                conditions.append("t.transaction_date <= ?")
+                params.append(end_date_filter)
+
+            if conditions:
+                sql += " WHERE " + " AND ".join(conditions)
+
+            sql += " ORDER BY t.transaction_date DESC, t.transaction_id DESC"
+
+            if limit > 0:
+                sql += f" LIMIT ?"
+                params.append(limit)
+
+            cursor.execute(sql, params)
+            return cursor.fetchall()
+        except ValueError:
+            logging.error("Invalid date format provided to get_transactions_filtered.", exc_info=True)
+            return [] # Or raise error
+        except sqlite3.Error as e:
+            logging.error(
+                f"Database error while fetching filtered transactions: {e}", exc_info=True
+            )
+            return []
 
 
 # Removed module-level get_db_connection and _TEST_IN_MEMORY_CONNECTION as connection is now managed externally.
