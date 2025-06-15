@@ -1,106 +1,68 @@
-# Kranos Reporter v2.0 - Project Plan
+Of course. Here are the updated application specifications as a direct response.
 
-| **Version** | **Date** |
-| :---------- | :------------- |
-| 1.1 | June 15, 2025 |
+***
 
-This document outlines the tasks required to refactor the Kranos Reporter application to version 2.0. Please check off tasks as they are completed. **Developer Note:** As you complete each task, ensure you also remove any old, commented-out code and unnecessary comments related to the V1 implementation.
+### Kranos Reporter: Application Specifications
+*Version 2.1 - Last Updated: June 15, 2025*
 
----
+#### 1. Overview
+This document outlines the complete functional and technical specifications for the Kranos Reporter application. The application is an internal tool designed to manage gym memberships, track payments, and provide essential financial and renewal reporting, based on a model where each membership record is a self-contained transaction.
 
-### Phase 1: Initial Bug Fixes & Code Cleanup
+#### 2. Database Schema
+The application will use a simplified SQLite database with the following **three core tables**:
 
-*Goal: Stabilize the current application before starting major refactoring.*
+**`members` table:**
+* `id` (INTEGER, Primary Key)
+* `name` (TEXT)
+* `phone` (TEXT)
+* `email` (TEXT)
+* `join_date` (TEXT)
+* `is_active` (BOOLEAN)
 
-- [ ] **Fix Data Migration Crash:** Modify `get_or_create_plan_id` in `database_manager.py` to first check if a plan with the same name and duration exists before inserting a new one. This will resolve the `UNIQUE constraint failed` error.
-- [ ] **Fix UI Startup Crash:** In `reporter/streamlit_ui/app.py`, update the `plan_display_list` list comprehension to correctly unpack the 5 columns now returned by the plan query, resolving the `ValueError`.
-- [ ] **Clean Up Dead Code:**
-    - [ ] Delete the `set_plan_active_status` method from `database_manager.py`.
-    - [ ] Delete the `get_all_plans_with_inactive` method from `database_manager.py`.
-    - [ ] Delete the corresponding API endpoints for the above methods in `app_api.py`.
-- [ ] **Fix "Add Plan" Feature:**
-    - [ ] Add `price` and `type` input fields to the "Add New Plan" form in `streamlit_ui/app.py`.
-    - [ ] Update the `api.add_plan` call to pass the new values.
-    - [ ] Update the `add_plan` method signatures in `app_api.py` and `database_manager.py` to accept the new fields.
+**`plans` table:**
+* `id` (INTEGER, Primary Key)
+* `name` (TEXT)
+* `price` (REAL)
+* `type` (TEXT: 'GC' or 'PT')
+* `is_active` (BOOLEAN)
 
----
+**`memberships` table:**
+* `id` (INTEGER, Primary Key)
+* `member_id` (INTEGER, Foreign Key to `members.id`)
+* `plan_id` (INTEGER, Foreign Key to `plans.id`)
+* `start_date` (TEXT)
+* `end_date` (TEXT)
+* `amount_paid` (REAL)
+* `purchase_date` (TEXT)
+* `membership_type` (TEXT: 'New' or 'Renewal')
+* `is_active` (BOOLEAN)
 
-### Phase 2: Backend & Data Model Refactoring
+#### 3. Functional Specifications by Tab
 
-*Goal: Align the backend with the simplified v2.0 data model.*
+**Memberships Tab (Primary Tab)**
+This tab features a two-panel layout.
 
-- [ ] **Update Database Schema:**
-    - [ ] In `database.py`, delete the `CREATE TABLE pt_records` statement.
-    - [ ] In `database.py`, add the `is_active` (BOOLEAN) column to the `plans` table definition.
-- [ ] **Remove Obsolete PT Logic:**
-    - [ ] In `database_manager.py`, delete all methods related to the `pt_records` table (e.g., `add_pt_transaction`). Ensure all associated comments are also removed.
-    - [ ] In `app_api.py`, delete the API endpoints that called the obsolete PT methods.
-- [ ] **Update Data Migration Script:**
-    - [ ] In `migrate_data.py`, modify `process_pt_data` to treat PT sessions as standard transactions.
-    - [ ] Ensure `process_pt_data` now calls `get_or_create_plan_id` and then `add_transaction`.
-    - [ ] Remove any old logic or comments related to processing PT data into a separate table.
+* **Left Panel: Create / Update Membership**
+    * **Member Name:** A searchable dropdown list of all active members.
+    * **Plan Name:** A dropdown list of all active plans.
+    * **Plan Duration (Days):** A number input for the length of the membership.
+    * **Amount:** A number input for the amount being paid for this specific purchase.
+    * **Start Date:** A date picker control.
+    * **SAVE Button Logic:**
+        1.  Calculates `end_date` from `start_date` + `Plan Duration`.
+        2.  Sets the `purchase_date` to the current date.
+        3.  Checks if the selected member has any prior memberships. If not, sets `membership_type` to "New". If they do, sets it to "Renewal".
+        4.  Creates **one single new row** in the `memberships` table containing all of this information.
+    * **CLEAR Button:** Resets all form fields.
 
----
+* **Right Panel: View / Manage Memberships**
+    * **Filters:** Text inputs for `Name` and `Phone`, and radio buttons for `Active`/`Inactive` status.
+    * **Membership List:** A table displays membership records matching the filters.
+    * **Selection & Actions:** When a user clicks a row, it becomes the "Selected Membership." `EDIT` and `DELETE` buttons appear and function on the selected record.
 
-### Phase 3: UI Overhaul - Global Structure
+**Reporting Tab**
 
-*Goal: Rebuild the Streamlit UI with the new tabbed navigation.*
-
-- [ ] **Implement Tabbed Layout:** In `streamlit_ui/app.py`, **delete all old UI code** and replace it with `st.tabs(["Memberships", "Members", "Plans", "Reporting"])`.
-- [ ] **Create Tab Functions:** For better organization, create separate functions to render the content of each tab (e.g., `render_memberships_tab()`, etc.) and call them within their respective tabs.
-
----
-
-### Phase 4: UI Build - "Members" Tab
-
-*Goal: Implement the full functionality of the "Members" tab.*
-
-- [ ] **Implement Layout:** Create the two-column layout.
-- [ ] **Build Left Form:** Create the "Add/Edit Member" form with "Save" and "Clear" buttons.
-- [ ] **Build Right Table & Filters:**
-    - [ ] Add all specified filter widgets above the table.
-    - [ ] Create a new backend function `get_filtered_members(...)` that uses the filter values to query the database.
-    - [ ] Call the new backend function and display the results in a dataframe.
-- [ ] **Implement Row Actions:**
-    - [ ] Add "History," "Edit," and "Delete" buttons to each row of the members table.
-    - [ ] Wire the "Edit" button to populate the left form with the selected member's data.
-    - [ ] Wire the "Delete" button to the corresponding API function.
-- [ ] **Implement "History" Modal:**
-    - [ ] On "History" button click, open a modal window.
-    - [ ] Inside the modal, display the selected member's transaction history with a total amount paid.
-
----
-
-### Phase 5: UI Build - Remaining Tabs
-
-*Goal: Implement the "Memberships," "Plans," and "Reporting" tabs.*
-
-- [ ] **"Memberships" Tab:**
-    - [ ] Implement the two-column layout.
-    - [ ] Build the "Add Membership" form on the left.
-    - [ ] Build the recent transactions list with filters on the right.
-    - [ ] Add the "Close Books for Month" section at the bottom.
-- [ ] **"Plans" Tab:**
-    - [ ] Implement the two-column layout.
-    - [ ] Build the "Add/Edit Plan" form on the left.
-    - [ ] Build the plans list on the right, including the "Active" checkbox and "Edit"/"Delete" buttons.
-- [ ] **"Reporting" Tab:**
-    - [ ] Implement the two vertical sections.
-    - [ ] Build the "Monthly Report" section with a table of transactions.
-    - [ ] Build the "Upcoming Renewals" section with its corresponding table.
-
----
-
-### Phase 6: Final Validation
-
-*Goal: Ensure the entire application works as expected.*
-
-- [ ] **Full Data Migration Test:** Delete the `reporter.db` file and run the `migrate_data.py` script from scratch. Verify that all GC and PT data is correctly imported into the `transactions` table.
-- [ ] **CRUD Testing - Members:** Test adding, editing, searching, filtering, and deleting members.
-- [ ] **CRUD Testing - Plans:** Test adding, editing, and deleting plans. Verify that the "Active" checkbox works correctly.
-- [ ] **CRUD Testing - Memberships:** Test adding, editing, and deleting membership transactions.
-- [ ] **Functionality Testing:**
-    - [ ] Verify the "History" modal works correctly.
-    - [ ] Verify the "Close Books" functionality works as expected.
-    - [ ] Verify both reports on the "Reporting" tab generate correct data.
-- [ ] **Final Code Review:** Perform a final pass on the entire codebase. Look for any remaining dead code, unnecessary comments, or areas where code clarity can be improved. Ensure the code is clean and easy to maintain.
+* **Financial Report:**
+    * **Logic:** Allows user to select a date range. It will query the `memberships` table, summing the `amount_paid` for all records where the **`purchase_date`** falls within that range. It generates a summary and an Excel download.
+* **Renewals Report:**
+    * **Logic:** Lists all active memberships (`is_active = True`) from the `memberships` table where the **`end_date`** is within the next 30 days.
