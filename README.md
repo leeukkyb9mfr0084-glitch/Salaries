@@ -32,38 +32,42 @@ The application uses the following SQLite schema:
 **`members` Table**
 ```sql
 CREATE TABLE IF NOT EXISTS members (
-    member_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_name TEXT NOT NULL,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
     phone TEXT UNIQUE,
-    join_date TEXT
+    email TEXT,
+    join_date TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1
 );
 ```
 
 **`plans` Table**
 ```sql
 CREATE TABLE IF NOT EXISTS plans (
-    plan_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    plan_name TEXT NOT NULL UNIQUE,
-    duration_days INTEGER NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    default_duration INTEGER NOT NULL,
+    price INTEGER,
+    type TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    UNIQUE(name, default_duration, type)
 );
 ```
 
-**`transactions` Table**
+**`memberships` Table**
 ```sql
-CREATE TABLE IF NOT EXISTS transactions (
-    transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    member_id INTEGER NOT NULL,
-    transaction_type TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS memberships (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    member_id INTEGER,
     plan_id INTEGER,
-    payment_date TEXT,
-    start_date TEXT NOT NULL,
+    start_date TEXT,
     end_date TEXT,
-    amount_paid REAL NOT NULL,
-    payment_method TEXT,
-    sessions INTEGER,
-    FOREIGN KEY (member_id) REFERENCES members (member_id),
-    FOREIGN KEY (plan_id) REFERENCES plans (plan_id)
+    is_active BOOLEAN,
+    amount_paid REAL,
+    purchase_date TEXT,
+    membership_type TEXT,
+    FOREIGN KEY (member_id) REFERENCES members(id),
+    FOREIGN KEY (plan_id) REFERENCES plans(id)
 );
 ```
 

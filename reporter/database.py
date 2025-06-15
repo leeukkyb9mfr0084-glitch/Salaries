@@ -18,8 +18,8 @@ def create_database(db_name: str):
         cursor.execute(
             """
         CREATE TABLE IF NOT EXISTS members (
-            member_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_name TEXT NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
             phone TEXT UNIQUE,
             email TEXT,
     join_date TEXT,
@@ -41,7 +41,7 @@ def create_database(db_name: str):
             amount_paid REAL,
             purchase_date TEXT,
             membership_type TEXT,
-            FOREIGN KEY (member_id) REFERENCES members(member_id),
+            FOREIGN KEY (member_id) REFERENCES members(id),
             FOREIGN KEY (plan_id) REFERENCES plans(id)
         );
         """
@@ -58,17 +58,6 @@ def create_database(db_name: str):
             type TEXT,
             is_active INTEGER NOT NULL DEFAULT 1,
             UNIQUE(name, default_duration, type)
-        );
-        """
-        )
-
-        # Create monthly_book_status table
-        cursor.execute(
-            """
-        CREATE TABLE IF NOT EXISTS monthly_book_status (
-            month_key TEXT PRIMARY KEY, -- e.g., "2025-06"
-            status TEXT NOT NULL CHECK(status IN ('open', 'closed')),
-            closed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """
         )
