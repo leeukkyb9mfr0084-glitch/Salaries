@@ -1,6 +1,6 @@
 import sqlite3
-from datetime import datetime, timedelta, date  # Added date
-from typing import Tuple, Optional  # Union might not be needed yet
+from datetime import datetime, timedelta, date
+from typing import Tuple, Optional, List, Dict # Added List, Dict
 import logging
 
 # Basic logging configuration (can be overridden by application's config)
@@ -18,6 +18,31 @@ class DatabaseManager:
         # Optional, can be kept or removed
         # self.conn.row_factory = sqlite3.Row
 
+    def get_or_create_plan_id(self, name: str, price: float, type_text: str) -> Optional[int]:
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("SELECT id, price FROM plans WHERE name = ? AND type = ?", (name, type_text))
+            row = cursor.fetchone()
+            if row:
+                plan_id = row[0]
+                existing_price = row[1]
+                if existing_price != price:
+                    logging.warning(f"Plan '{name}' (type: {type_text}) exists with price {existing_price} but new data suggests price {price}. Using existing plan ID {plan_id} with original price.")
+                return plan_id
+            else:
+                cursor.execute(
+                    "INSERT INTO plans (name, price, type, is_active) VALUES (?, ?, ?, ?)",
+                    (name, price, type_text, 1)
+                )
+                self.conn.commit()
+                new_plan_id = cursor.lastrowid
+                logging.info(f"Created new plan '{name}' (type: {type_text}, price: {price}) with ID {new_plan_id}.")
+                return new_plan_id
+        except sqlite3.Error as e:
+            self.conn.rollback()
+            logging.error(f"Database error in get_or_create_plan_id for plan '{name}': {e}", exc_info=True)
+            return None
+
     def create_membership_record(
         self,
         member_id: int,
@@ -26,12 +51,7 @@ class DatabaseManager:
         amount_paid: float,
         start_date: str,
     ) -> Tuple[bool, str]:
-        # Ensure necessary datetime imports (datetime, timedelta, date) are available.
-        # (These should be at the top of the file from the previous step)
-
         cursor = self.conn.cursor()
-
-        # 1. Determine if 'New' or 'Renewal'
         try:
             cursor.execute(
                 "SELECT COUNT(*) FROM memberships WHERE member_id = ?", (member_id,)
@@ -39,20 +59,12 @@ class DatabaseManager:
             count = cursor.fetchone()[0]
             membership_type = "Renewal" if count > 0 else "New"
 
-            # 2. Calculate end_date
-            start_date_obj = datetime.strptime(
-                start_date, "%Y-%m-%d"
-            ).date()  # noqa: E501
+            start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
             end_date_obj = start_date_obj + timedelta(days=plan_duration_days)
             end_date_str = end_date_obj.strftime("%Y-%m-%d")
-
-            # 3. Set purchase_date to current date
             purchase_date_str = date.today().strftime("%Y-%m-%d")
-
-            # 4. Set is_active to True
             is_active = True
 
-            # 5. Insert into memberships table
             sql_insert = """
             INSERT INTO memberships (
                 member_id, plan_id, start_date, end_date, amount_paid,
@@ -60,7 +72,7 @@ class DatabaseManager:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """
             cursor.execute(
-                sql_insert,  # Renamed sql to sql_insert to avoid conflict with sql in get_all_memberships_for_view
+                sql_insert,
                 (
                     member_id,
                     plan_id,
@@ -73,25 +85,14 @@ class DatabaseManager:
                 ),
             )
             self.conn.commit()
-            logging.info(
-                f"Membership record created for member_id {member_id}, "
-                f"plan_id {plan_id}."
-            )
+            logging.info(f"Membership record created for member_id {member_id}, plan_id {plan_id}.")
             return True, "Membership record created successfully."
-
         except sqlite3.Error as e:
             self.conn.rollback()
-            logging.error(
-                f"DB error creating membership for member {member_id}: {e}",
-                exc_info=True,
-            )
+            logging.error(f"DB error creating membership for member {member_id}: {e}", exc_info=True)
             return False, f"Database error: {e}"
         except ValueError as ve:
-            # Handle potential errors from strptime if start_date format is wrong
-            logging.error(
-                f"Date format error for start_date '{start_date}': {ve}",  # noqa: E501
-                exc_info=True,
-            )
+            logging.error(f"Date format error for start_date '{start_date}': {ve}", exc_info=True)
             return False, f"Date format error for start_date: {ve}"
 
     def get_all_memberships_for_view(

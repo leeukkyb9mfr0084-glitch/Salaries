@@ -53,11 +53,10 @@ def create_database(db_name: str):
         CREATE TABLE IF NOT EXISTS plans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            default_duration INTEGER NOT NULL,
             price INTEGER,
             type TEXT,
             is_active INTEGER NOT NULL DEFAULT 1,
-            UNIQUE(name, default_duration, type)
+            UNIQUE(name, type)
         );
         """
         )
