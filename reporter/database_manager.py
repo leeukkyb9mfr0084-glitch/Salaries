@@ -708,7 +708,7 @@ class DatabaseManager:
             SELECT pt.*, m.name as member_name
             FROM pt_memberships pt
             JOIN members m ON pt.member_id = m.id
-            ORDER BY pt.purchase_date DESC;
+            ORDER BY pt.purchase_date DESC, pt.id DESC;
             """
             cursor.execute(sql_select)
             pt_memberships = [dict(row) for row in cursor.fetchall()]
