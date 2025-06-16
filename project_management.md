@@ -1,5 +1,5 @@
 **Phase 2: Database Schema Migration**
-* **Task:** [DONE] Modify `reporter/database.py` to reflect the new data model.
+* **Task:** [VERIFIED] Modify `reporter/database.py` to reflect the new data model.
     * **Instructions:**
         1.  In the `create_tables` function, modify the SQL `CREATE TABLE` statement for the `plans` table.
             * **Remove** the `price` and `type` columns.
@@ -9,16 +9,16 @@
 
 ---
 **Phase 3: Backend Business Logic**
-* **Task:** Refactor the business logic in `reporter/database_manager.py`.
+* **Task:** [DONE] Refactor the business logic in `reporter/database_manager.py`.
     * **Instructions:**
-        1.  **Cleanup:** Delete or comment out any existing high-level functions related to the old membership creation process.
-        2.  **Implement Member CRUD:**
+        1.  **Cleanup:** [DONE] Delete or comment out any existing high-level functions related to the old membership creation process.
+        2.  **Implement Member CRUD:** [DONE]
             * Create functions: `add_member`, `update_member`, `get_all_members`, `delete_member`.
             * The `add_member` function must validate that the member's phone number does not already exist.
-        3.  **Implement Plan CRUD:**
+        3.  **Implement Plan CRUD:** [DONE]
             * Create functions: `add_plan`, `update_plan`, `get_all_plans`, `delete_plan`.
             * The `add_plan` function must automatically generate the `display_name` by combining plan name and duration, then validate its uniqueness before committing.
-        4.  **Implement Membership Creation:**
+        4.  **Implement Membership Creation:** [DONE]
             * Create a `create_membership` function that accepts `member_id`, `plan_id`, `start_date`, etc., and correctly calculates the `end_date` before saving a new record to the `memberships` table.
 
 ---
