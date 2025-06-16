@@ -1,5 +1,5 @@
 **Phase 2: Database Schema Migration**
-* **Task:** Modify `reporter/database.py` to reflect the new data model.
+* **Task:** [DONE] Modify `reporter/database.py` to reflect the new data model.
     * **Instructions:**
         1.  In the `create_tables` function, modify the SQL `CREATE TABLE` statement for the `plans` table.
             * **Remove** the `price` and `type` columns.
