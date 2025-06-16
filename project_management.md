@@ -1,53 +1,60 @@
-**Phase 2: Database Schema Migration**
-* **Task:** [VERIFIED] Modify `reporter/database.py` to reflect the new data model.
-    * **Instructions:**
-        1.  In the `create_tables` function, modify the SQL `CREATE TABLE` statement for the `plans` table.
-            * **Remove** the `price` and `type` columns.
-            * **Add** `duration_days` (INTEGER), `default_amount` (REAL), and `display_name` (TEXT, UNIQUE).
-        2.  Verify the `members` table schema matches the spec, ensuring the `phone` column has a `UNIQUE` constraint.
-        3.  The `memberships` table schema remains unchanged. Do not modify it.
+### Kranos Reporter: Development Plan v6.0
+
+**Objective:** Refactor the application to support both Group Class (GC) memberships and Personal Training (PT) memberships within a unified interface. This involves schema changes, backend logic updates, and a UI overhaul with consistent naming conventions.
 
 ---
-**Phase 3: Backend Business Logic**
-* **Task:** [DONE] Refactor the business logic in `reporter/database_manager.py`.
-    * **Instructions:**
-        1.  **Cleanup:** [DONE] Delete or comment out any existing high-level functions related to the old membership creation process.
-        2.  **Implement Member CRUD:** [DONE]
-            * Create functions: `add_member`, `update_member`, `get_all_members`, `delete_member`.
-            * The `add_member` function must validate that the member's phone number does not already exist.
-        3.  **Implement Plan CRUD:** [DONE]
-            * Create functions: `add_plan`, `update_plan`, `get_all_plans`, `delete_plan`.
-            * The `add_plan` function must automatically generate the `display_name` by combining plan name and duration, then validate its uniqueness before committing.
-        4.  **Implement Membership Creation:** [DONE]
-            * Create a `create_membership` function that accepts `member_id`, `plan_id`, `start_date`, etc., and correctly calculates the `end_date` before saving a new record to the `memberships` table.
+**Phase 1: Database Schema Update**
+* **Task:** `[PENDING]` Update `reporter/database.py` to implement the new, approved schema.
+* **Instructions:**
+    1.  In `create_database()`, rename the `plans` table to `group_plans`. Update its `CREATE TABLE` statement.
+    2.  Rename the `memberships` table to `group_class_memberships`. Ensure its foreign key (`plan_id`) correctly references the `id` column of `group_plans`.
+    3.  Add the new `pt_memberships` table. The schema must be:
+        ```sql
+        CREATE TABLE IF NOT EXISTS pt_memberships (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            member_id INTEGER,
+            purchase_date TEXT,
+            amount_paid REAL,
+            sessions_purchased INTEGER,
+            sessions_remaining INTEGER,
+            notes TEXT,
+            FOREIGN KEY (member_id) REFERENCES members(id)
+        );
+        ```
+    4.  Update the `seed_initial_plans()` function to insert data into the `group_plans` table.
 
 ---
-**Phase 4: User Interface Implementation**
-* **Task:** [DONE] Overhaul the Streamlit front-end in `reporter/streamlit_ui/app.py`.
-    * **Instructions:**
-        1.  **Cleanup:** [DONE] Remove all UI code related to the old two-panel layout for creating memberships.
-        2.  **Restructure:** [DONE] The main UI should now have four primary tabs: `Members`, `Plans`, `Memberships`, `Reporting`.
-        3.  **Build `Members` Tab:** [DONE] Implement the two-panel UI from the whiteboard sketch for full Member CRUD.
-        4.  **Build `Plans` Tab:** [DONE] Implement the two-panel UI for full Plan CRUD.
-        5.  **Update `Memberships` Tab:** [DONE]
-            * In the `Members` tab, add a **"Create Membership"** button that appears when a member is selected.
-            * This button will trigger a form to select a plan and create a new transaction in the `memberships` table.
-            * The `Memberships` tab itself will now primarily be for viewing the complete history of all membership transactions.
-        6.  **Verify `Reporting` Tab:** [DONE] The code for this tab should remain. Ensure it still functions correctly.
+**Phase 2: Backend Logic Refactoring**
+* **Task:** `[PENDING]` Update `reporter/database_manager.py` to manage the new tables.
+* **Instructions:**
+    1.  Rename functions related to `plans` to specify `group_plans` (e.g., `add_plan` -> `add_group_plan`).
+    2.  Rename functions related to the old `memberships` table to specify `group_class_memberships` (e.g., `create_membership` -> `create_group_class_membership`).
+    3.  Create a new set of CRUD functions for Personal Training: `add_pt_membership`, `get_all_pt_memberships`, and `delete_pt_membership`.
+    4.  Update `generate_financial_report_data`. Its logic must now query **both** the `group_class_memberships` table and the `pt_memberships` table.
+    5.  Confirm that `generate_renewal_report_data` **only** queries the `group_class_memberships` table.
 
 ---
-**Phase 5: Testing and Validation**
-* **Task:** Update the test suite in `reporter/tests/` to reflect all backend changes.
-    * **Instructions:**
-        1.  **Cleanup:** [DONE] Delete obsolete test files. `test_business_logic.py` is likely outdated and should be removed.
-        2.  **Update `test_database.py`:** [DONE] Ensure tests pass with the new table schemas.
-        3.  **Create `test_member_management.py`:** [DONE] Write unit tests for the new Member CRUD functions.
-        4.  **Create `test_plan_management.py`:** [DONE] Write unit tests for the new Plan CRUD functions, including the `display_name` uniqueness check.
-        5.  [SKIPPED] Review and update any data migration tests in `test_migrate_data.py` to align with the new structure. **Note:** Skipped because `reporter/migrate_data.py` is incompatible with the current `DatabaseManager` and schema. `migrate_data.py` requires significant updates before tests can be written or updated.
+**Phase 3: API Layer Update**
+* **Task:** `[PENDING]` Update `reporter/app_api.py` to expose the new backend logic.
+* **Instructions:**
+    1.  Reflect all function name changes from the `DatabaseManager` (e.g., `create_membership` -> `create_group_class_membership`).
+    2.  Add new pass-through functions for the PT logic (`create_pt_membership`, `get_all_pt_memberships`, etc.) that call the corresponding methods in the `DatabaseManager`.
 
 ---
-**Phase 6: Final Cleanup**
-* **Task:** Remove all obsolete files from the repository.
-    * **Instructions:**
-        1.  [DONE] Delete any old `.csv` or `.xlsx` data files that were used for the previous version's data migration (e.g., `Kranos MMA Members.xlsx - GC.csv`).
-        2.  [DONE] Review all scripts and utilities to ensure no code is left that references the old data structures. (Deleted `reporter/migrate_data.py` as it was obsolete and used the old data files)
+**Phase 4: UI Implementation**
+* **Task:** `[PENDING]` Overhaul `reporter/streamlit_ui/app.py` to match the new functional design.
+* **Instructions:**
+    1.  **`Members` Tab:** Ensure this tab only contains Member CRUD functionality.
+    2.  **`Memberships` Tab:** This tab will now handle both membership types.
+        * Add a `st.radio` selector at the top for "Group Class Memberships" and "Personal Training Memberships".
+        * Use an `if/else` block based on the selector.
+        * **If "Group Class Memberships" is selected:** Render the UI for creating and viewing records from the `group_class_memberships` table. Call the appropriate `...group_class...` functions from the API.
+        * **If "Personal Training Memberships" is selected:** Render the UI for creating and viewing records from the `pt_memberships` table. Call the appropriate `...pt_membership...` functions from the API.
+
+---
+**Phase 5: Testing and Final Migration**
+* **Task:** `[PENDING]` Update the test suite and create the final data migration script.
+* **Instructions:**
+    1.  **Update Tests:** Go through all files in `reporter/tests/` and update them to reflect the new table names (`group_class_memberships`, `pt_memberships`) and all associated function names.
+    2.  **Create PT Tests:** Add a new test file, `test_pt_memberships.py`, to test the CRUD operations for the `pt_memberships` table.
+    3.  **Create Migration Script:** Create the `reporter/migrate_historical_data.py` script. This script will perform the one-time data import from the old CSV files into the new `members`, `group_plans`, `group_class_memberships`, and `pt_memberships` tables.

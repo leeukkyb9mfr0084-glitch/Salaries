@@ -1,13 +1,13 @@
 ### Kranos Reporter: Application Specifications
-*Version 3.0 - Last Updated: June 15, 2025*
+*Version 6.0 - Last Updated: June 16, 2025*
 
 #### 1. Overview
-This document outlines the complete functional and technical specifications for the Kranos Reporter application. The application is an internal tool designed to manage members and service plans. It also creates membership transactions to track payments and provide essential financial and renewal reporting.
+This document outlines the complete functional and technical specifications for the Kranos Reporter application. The application is an internal tool designed to manage members, group class plans, personal training memberships, and all associated financial reporting.
 
 #### 2. Database Schema
-The application will use a simplified SQLite database with the following three core tables:
+The application will use an SQLite database with the following four core tables. This schema separates duration-based group classes from session-based personal training for data integrity.
 
-**`members` table:** (Based on whiteboard design)
+**`members` table:** (No changes)
 * `id` (INTEGER, Primary Key)
 * `name` (TEXT, Mandatory)
 * `phone` (TEXT, Mandatory, Unique)
@@ -15,7 +15,8 @@ The application will use a simplified SQLite database with the following three c
 * `join_date` (TEXT)
 * `is_active` (BOOLEAN)
 
-**`plans` table:** (Based on whiteboard design)
+**`group_plans` table:**
+*This table stores templates for duration-based group classes.*
 * `id` (INTEGER, Primary Key)
 * `name` (TEXT, Mandatory)
 * `duration_days` (INTEGER, Mandatory)
@@ -23,10 +24,11 @@ The application will use a simplified SQLite database with the following three c
 * `display_name` (TEXT, Unique)
 * `is_active` (BOOLEAN)
 
-**`memberships` table:** (Retained for reporting)
+**`group_class_memberships` table:**
+*This table tracks the purchase of time-based group class memberships.*
 * `id` (INTEGER, Primary Key)
 * `member_id` (INTEGER, Foreign Key to `members.id`)
-* `plan_id` (INTEGER, Foreign Key to `plans.id`)
+* `plan_id` (INTEGER, Foreign Key to `group_plans.id`)
 * `start_date` (TEXT)
 * `end_date` (TEXT)
 * `amount_paid` (REAL)
@@ -34,53 +36,42 @@ The application will use a simplified SQLite database with the following three c
 * `membership_type` (TEXT: 'New' or 'Renewal')
 * `is_active` (BOOLEAN)
 
+**`pt_memberships` table:**
+*This new table tracks the purchase of session-based personal training packages.*
+* `id` (INTEGER, Primary Key)
+* `member_id` (INTEGER, Foreign Key to `members.id`)
+* `purchase_date` (TEXT)
+* `amount_paid` (REAL)
+* `sessions_purchased` (INTEGER)
+* `sessions_remaining` (INTEGER)
+* `notes` (TEXT)
+
 #### 3. Functional Specifications by Tab
 
-The application will feature four primary tabs as depicted in the whiteboard navigation.
+The application will feature a four-tab navigation structure.
 
-**Members Tab**
-This tab follows the whiteboard design for member management.
+**`Members` Tab**
+* **Functionality:** This tab is dedicated exclusively to Member CRUD (Create, Read, Update, Delete) operations. No other functionality will be present.
 
-* **Left Panel: Create / Update Member**
-    * **Fields:** `Member Name`, `Member Phone`, `Join Date` (defaults to today), `Email`. Name and Phone are mandatory.
-    * **SAVE Button Logic:** Validates that `Member Phone` is unique in the `members` table before saving.
-    * **CLEAR Button:** Resets all form fields.
-* **Right Panel: View / Manage Members**
-    * **Filters:** Text inputs for `Name` and `Phone`, and radio buttons for `Active`/`Inactive` status.
-    * **Members List:** A table displays member records from the `members` table matching the filters.
-    * **Selection & Actions:** When a user clicks a row, the member's details are displayed below the list. `EDIT` and `DELETE` buttons appear and function on the selected member.
+**`Group Plans` Tab**
+* **Functionality:** This tab is for managing the templates for group class plans (e.g., "MMA Mastery - 90 Days"). The UI and logic will support full CRUD operations on the `group_plans` table.
 
-**Plans Tab**
-This tab follows the whiteboard design for plan management.
+**`Memberships` Tab**
+* **Functionality:** This tab consolidates the management of both Group Class and Personal Training memberships.
+* **Mode Selector:** A radio button or dropdown will be placed at the top of this tab with two options: "Group Class Memberships" (default) and "Personal Training Memberships". The selection will determine the content displayed below.
+* **"Group Class Memberships" Mode:**
+    * **UI:** A two-panel layout for creating and viewing records from the `group_class_memberships` table.
+    * **Creation Form (Left Panel):** Will allow creating a new time-based membership. It will include a dropdown to select a member and another to select from the `group_plans` list.
+    * **View (Right Panel):** A filterable list of all records from the `group_class_memberships` table.
+* **"Personal Training Memberships" Mode:**
+    * **UI:** A two-panel layout for creating and viewing records from the `pt_memberships` table.
+    * **Creation Form (Left Panel):** Will allow creating a new PT package. It will include a dropdown to select a member and fields for `Purchase Date`, `Amount Paid`, and `Sessions Purchased`.
+    * **Note:** The `sessions_remaining` field will be saved to the database but no UI functionality will be built to manage it (e.g., no "Use Session" button).
+    * **View (Right Panel):** A filterable list of all records from the `pt_memberships` table.
 
-* **Left Panel: Create / Update Plan**
-    * **Fields:** `Plan Name`, `Duration (days)`, `Default Amount`. All fields are mandatory.
-    * **`display_name` Logic:** This field is automatically generated by concatenating `Plan Name` and `Duration (days)` and is not user-editable.
-    * **SAVE Button Logic:** Validates that the generated `display_name` is unique in the `plans` table before saving.
-    * **CLEAR Button:** Resets all form fields.
-* **Right Panel: View / Manage Plans**
-    * **Filters:** Radio buttons for `Active`/`Inactive` status.
-    * **Plan List:** A table displays plan records from the `plans` table matching the filters.
-    * **Selection & Actions:** When a user clicks a row, the plan's details are displayed below the list. `EDIT` and `DELETE` buttons appear and function on the selected plan.
-
-**Memberships Tab**
-This tab is for creating and viewing the transactional history of memberships.
-
-* **Functionality:** To create a new membership, the user will first select a member from the `Members Tab`. A **"Create Membership"** button will be available for the selected member.
-* **Create Membership Form:**
-    * **Plan Name:** A dropdown list of all active plans.
-    * **Duration (Days):** Auto-filled from the selected plan, but user-editable.
-    * **Amount:** Auto-filled from the plan's `default_amount`, but user-editable.
-    * **Start Date:** A date picker control.
-    * **SAVE Button Logic:**
-        1.  Calculates `end_date` from `start_date` + `Duration`.
-        2.  Creates one new row in the `memberships` table.
-* **View Memberships:** This tab will also display a full, filterable list of all records in the `memberships` table.
-
-**Reporting Tab**
-This functionality is retained exactly from the previous specification.
-
+**`Reporting` Tab**
+* **Functionality:** This tab provides financial and renewal reporting.
 * **Financial Report:**
-    * **Logic:** Allows user to select a date range. It will query the `memberships` table, summing the `amount_paid` for all records where the **`purchase_date`** falls within that range. It generates a summary and an Excel download.
+    * **Logic:** The report must query **both** the `group_class_memberships` and `pt_memberships` tables. It will sum the `amount_paid` from all records in both tables where the `purchase_date` falls within the user-selected date range.
 * **Renewals Report:**
-    * **Logic:** Lists all active memberships (`is_active = True`) from the `memberships` table where the **`end_date`** is within the next 30 days.
+    * **Logic:** This report's logic will **only** query the `group_class_memberships` table. It will list all active memberships where the `end_date` is within the next 30 days. This report will not include PT data.
