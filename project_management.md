@@ -53,7 +53,13 @@
 
 ---
 **Phase 5: Testing and Final Migration**
-* **Task:** `[DONE (Existing tests updated; PT tests and migration script are pending as per focused task list)]` Update the test suite and create the final data migration script.
+* **Task:** `[DONE]` Update the test suite and create the final data migration script.
+  * Create `test_pt_memberships.py` and add initial tests for `add_pt_membership`. - DONE
+  * Add tests for `get_all_pt_memberships` in `test_pt_memberships.py`. - DONE
+  * Add tests for `delete_pt_membership` in `test_pt_memberships.py`. - DONE
+  * All PT membership CRUD tests are now present in `test_pt_memberships.py`. - DONE
+  * Create `reporter/migrate_historical_data.py` with basic structure and placeholders. - DONE
+  * Implement full data migration logic in `reporter/migrate_historical_data.py` for GC and PT members. - DONE
 * **Instructions:**
     1.  **Update Tests:** Go through all files in `reporter/tests/` and update them to reflect the new table names (`group_class_memberships`, `pt_memberships`) and all associated function names.
     2.  **Create PT Tests:** Add a new test file, `test_pt_memberships.py`, to test the CRUD operations for the `pt_memberships` table.
