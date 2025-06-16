@@ -12,7 +12,7 @@
 ### **Phase 1: Critical Bug Fixes & Code Cleanup**
 This phase addresses the showstopper bugs that prevent the application from running correctly and cleans up obsolete files.
 
-**Task 1.1: Fix Database Variable Mismatch in Migration Script**
+- [FAILED] **Task 1.1: Fix Database Variable Mismatch in Migration Script**
 * **File to Modify:** `reporter/migrate_historical_data.py`
 * **Instructions:**
     1.  Open `reporter/migrate_historical_data.py`.
@@ -22,7 +22,7 @@ This phase addresses the showstopper bugs that prevent the application from runn
     * In the project's root directory, run the command: `python -c "from reporter.migrate_historical_data import migrate_historical_data; print('SUCCESS: Import OK')"`
     * The terminal must print "SUCCESS: Import OK" without any errors.
 
-**Task 1.2: Fix Incorrect Function Call in Main Application**
+- [FAILED] **Task 1.2: Fix Incorrect Function Call in Main Application**
 * **File to Modify:** `reporter/main.py`
 * **Instructions:**
     1.  Open `reporter/main.py`.
@@ -51,7 +51,7 @@ This phase addresses the showstopper bugs that prevent the application from runn
     3.  Run the script from your terminal: `python verify_task_1_2.py`.
     4.  It must print a SUCCESS message.
 
-**Task 1.3: Clean Up Unused and Obsolete Files**
+- [DONE] **Task 1.3: Clean Up Unused and Obsolete Files**
 * **Files to Rename:**
 * **Instructions:**
     1.  Rename `run_all_tests.sh` to `run_all_tests.sh-todelete`.
@@ -62,7 +62,7 @@ This phase addresses the showstopper bugs that prevent the application from runn
 * **Verification:**
     * Confirm that all specified files have been renamed with the `-todelete` suffix in your file explorer.
 
-**Task 1.4: Clean Up Project Dependencies**
+- [DONE] **Task 1.4: Clean Up Project Dependencies**
 * **File to Modify:** `requirements.txt`
 * **Instructions:**
     1.  Open `requirements.txt` and delete the line containing `flet`.

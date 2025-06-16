@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime, timedelta
 import os
 from reporter.database_manager import DatabaseManager
-from reporter.database import create_database, DB_PATH as ACTUAL_APP_DB_PATH
+from reporter.database import DB_FILE, create_database
 
 # Source CSV files (expected in the project root directory)
 GC_MEMBERS_CSV = "Kranos MMA Members.xlsx - GC.csv"
@@ -249,15 +249,18 @@ def main():
     total_pt_success = 0
     total_pt_failed = 0
     try:
-        db_dir = os.path.dirname(ACTUAL_APP_DB_PATH)
+        # The following lines related to db_dir and ACTUAL_APP_DB_PATH might cause errors
+        # as ACTUAL_APP_DB_PATH is no longer defined.
+        # However, the instructions are specific about changing the create_database line.
+        db_dir = os.path.dirname(DB_FILE) # Assuming DB_FILE can be used here
         if db_dir and not os.path.exists(db_dir):
              os.makedirs(db_dir, exist_ok=True)
              print(f"Created database directory: {db_dir}")
 
-        conn = create_database(ACTUAL_APP_DB_PATH)
+        conn = create_database(DB_FILE)
         conn.execute("PRAGMA foreign_keys = ON;")
         db_mngr = DatabaseManager(connection=conn)
-        print(f"Connected to database: {ACTUAL_APP_DB_PATH}")
+        print(f"Connected to database: {DB_FILE}") # Changed to DB_FILE
 
         db_group_plans = db_mngr.get_all_group_plans()
         group_plans_map = {}
