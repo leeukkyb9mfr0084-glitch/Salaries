@@ -1,66 +1,210 @@
-### Kranos Reporter: Development Plan v6.0
+# Project Recovery and Bug Fix Plan
+**Date:** June 16, 2025
+**Objective:** To address critical bugs, restore lost functionality, and clean up the codebase. Each task is designed to be a small, focused effort.
 
-**Objective:** Refactor the application to support both Group Class (GC) memberships and Personal Training (PT) memberships within a unified interface. This involves schema changes, backend logic updates, and a UI overhaul with consistent naming conventions.
+**Instructions for the Developer:**
+1.  Complete each task in the order it is listed.
+2.  Do not move to the next task until the current one is fully verified using the provided scripts.
+3.  After completing each task, update the "Project Status Log" section at the bottom of this document.
 
 ---
-**Phase 1: Database Schema Update**
-* **Task:** `[DONE]` Update `reporter/database.py` to implement the new, approved schema.
+
+### **Phase 1: Critical Bug Fixes & Code Cleanup**
+This phase addresses the showstopper bugs that prevent the application from running correctly and cleans up obsolete files.
+
+**Task 1.1: Fix Database Variable Mismatch in Migration Script**
+* **File to Modify:** `reporter/migrate_historical_data.py`
 * **Instructions:**
-    1.  In `create_database()`, rename the `plans` table to `group_plans`. Update its `CREATE TABLE` statement.
-    2.  Rename the `memberships` table to `group_class_memberships`. Ensure its foreign key (`plan_id`) correctly references the `id` column of `group_plans`.
-    3.  Add the new `pt_memberships` table. The schema must be:
-        ```sql
-        CREATE TABLE IF NOT EXISTS pt_memberships (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            member_id INTEGER,
-            purchase_date TEXT,
-            amount_paid REAL,
-            sessions_purchased INTEGER,
-            sessions_remaining INTEGER,
-            notes TEXT,
-            FOREIGN KEY (member_id) REFERENCES members(id)
-        );
+    1.  Open `reporter/migrate_historical_data.py`.
+    2.  Locate the line: `from reporter.database import DB_PATH, create_connection` and change `DB_PATH` to `DB_FILE`.
+    3.  Locate the line: `conn = create_connection(DB_PATH)` and change `DB_PATH` to `DB_FILE`.
+* **Verification:**
+    * In the project's root directory, run the command: `python -c "from reporter.migrate_historical_data import migrate_historical_data; print('SUCCESS: Import OK')"`
+    * The terminal must print "SUCCESS: Import OK" without any errors.
+
+**Task 1.2: Fix Incorrect Function Call in Main Application**
+* **File to Modify:** `reporter/main.py`
+* **Instructions:**
+    1.  Open `reporter/main.py`.
+    2.  At the top of the file, add the import: `from reporter.migrate_historical_data import migrate_historical_data`
+    3.  Inside the `handle_database_migration` function, change the line `migrate_data()` to `migrate_historical_data()`.
+* **Verification Script:**
+    1.  Create a new file in the project root named `verify_task_1_2.py`.
+    2.  Copy the following code into it:
+        ```python
+        import os
+        from reporter.main import handle_database_migration
+        from reporter.database import DB_FILE
+
+        print("Running verification for Task 1.2...")
+        if os.path.exists(DB_FILE):
+            os.remove(DB_FILE)
+        
+        handle_database_migration()
+
+        if os.path.exists(DB_FILE):
+            print(f"SUCCESS: Database file '{DB_FILE}' was created by the handler.")
+            os.remove(DB_FILE)
+        else:
+            print(f"FAILURE: Database file '{DB_FILE}' was not created.")
         ```
-    4.  Update the `seed_initial_plans()` function to insert data into the `group_plans` table.
+    3.  Run the script from your terminal: `python verify_task_1_2.py`.
+    4.  It must print a SUCCESS message.
+
+**Task 1.3: Clean Up Unused and Obsolete Files**
+* **Files to Rename:**
+* **Instructions:**
+    1.  Rename `run_all_tests.sh` to `run_all_tests.sh-todelete`.
+    2.  Rename `run_validation.sh` to `run_validation.sh-todelete`.
+    3.  Rename `validate_fixes.sh` to `validate_fixes.sh-todelete`.
+    4.  In `scripts/`, rename `process_data.py` to `process_data.py-todelete`.
+    5.  In `tests/`, rename `test_process_data.py` to `test_process_data.py-todelete`.
+* **Verification:**
+    * Confirm that all specified files have been renamed with the `-todelete` suffix in your file explorer.
+
+**Task 1.4: Clean Up Project Dependencies**
+* **File to Modify:** `requirements.txt`
+* **Instructions:**
+    1.  Open `requirements.txt` and delete the line containing `flet`.
+* **Verification:**
+    * Open `requirements.txt` and confirm the line with `flet` is gone.
 
 ---
-**Phase 2: Backend Logic Refactoring**
-* **Task:** `[DONE]` Update `reporter/database_manager.py` to manage the new tables.
+
+### **Phase 2: Logic and Functional Fixes**
+This phase restores lost functionality and improves backend logic.
+
+**Task 2.1: Restore "Renewal" Logic for Group Class Memberships**
+* **File to Modify:** `reporter/database_manager.py`
 * **Instructions:**
-    1.  Rename functions related to `plans` to specify `group_plans` (e.g., `add_plan` -> `add_group_plan`).
-    2.  Rename functions related to the old `memberships` table to specify `group_class_memberships` (e.g., `create_membership` -> `create_group_class_membership`).
-    3.  Create a new set of CRUD functions for Personal Training: `add_pt_membership`, `get_all_pt_memberships`, and `delete_pt_membership`.
-    4.  Update `generate_financial_report_data`. Its logic must now query **both** the `group_class_memberships` table and the `pt_memberships` table.
-    5.  Confirm that `generate_renewal_report_data` **only** queries the `group_class_memberships` table.
+    1.  Open `reporter/database_manager.py` and find the `create_group_class_membership` function.
+    2.  Delete the line: `membership_type = "New"`.
+    3.  In its place, add the following logic to check for existing memberships before setting the `membership_type`:
+        ```python
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT 1 FROM group_class_memberships WHERE member_id = ?", (member_id,))
+        membership_type = "Renewal" if cursor.fetchone() else "New"
+        ```
+* **Verification Script:**
+    1.  Create a new file in the project root named `verify_task_2_1.py`.
+    2.  Copy the following code into it:
+        ```python
+        import os
+        import sqlite3
+        from reporter.database_manager import DatabaseManager
+
+        DB_FILE = "test_renewal.db"
+        print("Running verification for Task 2.1...")
+        if os.path.exists(DB_FILE): os.remove(DB_FILE)
+        
+        db_manager = DatabaseManager(db_file=DB_FILE)
+        member_id, _, _ = db_manager.add_member("Test Member", "555-0101", "test@test.com", "Active")
+        plan_id, _, _ = db_manager.add_group_plan("Test Plan", 100, 30)
+
+        db_manager.create_group_class_membership(member_id, plan_id, "2025-06-16")
+        db_manager.create_group_class_membership(member_id, plan_id, "2025-07-16")
+
+        conn = sqlite3.connect(DB_FILE)
+        results = [row[0] for row in conn.cursor().execute("SELECT membership_type FROM group_class_memberships ORDER BY start_date")]
+        conn.close()
+
+        if results == ["New", "Renewal"]:
+            print("SUCCESS: Membership types are correctly assigned as 'New' then 'Renewal'.")
+        else:
+            print(f"FAILURE: Expected ['New', 'Renewal'], but got {results}.")
+        
+        os.remove(DB_FILE)
+        ```
+    3.  Run the script from your terminal: `python verify_task_2_1.py`.
+    4.  It must print a SUCCESS message.
+
+**Task 2.2: Add User-Friendly Error for Duplicate Phone Numbers**
+* **File to Modify:** `reporter/streamlit_ui/app.py`
+* **Instructions:**
+    1.  Open `reporter/streamlit_ui/app.py` and find the `render_members_tab` function.
+    2.  Wrap the API calls in the "Add Member" and "Update Member" sections in `try...except ValueError` blocks. This allows the UI to catch the specific error from the backend.
+        * **For "Add Member":**
+            ```python
+            try:
+                success, message = self.api.add_member(name, phone, email, "Active")
+                if success:
+                    st.success(message)
+                    st.experimental_rerun()
+                else:
+                    st.error(message)
+            except ValueError as e:
+                st.error(f"Error: {e}")
+            ```
+        * **For "Update Member":**
+            ```python
+            try:
+                success, message = self.api.update_member(member_id, name, phone, email, status)
+                if success:
+                    st.success(message)
+                    st.session_state.edit_member_id = None
+                    st.experimental_rerun()
+                else:
+                    st.error(message)
+            except ValueError as e:
+                st.error(f"Error: {e}")
+            ```
+* **Verification Script:**
+    * This task modifies the UI's error handling. The following script verifies that the backend correctly raises the error that the UI code is now designed to catch.
+    1.  Create a file named `verify_task_2_2.py`.
+    2.  Copy the following code into it:
+        ```python
+        import os
+        from reporter.database_manager import DatabaseManager
+
+        DB_FILE = "test_duplicate.db"
+        print("Running verification for Task 2.2...")
+        if os.path.exists(DB_FILE): os.remove(DB_FILE)
+        db_manager = DatabaseManager(db_file=DB_FILE)
+
+        db_manager.add_member("First Member", "555-1234", "first@test.com", "Active")
+        
+        try:
+            db_manager.add_member("Second Member", "555-1234", "second@test.com", "Active")
+            print("FAILURE: ValueError was NOT raised for a duplicate phone number.")
+        except ValueError:
+            print("SUCCESS: ValueError was correctly raised for a duplicate phone number.")
+        
+        os.remove(DB_FILE)
+        ```
+    3.  Run the script: `python verify_task_2_2.py`.
+    4.  It must print a SUCCESS message.
 
 ---
-**Phase 3: API Layer Update**
-* **Task:** `[DONE]` Update `reporter/app_api.py` to expose the new backend logic.
+
+### **Phase 3: Final Verification**
+
+**Task 3.1: Update the Project Management File**
+* **File to Modify:** `project_management.md`
 * **Instructions:**
-    1.  Reflect all function name changes from the `DatabaseManager` (e.g., `create_membership` -> `create_group_class_membership`).
-    2.  Add new pass-through functions for the PT logic (`create_pt_membership`, `get_all_pt_memberships`, etc.) that call the corresponding methods in the `DatabaseManager`.
+    1.  Open `project_management.md`, delete all its content.
+    2.  Copy and paste the "Project Status Log" from below into it.
+* **Verification:**
+    * Open `project_management.md` and confirm its content matches the log.
 
 ---
-**Phase 4: UI Implementation**
-* **Task:** `[DONE]` Overhaul `reporter/streamlit_ui/app.py` to match the new functional design.
-* **Instructions:**
-    1.  **`Members` Tab:** Ensure this tab only contains Member CRUD functionality.
-    2.  **`Memberships` Tab:** This tab will now handle both membership types.
-        * Add a `st.radio` selector at the top for "Group Class Memberships" and "Personal Training Memberships".
-        * Use an `if/else` block based on the selector.
-        * **If "Group Class Memberships" is selected:** Render the UI for creating and viewing records from the `group_class_memberships` table. Call the appropriate `...group_class...` functions from the API.
-        * **If "Personal Training Memberships" is selected:** Render the UI for creating and viewing records from the `pt_memberships` table. Call the appropriate `...pt_membership...` functions from the API.
+<br>
 
----
-**Phase 5: Testing and Final Migration**
-* **Task:** `[DONE]` Update the test suite and create the final data migration script.
-  * Create `test_pt_memberships.py` and add initial tests for `add_pt_membership`. - DONE
-  * Add tests for `get_all_pt_memberships` in `test_pt_memberships.py`. - DONE
-  * Add tests for `delete_pt_membership` in `test_pt_memberships.py`. - DONE
-  * All PT membership CRUD tests are now present in `test_pt_memberships.py`. - DONE
-  * Create `reporter/migrate_historical_data.py` with basic structure and placeholders. - DONE
-  * Implement full data migration logic in `reporter/migrate_historical_data.py` for GC and PT members. - DONE
-* **Instructions:**
-    1.  **Update Tests:** Go through all files in `reporter/tests/` and update them to reflect the new table names (`group_class_memberships`, `pt_memberships`) and all associated function names.
-    2.  **Create PT Tests:** Add a new test file, `test_pt_memberships.py`, to test the CRUD operations for the `pt_memberships` table.
-    3.  **Create Migration Script:** Create the `reporter/migrate_historical_data.py` script. This script will perform the one-time data import from the old CSV files into the new `members`, `group_plans`, `group_class_memberships`, and `pt_memberships` tables.
+## Project Status Log
+*(Copy this section into `project_management.md` after all tasks are done)*
+
+### Project Recovery Plan - June 2025
+
+**Phase 1: Critical Bug Fixes & Code Cleanup**
+- [DONE] Task 1.1: Fix Database Variable Mismatch in Migration Script
+- [DONE] Task 1.2: Fix Incorrect Function Call in Main Application
+- [DONE] Task 1.3: Clean Up Unused and Obsolete Files
+- [DONE] Task 1.4: Clean Up Project Dependencies
+
+**Phase 2: Logic and Functional Fixes**
+- [DONE] Task 2.1: Restore "Renewal" Logic for Group Class Memberships
+- [DONE] Task 2.2: Add User-Friendly Error for Duplicate Phone Numbers
+
+**Phase 3: Final Verification**
+- [DONE] Task 3.1: Update the Project Management File
+
+**Conclusion:** All critical bugs and regressions have been addressed. The application is now in a stable state.
