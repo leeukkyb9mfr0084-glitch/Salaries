@@ -23,17 +23,17 @@
 
 ---
 **Phase 4: User Interface Implementation**
-* **Task:** Overhaul the Streamlit front-end in `reporter/streamlit_ui/app.py`.
+* **Task:** [DONE] Overhaul the Streamlit front-end in `reporter/streamlit_ui/app.py`.
     * **Instructions:**
-        1.  **Cleanup:** Remove all UI code related to the old two-panel layout for creating memberships.
-        2.  **Restructure:** The main UI should now have four primary tabs: `Members`, `Plans`, `Memberships`, `Reporting`.
-        3.  **Build `Members` Tab:** Implement the two-panel UI from the whiteboard sketch for full Member CRUD.
-        4.  **Build `Plans` Tab:** Implement the two-panel UI for full Plan CRUD.
-        5.  **Update `Memberships` Tab:**
+        1.  **Cleanup:** [DONE] Remove all UI code related to the old two-panel layout for creating memberships.
+        2.  **Restructure:** [DONE] The main UI should now have four primary tabs: `Members`, `Plans`, `Memberships`, `Reporting`.
+        3.  **Build `Members` Tab:** [DONE] Implement the two-panel UI from the whiteboard sketch for full Member CRUD.
+        4.  **Build `Plans` Tab:** [DONE] Implement the two-panel UI for full Plan CRUD.
+        5.  **Update `Memberships` Tab:** [DONE]
             * In the `Members` tab, add a **"Create Membership"** button that appears when a member is selected.
             * This button will trigger a form to select a plan and create a new transaction in the `memberships` table.
             * The `Memberships` tab itself will now primarily be for viewing the complete history of all membership transactions.
-        6.  **Verify `Reporting` Tab:** The code for this tab should remain. Ensure it still functions correctly.
+        6.  **Verify `Reporting` Tab:** [DONE] The code for this tab should remain. Ensure it still functions correctly.
 
 ---
 **Phase 5: Testing and Validation**
