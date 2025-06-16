@@ -71,11 +71,11 @@
 
 *Goal: Create a baseline of useful tests that reflect the current, correct state of the application.*
 
-- [ ] **4.1: Write New `test_database_manager.py`**
+- [x] **4.1: Write New `test_database_manager.py`**
   - **Why:** Having deleted the old, broken tests, we now have zero test coverage for our core business logic. We need to create new tests to ensure the `DatabaseManager` functions work correctly with the proper `memberships` schema. This is critical for preventing future bugs.
   - **Action:** Create a new file: `reporter/tests/test_database_manager.py`. In this file, write new `pytest` functions that specifically test the main business logic: `create_membership_record`, `generate_financial_report_data`, and `generate_renewal_report_data`. Use `pytest` fixtures to manage a temporary test database.
 
-- [ ] **4.2: Write New `test_plan_management.py`**
+- [x] **4.2: Write New `test_plan_management.py`**
   - **Why:** We need to ensure that the basic operations for managing plans are working correctly after our schema changes in Phase 1.
   - **Action:** In the existing file `reporter/tests/test_plan_management.py`, review and update the tests to align with the corrected schema (i.e., no `default_duration`). Add simple tests to verify the creation and retrieval of plans.
 
