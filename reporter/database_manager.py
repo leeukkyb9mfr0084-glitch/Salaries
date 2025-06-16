@@ -161,12 +161,12 @@ class DatabaseManager:
             logging.error(f"Database error in delete_member for ID {member_id}: {e}", exc_info=True)
             return False
 
-    def add_plan(self, name: str, duration_days: int, default_amount: float) -> Optional[int]:
-        """Adds a new plan to the database.
+    def add_group_plan(self, name: str, duration_days: int, default_amount: float) -> Optional[int]:
+        """Adds a new group_plan to the database.
         Generates display_name from name and duration_days.
         Sets is_active to True by default.
         Raises ValueError if display_name already exists.
-        Returns the id of the newly created plan, or None if an error occurs.
+        Returns the id of the newly created group_plan, or None if an error occurs.
         """
         cursor = self.conn.cursor()
         display_name = f"{name} - {duration_days} days"
@@ -174,27 +174,27 @@ class DatabaseManager:
 
         try:
             # Check for display_name uniqueness
-            cursor.execute("SELECT id FROM plans WHERE display_name = ?", (display_name,))
+            cursor.execute("SELECT id FROM group_plans WHERE display_name = ?", (display_name,))
             if cursor.fetchone():
-                logging.warning(f"Attempt to add plan with existing display_name: {display_name}")
+                logging.warning(f"Attempt to add group_plan with existing display_name: {display_name}")
                 raise ValueError(f"Display name '{display_name}' already exists.")
 
             cursor.execute(
-                "INSERT INTO plans (name, duration_days, default_amount, display_name, is_active) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO group_plans (name, duration_days, default_amount, display_name, is_active) VALUES (?, ?, ?, ?, ?)",
                 (name, duration_days, default_amount, display_name, is_active),
             )
             self.conn.commit()
             plan_id = cursor.lastrowid
-            logging.info(f"Plan '{name}' added with ID {plan_id}, display_name '{display_name}'.")
+            logging.info(f"Group Plan '{name}' added with ID {plan_id}, display_name '{display_name}'.")
             return plan_id
         except sqlite3.Error as e:
             self.conn.rollback()
-            logging.error(f"Database error in add_plan for '{name}': {e}", exc_info=True)
+            logging.error(f"Database error in add_group_plan for '{name}': {e}", exc_info=True)
             return None
         except ValueError: # Re-raise ValueError for display_name uniqueness
             raise
 
-    def update_plan(
+    def update_group_plan(
         self,
         plan_id: int,
         name: Optional[str] = None,
@@ -202,7 +202,7 @@ class DatabaseManager:
         default_amount: Optional[float] = None,
         is_active: Optional[bool] = None,
     ) -> bool:
-        """Updates an existing plan's details.
+        """Updates an existing group_plan's details.
         If name or duration_days are changed, display_name is regenerated and its uniqueness checked.
         Returns True if update was successful, False otherwise.
         """
@@ -210,12 +210,12 @@ class DatabaseManager:
         fields_to_update = []
         params_for_update = []
 
-        # Fetch current plan details first to determine if display_name needs update and for current values
+        # Fetch current group_plan details first to determine if display_name needs update and for current values
         try:
-            cursor.execute("SELECT name, duration_days, display_name FROM plans WHERE id = ?", (plan_id,))
+            cursor.execute("SELECT name, duration_days, display_name FROM group_plans WHERE id = ?", (plan_id,))
             current_plan_row = cursor.fetchone()
             if not current_plan_row:
-                logging.warning(f"Plan with ID {plan_id} not found for update.")
+                logging.warning(f"Group Plan with ID {plan_id} not found for update.")
                 return False
             current_name, current_duration_days, current_display_name = current_plan_row
 
@@ -245,10 +245,10 @@ class DatabaseManager:
             if display_name_changed:
                 new_display_name = f"{new_name} - {new_duration_days} days"
                 if new_display_name != current_display_name:
-                    cursor.execute("SELECT id FROM plans WHERE display_name = ? AND id != ?", (new_display_name, plan_id))
+                    cursor.execute("SELECT id FROM group_plans WHERE display_name = ? AND id != ?", (new_display_name, plan_id))
                     if cursor.fetchone():
-                        logging.warning(f"Attempt to update plan {plan_id} with existing display_name: {new_display_name}")
-                        raise ValueError(f"Display name '{new_display_name}' already exists for another plan.")
+                        logging.warning(f"Attempt to update group_plan {plan_id} with existing display_name: {new_display_name}")
+                        raise ValueError(f"Display name '{new_display_name}' already exists for another group_plan.")
                 fields_to_update.append("display_name = ?")
                 params_for_update.append(new_display_name)
 
@@ -261,10 +261,10 @@ class DatabaseManager:
                 params_for_update.append(1 if is_active else 0)
 
             if not fields_to_update:
-                logging.info(f"No fields provided to update for plan ID {plan_id}.")
+                logging.info(f"No fields provided to update for group_plan ID {plan_id}.")
                 return True
 
-            sql_update_stmt = f"UPDATE plans SET {', '.join(fields_to_update)} WHERE id = ?"
+            sql_update_stmt = f"UPDATE group_plans SET {', '.join(fields_to_update)} WHERE id = ?"
             params_for_update.append(plan_id)
 
             cursor.execute(sql_update_stmt, tuple(params_for_update))
@@ -273,54 +273,70 @@ class DatabaseManager:
             if cursor.rowcount == 0:
                 # This could mean plan_id not found OR data was identical.
                 # We already checked for plan_id existence. So, data was identical.
-                logging.info(f"Plan ID {plan_id} data was the same, no update performed in DB, but operation considered successful.")
+                logging.info(f"Group Plan ID {plan_id} data was the same, no update performed in DB, but operation considered successful.")
                 return True
 
-            logging.info(f"Plan ID {plan_id} updated successfully. New display_name: '{new_display_name if display_name_changed else current_display_name}'.")
+            logging.info(f"Group Plan ID {plan_id} updated successfully. New display_name: '{new_display_name if display_name_changed else current_display_name}'.")
             return True
         except sqlite3.Error as e:
             self.conn.rollback()
-            logging.error(f"Database error in update_plan for ID {plan_id}: {e}", exc_info=True)
+            logging.error(f"Database error in update_group_plan for ID {plan_id}: {e}", exc_info=True)
             return False
         except ValueError: # Re-raise ValueError for display_name uniqueness
             raise
 
-    def get_all_plans(self) -> List[Dict]:
-        """Retrieves all plans from the database."""
+    def get_all_group_plans(self) -> List[Dict]:
+        """Retrieves all group_plans from the database."""
         cursor = self.conn.cursor()
         try:
             self.conn.row_factory = sqlite3.Row # To get results as dicts
             cursor = self.conn.cursor()
-            cursor.execute("SELECT id, name, duration_days, default_amount, display_name, is_active FROM plans ORDER BY name ASC")
+            cursor.execute("SELECT id, name, duration_days, default_amount, display_name, is_active FROM group_plans ORDER BY name ASC")
             plans = [dict(row) for row in cursor.fetchall()]
             self.conn.row_factory = None # Reset row_factory
             return plans
         except sqlite3.Error as e:
-            logging.error(f"Database error in get_all_plans: {e}", exc_info=True)
+            logging.error(f"Database error in get_all_group_plans: {e}", exc_info=True)
             self.conn.row_factory = None # Ensure reset on error too
             return []
 
-    def delete_plan(self, plan_id: int) -> bool:
-        """Deletes a plan from the database by its ID.
+    def delete_group_plan(self, plan_id: int) -> bool:
+        """Deletes a group_plan from the database by its ID.
         Returns True if deletion was successful, False otherwise.
         """
         cursor = self.conn.cursor()
         try:
             # Future consideration: Check for related memberships.
             # For now, direct delete.
-            cursor.execute("DELETE FROM plans WHERE id = ?", (plan_id,))
+            cursor.execute("DELETE FROM group_plans WHERE id = ?", (plan_id,))
             self.conn.commit()
             if cursor.rowcount == 0:
-                logging.warning(f"No plan found with ID {plan_id} to delete.")
+                logging.warning(f"No group_plan found with ID {plan_id} to delete.")
                 return False
-            logging.info(f"Plan ID {plan_id} deleted successfully.")
+            logging.info(f"Group Plan ID {plan_id} deleted successfully.")
             return True
         except sqlite3.Error as e:
             self.conn.rollback()
-            logging.error(f"Database error in delete_plan for ID {plan_id}: {e}", exc_info=True)
+            logging.error(f"Database error in delete_group_plan for ID {plan_id}: {e}", exc_info=True)
             return False
 
-    def create_membership(
+    def get_group_plan_by_display_name(self, display_name: str) -> Optional[Dict]:
+        """Retrieves a specific group_plan by its display_name."""
+        self.conn.row_factory = sqlite3.Row
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("SELECT * FROM group_plans WHERE display_name = ?", (display_name,))
+            plan_row = cursor.fetchone()
+            self.conn.row_factory = None # Reset
+            if plan_row:
+                return dict(plan_row)
+            return None
+        except sqlite3.Error as e:
+            logging.error(f"Database error in get_group_plan_by_display_name for '{display_name}': {e}", exc_info=True)
+            self.conn.row_factory = None # Ensure reset on error too
+            return None
+
+    def create_group_class_membership(
         self,
         member_id: int,
         plan_id: int,
@@ -329,21 +345,21 @@ class DatabaseManager:
         payment_method: Optional[str] = None, # Not in current schema, but in prompt
         notes: Optional[str] = None, # Not in current schema, but in prompt
     ) -> Optional[int]:
-        """Creates a new membership record.
-        Calculates end_date based on plan's duration_days.
+        """Creates a new group_class_membership record.
+        Calculates end_date based on group_plan's duration_days.
         Sets transaction_date (purchase_date) to current timestamp.
         Sets is_active to True and membership_type to "New" by default.
         Raises ValueError if plan_id is not found or start_date_str is invalid.
-        Returns the id of the newly created membership, or None if an error occurs.
+        Returns the id of the newly created group_class_membership, or None if an error occurs.
         """
         cursor = self.conn.cursor()
         try:
-            # Retrieve plan duration
-            cursor.execute("SELECT duration_days FROM plans WHERE id = ?", (plan_id,))
+            # Retrieve group_plan duration
+            cursor.execute("SELECT duration_days FROM group_plans WHERE id = ?", (plan_id,))
             plan_row = cursor.fetchone()
             if not plan_row:
-                logging.error(f"Plan with ID {plan_id} not found.")
-                raise ValueError(f"Plan with ID {plan_id} not found.")
+                logging.error(f"Group Plan with ID {plan_id} not found.")
+                raise ValueError(f"Group Plan with ID {plan_id} not found.")
             duration_days = plan_row[0]
 
             # Calculate end_date
@@ -363,12 +379,12 @@ class DatabaseManager:
             is_active = 1  # True
             membership_type = "New" # Default for new memberships
 
-            # Note: payment_method and notes are not part of the current 'memberships' table schema.
+            # Note: payment_method and notes are not part of the current 'group_class_memberships' table schema.
             # They are included in the function signature as per the prompt, but will not be inserted.
-            # If they need to be stored, the 'memberships' table schema must be altered.
+            # If they need to be stored, the 'group_class_memberships' table schema must be altered.
 
             sql_insert = """
-            INSERT INTO memberships (
+            INSERT INTO group_class_memberships (
                 member_id, plan_id, start_date, end_date, amount_paid,
                 purchase_date, membership_type, is_active
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -388,7 +404,7 @@ class DatabaseManager:
             )
             self.conn.commit()
             membership_id = cursor.lastrowid
-            logging.info(f"Membership record created for member ID {member_id}, plan ID {plan_id} with membership ID {membership_id}.")
+            logging.info(f"Group Class Membership record created for member ID {member_id}, plan ID {plan_id} with membership ID {membership_id}.")
             # Logging payment_method and notes if provided, even if not stored, for audit/debugging
             if payment_method:
                 logging.info(f"Membership ID {membership_id} - Payment Method (not stored): {payment_method}")
@@ -397,42 +413,42 @@ class DatabaseManager:
             return membership_id
         except sqlite3.IntegrityError as ie: # Specifically catch IntegrityError
             self.conn.rollback()
-            logging.error(f"DB integrity error creating membership for member {member_id}, plan {plan_id}: {ie}", exc_info=True)
+            logging.error(f"DB integrity error creating group_class_membership for member {member_id}, plan {plan_id}: {ie}", exc_info=True)
             raise # Re-raise the IntegrityError
         except sqlite3.Error as e:
             self.conn.rollback()
-            logging.error(f"DB error creating membership for member {member_id}, plan {plan_id}: {e}", exc_info=True)
+            logging.error(f"DB error creating group_class_membership for member {member_id}, plan {plan_id}: {e}", exc_info=True)
             return None
         except ValueError: # Re-raise ValueError for plan_id not found or date format issues
             raise
 
 
-    # def get_or_create_plan_id(self, name: str, price: float, type_text: str) -> Optional[int]:
+    # def get_or_create_group_plan_id(self, name: str, price: float, type_text: str) -> Optional[int]:
     #     cursor = self.conn.cursor()
     #     try:
-    #         cursor.execute("SELECT id, price FROM plans WHERE name = ? AND type = ?", (name, type_text))
+    #         cursor.execute("SELECT id, price FROM group_plans WHERE name = ? AND type = ?", (name, type_text))
     #         row = cursor.fetchone()
     #         if row:
     #             plan_id = row[0]
     #             existing_price = row[1]
     #             if existing_price != price:
-    #                 logging.warning(f"Plan '{name}' (type: {type_text}) exists with price {existing_price} but new data suggests price {price}. Using existing plan ID {plan_id} with original price.")
+    #                 logging.warning(f"Group Plan '{name}' (type: {type_text}) exists with price {existing_price} but new data suggests price {price}. Using existing group_plan ID {plan_id} with original price.")
     #             return plan_id
     #         else:
     #             cursor.execute(
-    #                 "INSERT INTO plans (name, price, type, is_active) VALUES (?, ?, ?, ?)",
+    #                 "INSERT INTO group_plans (name, price, type, is_active) VALUES (?, ?, ?, ?)",
     #                 (name, price, type_text, 1)
     #             )
     #             self.conn.commit()
     #             new_plan_id = cursor.lastrowid
-    #             logging.info(f"Created new plan '{name}' (type: {type_text}, price: {price}) with ID {new_plan_id}.")
+    #             logging.info(f"Created new group_plan '{name}' (type: {type_text}, price: {price}) with ID {new_plan_id}.")
     #             return new_plan_id
     #     except sqlite3.Error as e:
     #         self.conn.rollback()
-    #         logging.error(f"Database error in get_or_create_plan_id for plan '{name}': {e}", exc_info=True)
+    #         logging.error(f"Database error in get_or_create_group_plan_id for group_plan '{name}': {e}", exc_info=True)
     #         return None
 
-    # def create_membership_record(self, data: Dict) -> Tuple[bool, str]:
+    # def create_group_class_membership_record(self, data: Dict) -> Tuple[bool, str]:
     #     member_id = data.get("member_id")
     #     plan_id = data.get("plan_id")
         plan_duration_days = data.get("plan_duration_days")
@@ -441,13 +457,13 @@ class DatabaseManager:
 
         if not all([member_id, plan_id, plan_duration_days, amount_paid, start_date]):
             missing_keys = [key for key, value in data.items() if not value and key in ["member_id", "plan_id", "plan_duration_days", "amount_paid", "start_date"]]
-            logging.error(f"Missing required data for creating membership record. Missing: {missing_keys}")
+            logging.error(f"Missing required data for creating group_class_membership record. Missing: {missing_keys}")
             return False, f"Missing required data: {', '.join(missing_keys)}"
 
         cursor = self.conn.cursor()
         try:
             cursor.execute(
-                "SELECT COUNT(*) FROM memberships WHERE member_id = ?", (member_id,)
+                "SELECT COUNT(*) FROM group_class_memberships WHERE member_id = ?", (member_id,)
             )
             count = cursor.fetchone()[0]
             membership_type = "Renewal" if count > 0 else "New"
@@ -459,7 +475,7 @@ class DatabaseManager:
             is_active = True
 
             sql_insert = """
-            INSERT INTO memberships (
+            INSERT INTO group_class_memberships (
                 member_id, plan_id, start_date, end_date, amount_paid,
                 purchase_date, membership_type, is_active
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -478,45 +494,45 @@ class DatabaseManager:
                 ),
             )
             self.conn.commit()
-            logging.info(f"Membership record created for member_id {member_id}, plan_id {plan_id}.")
-            return True, "Membership record created successfully."
+            logging.info(f"Group Class Membership record created for member_id {member_id}, plan_id {plan_id}.")
+            return True, "Group Class Membership record created successfully."
         except sqlite3.Error as e:
             self.conn.rollback()
-            logging.error(f"DB error creating membership for member {member_id}: {e}", exc_info=True)
+            logging.error(f"DB error creating group_class_membership for member {member_id}: {e}", exc_info=True)
             return False, f"Database error: {e}"
         except ValueError as ve:
             logging.error(f"Date format error for start_date '{start_date}': {ve}", exc_info=True)
             return False, f"Date format error for start_date: {ve}"
 
-    # def get_all_memberships_for_view( # Commenting out this function as well
-    #     self,
-    #     name_filter: Optional[str] = None,
-    #     phone_filter: Optional[str] = None,
-    #     status_filter: Optional[str] = None,  # 'Active', 'Inactive', or None
-    # ) -> list:
-    #     try:
-    #         cursor = self.conn.cursor()
-            # These are the columns as per app_specs.md for the memberships table
+    def get_all_group_class_memberships_for_view( # Renamed function
+        self,
+        name_filter: Optional[str] = None,
+        phone_filter: Optional[str] = None,
+        status_filter: Optional[str] = None,  # 'Active', 'Inactive', or None
+    ) -> list:
+        try:
+            cursor = self.conn.cursor()
+            # These are the columns as per app_specs.md for the group_class_memberships table
             # plus the joined columns needed for the view.
             # Adjust column names if they differ in your actual schema (e.g. members.name vs members.client_name)
-            # Based on app_specs: members.name, plans.name
+            # Based on app_specs: members.name, group_plans.name
             # Based on old code exploration, it was members.client_name. Sticking to app_specs.md.
             sql_select = """
             SELECT
-                ms.id AS membership_id,
+                gcm.id AS membership_id,
                 m.name AS member_name,
                 m.phone AS member_phone,
-                p.name AS plan_name,
-                ms.start_date,
-                ms.end_date,
-                ms.amount_paid,
-                ms.purchase_date,
-                ms.membership_type,
-                ms.is_active
-            FROM memberships ms
-            JOIN members m ON ms.member_id = m.id
-            JOIN plans p ON ms.plan_id = p.id
-            """  # Renamed sql to sql_select
+                gp.name AS plan_name,
+                gcm.start_date,
+                gcm.end_date,
+                gcm.amount_paid,
+                gcm.purchase_date,
+                gcm.membership_type,
+                gcm.is_active
+            FROM group_class_memberships gcm
+            JOIN members m ON gcm.member_id = m.id
+            JOIN group_plans gp ON gcm.plan_id = gp.id
+            """  # Renamed sql to sql_select, updated table names
             conditions = []
             params = []
 
@@ -528,16 +544,16 @@ class DatabaseManager:
                 params.append(f"%{phone_filter}%")
             if status_filter:
                 if status_filter.lower() == "active":
-                    conditions.append("ms.is_active = ?")
+                    conditions.append("gcm.is_active = ?")
                     params.append(1)  # Assuming 1 for True
                 elif status_filter.lower() == "inactive":
-                    conditions.append("ms.is_active = ?")
+                    conditions.append("gcm.is_active = ?")
                     params.append(0)  # Assuming 0 for False
 
             if conditions:
                 sql_select += " WHERE " + " AND ".join(conditions)
 
-            sql_select += " ORDER BY ms.purchase_date DESC, m.name ASC"  # Sensible default ordering
+            sql_select += " ORDER BY gcm.purchase_date DESC, m.name ASC"  # Sensible default ordering
 
             cursor.execute(sql_select, params)
             # Fetch as a list of dictionaries for easier UI consumption if desired,
@@ -552,17 +568,17 @@ class DatabaseManager:
 
         except sqlite3.Error as e:
             logging.error(
-                f"Database error while fetching memberships for view: {e}",
+                f"Database error while fetching group_class_memberships for view: {e}",
                 exc_info=True,
             )
             return []
 
-    def update_membership_record(
+    def update_group_class_membership_record( # Renamed function
         self,
         membership_id: int,
         member_id: int,  # Assuming member_id might be updatable for a membership, or plan_id
         plan_id: int,
-        plan_duration_days: int,
+        plan_duration_days: int, # This is from group_plans
         amount_paid: float,
         start_date: str,  # Date as string e.g., "YYYY-MM-DD"
         is_active: bool,
@@ -570,12 +586,14 @@ class DatabaseManager:
         try:
             # Calculate end_date
             start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
-            end_date_obj = start_date_obj + timedelta(days=plan_duration_days)
+            # Duration comes from the group_plan, ensure it's fetched or passed correctly if not fixed per plan_id
+            # Assuming plan_duration_days is correctly passed based on the chosen plan_id's current duration
+            end_date_obj = start_date_obj + timedelta(days=plan_duration_days) # Removed -1, standard end date calc
             end_date_str = end_date_obj.strftime("%Y-%m-%d")
 
             cursor = self.conn.cursor()
             sql_update = """
-            UPDATE memberships
+            UPDATE group_class_memberships
             SET
                 member_id = ?,
                 plan_id = ?,
@@ -602,17 +620,17 @@ class DatabaseManager:
 
             if cursor.rowcount == 0:
                 logging.warning(
-                    f"No membership record found with id {membership_id} to update."
+                    f"No group_class_membership record found with id {membership_id} to update."
                 )
-                return False, "No membership record found with the given ID to update."
+                return False, "No group_class_membership record found with the given ID to update."
 
-            logging.info(f"Membership record {membership_id} updated successfully.")
-            return True, "Membership record updated successfully."
+            logging.info(f"Group Class Membership record {membership_id} updated successfully.")
+            return True, "Group Class Membership record updated successfully."
 
         except sqlite3.Error as e:
             self.conn.rollback()
             logging.error(
-                f"Database error while updating membership {membership_id}: {e}",
+                f"Database error while updating group_class_membership {membership_id}: {e}",
                 exc_info=True,
             )
             return False, f"Database error: {e}"
@@ -624,31 +642,100 @@ class DatabaseManager:
             )
             return False, f"Date format error for start_date: {ve}"
 
-    def delete_membership_record(self, membership_id: int) -> Tuple[bool, str]:
+    def delete_group_class_membership_record(self, membership_id: int) -> Tuple[bool, str]: # Renamed function
         try:
             cursor = self.conn.cursor()
             sql_delete = (
-                "DELETE FROM memberships WHERE id = ?"  # Renamed for consistency
+                "DELETE FROM group_class_memberships WHERE id = ?"  # Renamed for consistency
             )
             cursor.execute(sql_delete, (membership_id,))
             self.conn.commit()
 
             if cursor.rowcount == 0:
                 logging.warning(
-                    f"No membership record found with id {membership_id} to delete."
+                    f"No group_class_membership record found with id {membership_id} to delete."
                 )
-                return False, "No membership record found with the given ID to delete."
+                return False, "No group_class_membership record found with the given ID to delete."
 
-            logging.info(f"Membership record {membership_id} deleted successfully.")
-            return True, "Membership record deleted successfully."
+            logging.info(f"Group Class Membership record {membership_id} deleted successfully.")
+            return True, "Group Class Membership record deleted successfully."
 
         except sqlite3.Error as e:
             self.conn.rollback()  # Good practice, though for a simple delete it might not be strictly necessary if autocommit is off
             logging.error(
-                f"Database error while deleting membership {membership_id}: {e}",
+                f"Database error while deleting group_class_membership {membership_id}: {e}",
                 exc_info=True,
             )
             return False, f"Database error: {e}"
+
+    # Personal Training (PT) Membership CRUD operations
+    def add_pt_membership(self, member_id: int, purchase_date: str, amount_paid: float, sessions_purchased: int, notes: Optional[str] = None) -> Optional[int]:
+        """Adds a new PT membership record.
+        Sessions_remaining is initialized with sessions_purchased.
+        Returns the id of the newly created PT membership, or None if an error occurs.
+        """
+        cursor = self.conn.cursor()
+        sessions_remaining = sessions_purchased # Initialize remaining with purchased
+        try:
+            sql_insert = """
+            INSERT INTO pt_memberships (member_id, purchase_date, amount_paid, sessions_purchased, sessions_remaining, notes)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """
+            cursor.execute(
+                sql_insert,
+                (member_id, purchase_date, amount_paid, sessions_purchased, sessions_remaining, notes),
+            )
+            self.conn.commit()
+            pt_membership_id = cursor.lastrowid
+            logging.info(f"PT Membership record created for member ID {member_id} with ID {pt_membership_id}.")
+            return pt_membership_id
+        except sqlite3.IntegrityError as ie:
+            self.conn.rollback()
+            logging.error(f"DB integrity error creating PT membership for member {member_id}: {ie}", exc_info=True)
+            # Could be due to member_id not existing if foreign key constraint is on.
+            raise # Re-raise the IntegrityError to signal issue (e.g. member_id invalid)
+        except sqlite3.Error as e:
+            self.conn.rollback()
+            logging.error(f"DB error creating PT membership for member {member_id}: {e}", exc_info=True)
+            return None
+
+    def get_all_pt_memberships(self) -> List[Dict]:
+        """Retrieves all PT memberships, joining with member's name."""
+        self.conn.row_factory = sqlite3.Row
+        cursor = self.conn.cursor()
+        try:
+            sql_select = """
+            SELECT pt.*, m.name as member_name
+            FROM pt_memberships pt
+            JOIN members m ON pt.member_id = m.id
+            ORDER BY pt.purchase_date DESC;
+            """
+            cursor.execute(sql_select)
+            pt_memberships = [dict(row) for row in cursor.fetchall()]
+            self.conn.row_factory = None # Reset
+            return pt_memberships
+        except sqlite3.Error as e:
+            logging.error(f"Database error in get_all_pt_memberships: {e}", exc_info=True)
+            self.conn.row_factory = None # Ensure reset
+            return []
+
+    def delete_pt_membership(self, membership_id: int) -> bool:
+        """Deletes a PT membership by its ID.
+        Returns True if deletion was successful, False otherwise.
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("DELETE FROM pt_memberships WHERE id = ?", (membership_id,))
+            self.conn.commit()
+            if cursor.rowcount == 0:
+                logging.warning(f"No PT membership found with ID {membership_id} to delete.")
+                return False
+            logging.info(f"PT Membership ID {membership_id} deleted successfully.")
+            return True
+        except sqlite3.Error as e:
+            self.conn.rollback()
+            logging.error(f"Database error deleting PT membership ID {membership_id}: {e}", exc_info=True)
+            return False
 
     def generate_financial_report_data(self, start_date: str, end_date: str) -> dict:
         summary = {"total_revenue": 0.0}
@@ -656,38 +743,45 @@ class DatabaseManager:
 
         try:
             cursor = self.conn.cursor()
-            # Query for detailed list of transactions
-            # Joining with members and plans to get names
-            sql_select_details = """
+            # Query for detailed list of transactions from group_class_memberships
+            sql_group_details = """
             SELECT
-                m.name AS member_name,
-                p.name AS plan_name,
-                ms.amount_paid,
-                ms.purchase_date,
-                ms.membership_type
-            FROM memberships ms
-            JOIN members m ON ms.member_id = m.id
-            JOIN plans p ON ms.plan_id = p.id
-            WHERE ms.purchase_date BETWEEN ? AND ?
-            ORDER BY ms.purchase_date ASC;
+                gcm.purchase_date,
+                gcm.amount_paid,
+                'Group Class' as type,
+                m.name as member_name,
+                gp.name as item_name -- Plan name for group class
+            FROM group_class_memberships gcm
+            JOIN members m ON gcm.member_id = m.id
+            JOIN group_plans gp ON gcm.plan_id = gp.id
+            WHERE gcm.purchase_date BETWEEN ? AND ?
             """
-            cursor.execute(sql_select_details, (start_date, end_date))
+            cursor.execute(sql_group_details, (start_date, end_date))
+            column_names_group = [description[0] for description in cursor.description]
+            details.extend([dict(zip(column_names_group, row)) for row in cursor.fetchall()])
 
-            # It's good practice to define the structure of the details.
-            # Using a list of dictionaries for the details.
-            column_names = [description[0] for description in cursor.description]
-            details = [dict(zip(column_names, row)) for row in cursor.fetchall()]
-
-            # Query for total revenue
-            sql_select_sum = """
-            SELECT SUM(ms.amount_paid)
-            FROM memberships ms
-            WHERE ms.purchase_date BETWEEN ? AND ?;
+            # Query for detailed list of transactions from pt_memberships
+            sql_pt_details = """
+            SELECT
+                ptm.purchase_date,
+                ptm.amount_paid,
+                'Personal Training' as type,
+                m.name as member_name,
+                CAST(ptm.sessions_purchased AS TEXT) || ' PT Sessions' as item_name -- e.g., "10 PT Sessions"
+            FROM pt_memberships ptm
+            JOIN members m ON ptm.member_id = m.id
+            WHERE ptm.purchase_date BETWEEN ? AND ?
             """
-            cursor.execute(sql_select_sum, (start_date, end_date))
-            total_revenue_result = cursor.fetchone()
-            if total_revenue_result and total_revenue_result[0] is not None:
-                summary["total_revenue"] = float(total_revenue_result[0])
+            cursor.execute(sql_pt_details, (start_date, end_date))
+            column_names_pt = [description[0] for description in cursor.description]
+            details.extend([dict(zip(column_names_pt, row)) for row in cursor.fetchall()])
+
+            # Sort all details by purchase_date
+            details.sort(key=lambda x: x['purchase_date'])
+
+            # Calculate total revenue from both sources
+            total_revenue = sum(item['amount_paid'] for item in details)
+            summary["total_revenue"] = total_revenue
 
             return {"summary": summary, "details": details}
 
@@ -713,23 +807,24 @@ class DatabaseManager:
             thirty_days_later_str = thirty_days_later_obj.strftime("%Y-%m-%d")
 
             # Query for renewal data
-            # Joins with members and plans to get names.
-            # Filters for active memberships ending in the next 30 days.
+            # Joins with members and group_plans to get names.
+            # Filters for active group_class_memberships ending in the next 30 days.
+            # PT memberships are not included here as they are session-based.
             sql_select_renewals = """
             SELECT
                 m.name AS member_name,
                 m.phone AS member_phone,
-                p.name AS plan_name,
-                ms.start_date,
-                ms.end_date,
-                ms.amount_paid,
-                ms.membership_type
-            FROM memberships ms
-            JOIN members m ON ms.member_id = m.id
-            JOIN plans p ON ms.plan_id = p.id
-            WHERE ms.is_active = 1  -- Assuming 1 for True
-            AND ms.end_date BETWEEN ? AND ?
-            ORDER BY ms.end_date ASC, m.name ASC;
+                gp.name AS plan_name,
+                gcm.start_date,
+                gcm.end_date,
+                gcm.amount_paid,
+                gcm.membership_type
+            FROM group_class_memberships gcm
+            JOIN members m ON gcm.member_id = m.id
+            JOIN group_plans gp ON gcm.plan_id = gp.id
+            WHERE gcm.is_active = 1  -- Assuming 1 for True
+            AND gcm.end_date BETWEEN ? AND ?
+            ORDER BY gcm.end_date ASC, m.name ASC;
             """
             # Parameters for the query: current_date and 30_days_from_current_date
             # The range should be from today to 30 days from today.

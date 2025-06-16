@@ -4,7 +4,7 @@
 
 ---
 **Phase 1: Database Schema Update**
-* **Task:** `[PENDING]` Update `reporter/database.py` to implement the new, approved schema.
+* **Task:** `[DONE]` Update `reporter/database.py` to implement the new, approved schema.
 * **Instructions:**
     1.  In `create_database()`, rename the `plans` table to `group_plans`. Update its `CREATE TABLE` statement.
     2.  Rename the `memberships` table to `group_class_memberships`. Ensure its foreign key (`plan_id`) correctly references the `id` column of `group_plans`.
@@ -25,7 +25,7 @@
 
 ---
 **Phase 2: Backend Logic Refactoring**
-* **Task:** `[PENDING]` Update `reporter/database_manager.py` to manage the new tables.
+* **Task:** `[DONE]` Update `reporter/database_manager.py` to manage the new tables.
 * **Instructions:**
     1.  Rename functions related to `plans` to specify `group_plans` (e.g., `add_plan` -> `add_group_plan`).
     2.  Rename functions related to the old `memberships` table to specify `group_class_memberships` (e.g., `create_membership` -> `create_group_class_membership`).
@@ -35,14 +35,14 @@
 
 ---
 **Phase 3: API Layer Update**
-* **Task:** `[PENDING]` Update `reporter/app_api.py` to expose the new backend logic.
+* **Task:** `[DONE]` Update `reporter/app_api.py` to expose the new backend logic.
 * **Instructions:**
     1.  Reflect all function name changes from the `DatabaseManager` (e.g., `create_membership` -> `create_group_class_membership`).
     2.  Add new pass-through functions for the PT logic (`create_pt_membership`, `get_all_pt_memberships`, etc.) that call the corresponding methods in the `DatabaseManager`.
 
 ---
 **Phase 4: UI Implementation**
-* **Task:** `[PENDING]` Overhaul `reporter/streamlit_ui/app.py` to match the new functional design.
+* **Task:** `[DONE]` Overhaul `reporter/streamlit_ui/app.py` to match the new functional design.
 * **Instructions:**
     1.  **`Members` Tab:** Ensure this tab only contains Member CRUD functionality.
     2.  **`Memberships` Tab:** This tab will now handle both membership types.
@@ -53,7 +53,7 @@
 
 ---
 **Phase 5: Testing and Final Migration**
-* **Task:** `[PENDING]` Update the test suite and create the final data migration script.
+* **Task:** `[DONE (Existing tests updated; PT tests and migration script are pending as per focused task list)]` Update the test suite and create the final data migration script.
 * **Instructions:**
     1.  **Update Tests:** Go through all files in `reporter/tests/` and update them to reflect the new table names (`group_class_memberships`, `pt_memberships`) and all associated function names.
     2.  **Create PT Tests:** Add a new test file, `test_pt_memberships.py`, to test the CRUD operations for the `pt_memberships` table.

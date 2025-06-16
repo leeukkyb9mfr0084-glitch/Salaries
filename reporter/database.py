@@ -28,36 +28,51 @@ def create_database(db_name: str):
         """
         )
 
-        # Create memberships table
+        # Create pt_memberships table
         cursor.execute(
             """
-        CREATE TABLE IF NOT EXISTS memberships (
+        CREATE TABLE IF NOT EXISTS pt_memberships (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            member_id INTEGER,
+            purchase_date TEXT,
+            amount_paid REAL,
+            sessions_purchased INTEGER,
+            sessions_remaining INTEGER,
+            notes TEXT,
+            FOREIGN KEY (member_id) REFERENCES members(id)
+        );
+        """
+        )
+
+        # Create group_class_memberships table
+        cursor.execute(
+            """
+        CREATE TABLE IF NOT EXISTS group_class_memberships (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             member_id INTEGER,
             plan_id INTEGER,
             start_date TEXT,
             end_date TEXT,
-            is_active BOOLEAN,
             amount_paid REAL,
             purchase_date TEXT,
-            membership_type TEXT,
+            membership_type TEXT, -- 'New' or 'Renewal'
+            is_active BOOLEAN,
             FOREIGN KEY (member_id) REFERENCES members(id),
-            FOREIGN KEY (plan_id) REFERENCES plans(id)
+            FOREIGN KEY (plan_id) REFERENCES group_plans(id)
         );
         """
         )
 
-        # Create plans table
+        # Create group_plans table
         cursor.execute(
             """
-        CREATE TABLE IF NOT EXISTS plans (
+        CREATE TABLE IF NOT EXISTS group_plans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            duration_days INTEGER,
-            default_amount REAL,
+            duration_days INTEGER NOT NULL,
+            default_amount REAL NOT NULL,
             display_name TEXT UNIQUE,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            UNIQUE(name)
+            is_active BOOLEAN NOT NULL DEFAULT 1
         );
         """
         )
@@ -75,7 +90,7 @@ def create_database(db_name: str):
 
 def seed_initial_plans(conn: sqlite3.Connection):
     """
-    Inserts initial plans into the plans table.
+    Inserts initial plans into the group_plans table.
     Args:
         conn (sqlite3.Connection): The database connection object.
     """
@@ -93,7 +108,7 @@ def seed_initial_plans(conn: sqlite3.Connection):
             display_name,
         ) in plans_to_seed:
             cursor.execute(
-                "INSERT OR IGNORE INTO plans (name, duration_days, default_amount, display_name) VALUES (?, ?, ?, ?)",
+                "INSERT OR IGNORE INTO group_plans (name, duration_days, default_amount, display_name) VALUES (?, ?, ?, ?)",
                 (name, duration_days, default_amount, display_name),
             )
         conn.commit()
