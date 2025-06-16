@@ -327,20 +327,27 @@ def render_memberships_tab():
                 # Prepare for display (e.g., client_name, plan_name, start_date, end_date, status string)
                 display_df = pd.DataFrame(st.session_state.memberships_view_data)
                 # Ensure correct columns for display if needed, API returns dicts with correct keys
+                # Make sure 'membership_id' is available for selection handling but can be hidden
+                cols_to_display = [
+                    "client_name",
+                    "phone",
+                    "plan_name",
+                    "start_date",
+                    "end_date",
+                    "status"
+                    # "membership_id" # Keep for selection, but can be hidden using column_config
+                ]
+                # Make a copy for display to avoid modifying session state directly if we drop columns for view
+                display_df_view = display_df[cols_to_display + ["membership_id"]].copy()
+
                 st.dataframe(
-                    display_df[
-                        [
-                            "client_name",
-                            "phone",
-                            "plan_name",
-                            "start_date",
-                            "end_date",
-                            "status",
-                            "membership_id",
-                        ]
-                    ],
+                    display_df_view,
                     hide_index=True,
                     use_container_width=True,
+                    key="manage_memberships_df",
+                    on_select="rerun", # Use rerun to process selection
+                    selection_mode="single-row",
+                    column_config={"membership_id": None} # Hide membership_id column from view
                 )
             else:
                 st.info("No memberships found matching your criteria.")
@@ -354,71 +361,48 @@ def render_memberships_tab():
                 pd.DataFrame(), use_container_width=True
             )  # Display empty dataframe
 
-        # Select Membership to Manage
-        # Create options for the selectbox from the fetched data
-        manage_options = [(None, "Select Membership...")] + [
-            (
-                item["membership_id"],
-                f"{item['client_name']} - {item['plan_name']} ({item['start_date']} to {item['end_date']})",
-            )
-            for item in st.session_state.memberships_view_data
-        ]
 
-        if (
-            not st.session_state.memberships_view_data
-            and st.session_state.manage_selected_membership_id
-        ):
-            st.session_state.manage_selected_membership_id = (
-                None  # Clear selection if list is empty
-            )
+        # Handle DataFrame Row Selection
+        if "manage_memberships_df" in st.session_state and st.session_state.manage_memberships_df.selection.rows:
+            selected_row_index = st.session_state.manage_memberships_df.selection.rows[0]
+            # Check if selected_row_index is within the bounds of the current data
+            if selected_row_index < len(st.session_state.memberships_view_data):
+                selected_membership_details = st.session_state.memberships_view_data[selected_row_index]
+                newly_selected_id = selected_membership_details["membership_id"]
 
-        def on_select_membership_for_management():
-            selected_id = st.session_state.get(
-                "_manage_selected_membership_id_display"
-            )  # temp key from widget
-            if selected_id is None:
+                # If selection changed, update form fields
+                if st.session_state.manage_selected_membership_id != newly_selected_id:
+                    st.session_state.manage_selected_membership_id = newly_selected_id
+                    st.session_state.edit_start_date = datetime.strptime(
+                        selected_membership_details["start_date"], "%Y-%m-%d"
+                    ).date()
+                    st.session_state.edit_end_date = datetime.strptime(
+                        selected_membership_details["end_date"], "%Y-%m-%d"
+                    ).date()
+                    st.session_state.edit_is_active = (
+                        True if selected_membership_details["status"].lower() == "active" else False
+                    )
+                    st.session_state.edit_form_key = f"edit_form_{datetime.now().timestamp()}"
+                    # Clear any pending delete confirmation from a previous selection
+                    if "confirm_delete_membership_id" in st.session_state:
+                        del st.session_state.confirm_delete_membership_id
+                    st.rerun() # Rerun to update the form with new selection
+            else:
+                # Index out of bounds, likely due to data refresh and stale selection
                 st.session_state.manage_selected_membership_id = None
-                return
+                 # Clear any pending delete confirmation
+                if "confirm_delete_membership_id" in st.session_state:
+                    del st.session_state.confirm_delete_membership_id
+                # st.rerun() # Optionally rerun if selection should be cleared visually
 
-            st.session_state.manage_selected_membership_id = selected_id
-            # Populate edit form fields
-            selected_details = next(
-                (
-                    m
-                    for m in st.session_state.memberships_view_data
-                    if m["membership_id"] == selected_id
-                ),
-                None,
-            )
-            if selected_details:
-                st.session_state.edit_start_date = datetime.strptime(
-                    selected_details["start_date"], "%Y-%m-%d"
-                ).date()
-                st.session_state.edit_end_date = datetime.strptime(
-                    selected_details["end_date"], "%Y-%m-%d"
-                ).date()
-                st.session_state.edit_is_active = (
-                    True if selected_details["status"].lower() == "active" else False
-                )
-                st.session_state.edit_form_key = f"edit_form_{datetime.now().timestamp()}"  # Change key to force re-render of form defaults
-
-        st.selectbox(
-            "Select Membership to Manage",
-            options=manage_options,
-            format_func=lambda x: x[1],
-            key="_manage_selected_membership_id_display",  # Temporary key to capture selection
-            on_change=on_select_membership_for_management,
-            index=manage_options.index(
-                next(
-                    (
-                        opt
-                        for opt in manage_options
-                        if opt[0] == st.session_state.manage_selected_membership_id
-                    ),
-                    (None, "Select Membership..."),
-                )
-            ),
-        )
+        elif "manage_memberships_df" in st.session_state and not st.session_state.manage_memberships_df.selection.rows:
+            # No row is selected
+            if st.session_state.manage_selected_membership_id is not None:
+                st.session_state.manage_selected_membership_id = None
+                 # Clear any pending delete confirmation
+                if "confirm_delete_membership_id" in st.session_state:
+                    del st.session_state.confirm_delete_membership_id
+                st.rerun() # Rerun to clear the edit form
 
         # Edit/Delete Form (conditional)
         if st.session_state.manage_selected_membership_id is not None:
@@ -697,56 +681,21 @@ def render_reporting_tab():
     # --- Upcoming Renewals Section ---
     st.subheader("Upcoming Membership Renewals")
 
-    report_month_renewals_val = st.date_input(
-        "Select Month for Renewals Report",
-        value=st.session_state.report_month_renewals,
-        key="renewals_report_month_selector",  # Unique key
-    )
-    if report_month_renewals_val != st.session_state.report_month_renewals:
-        st.session_state.report_month_renewals = report_month_renewals_val
-        # Clear old report data
-        st.session_state.renewals_report_data = None
+    # Removed date selector widgets for Renewals Report as per Task 3.2
+    # The report will now show upcoming renewals based on backend default (e.g., next 30 days)
 
-    if st.button("Generate Renewals Report", key="generate_renewals_report"):
-        # Similar to financial report, AppAPI.generate_renewal_report_data has no date args in P1.
-        # This is a mismatch with UI expectation of filtering by month.
-        # Assuming AppAPI.generate_renewal_report_data *should* take date arguments.
-        # For now, I'll call it without, and if it returns all renewals, UI needs to filter.
-        # Let's assume it's updated to take start_date and end_date for the month.
-        start_date_renewals = st.session_state.report_month_renewals
-        if start_date_renewals.month == 12:
-            end_date_renewals = date(start_date_renewals.year + 1, 1, 1)
-        else:
-            end_date_renewals = date(
-                start_date_renewals.year, start_date_renewals.month + 1, 1
-            )
-
-        import calendar
-
-        last_day_renewals = calendar.monthrange(
-            start_date_renewals.year, start_date_renewals.month
-        )[1]
-        end_date_renewals_correct = date(
-            start_date_renewals.year, start_date_renewals.month, last_day_renewals
-        )
-
-        start_date_str_renewals = start_date_renewals.strftime("%Y-%m-%d")
-        end_date_str_renewals_correct = end_date_renewals_correct.strftime("%Y-%m-%d")
-
+    if st.button("Generate Upcoming Renewals Report", key="generate_renewals_report"):
         try:
-            # Assuming AppAPI was updated to take start_date and end_date
-            renewal_data_list = api.generate_renewal_report_data(
-                start_date=start_date_str_renewals,
-                end_date=end_date_str_renewals_correct,
-            )
+            # Call API without date arguments to get default upcoming renewals (e.g., next 30 days)
+            renewal_data_list = api.generate_renewal_report_data()
             st.session_state.renewals_report_data = renewal_data_list
             if not renewal_data_list:
                 st.info(
-                    f"No upcoming renewals found for {st.session_state.report_month_renewals.strftime('%B %Y')}."
+                    "No upcoming renewals found (e.g., in the next 30 days)."
                 )
             else:
                 st.success(
-                    f"Renewals report generated for {st.session_state.report_month_renewals.strftime('%B %Y')}."
+                    "Upcoming renewals report generated successfully."
                 )
         except Exception as e:
             st.error(f"Error generating renewals report: {e}")
@@ -760,9 +709,9 @@ def render_reporting_tab():
             hide_index=True,
             use_container_width=True,
         )
-    elif st.session_state.renewals_report_data == []:
+    elif st.session_state.renewals_report_data == []: # Explicitly check for empty list if that's a possible state
         st.info(
-            f"No upcoming renewals found for {st.session_state.report_month_renewals.strftime('%B %Y')}."
+            "No upcoming renewals found (e.g., in the next 30 days)."
         )
 
 

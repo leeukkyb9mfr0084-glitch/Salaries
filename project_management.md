@@ -43,11 +43,11 @@
 
 *Goal: Ensure the API, business logic, and UI are correctly wired together and handle data as expected.*
 
-- [ ] **2.1: Fix API Function Signature Mismatch**
+- [x] **2.1: Fix API Function Signature Mismatch**
   - **Why:** The UI (`streamlit_ui/app.py`) calls the API with a single dictionary object, but the business logic layer (`database_manager.py`) expects multiple, separate arguments. This will cause a `TypeError` and crash the application. The API layer must correctly translate requests from the client.
   - **Action:** In `reporter/database_manager.py`, modify the `create_membership_record` function signature. Change it from `def create_membership_record(self, member_id, plan_id, ...)` to `def create_membership_record(self, data)`. Then, inside the function, unpack the dictionary to get your variables (e.g., `member_id = data['member_id']`, `plan_id = data['plan_id']`, etc.).
 
-- [ ] **2.2: Add Missing Dependency**
+- [x] **2.2: Add Missing Dependency**
   - **Why:** The `reporter/main.py` file imports the `flet` library, but this is not declared in `requirements.txt`. The application will fail to start in any new environment where dependencies are installed from this file.
   - **Action:** Open the `requirements.txt` file and add `flet` on a new line.
 
@@ -57,11 +57,11 @@
 
 *Goal: Correct the UI workflows to match the `app_specs.md` precisely.*
 
-- [ ] **3.1: Fix Membership Selection**
+- [x] **3.1: Fix Membership Selection**
   - **Why:** The `app_specs.md` requires a more intuitive workflow where users click directly on a table row to select it for editing or deletion. The current dropdown is less user-friendly and violates the spec.
   - **Action:** In `reporter/streamlit_ui/app.py`, remove the `st.selectbox` currently used for selecting a membership to edit/delete. The goal is to make the rows of the main membership dataframe selectable. You will need to find a method to capture a click event on the dataframe to get the ID of the selected row and store it in the session state for the `EDIT` and `DELETE` buttons to use.
 
-- [ ] **3.2: Correct Renewals Report Logic**
+- [x] **3.2: Correct Renewals Report Logic**
   - **Why:** The spec requires a dynamic, rolling 30-day view of upcoming renewals, which is more useful for proactive management. The current monthly view is static and doesn't meet this requirement. The backend logic is already correct; the UI just needs to use it properly.
   - **Action:** In `reporter/streamlit_ui/app.py`, go to the "Reporting" tab's "Renewals Report" section. Remove the date and month selector widgets. Modify the logic so that the `api.generate_renewal_report_data()` function is called *without* any date arguments. This will allow the backend to correctly use its default logic of finding renewals in the next 30 days.
 

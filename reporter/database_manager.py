@@ -43,14 +43,18 @@ class DatabaseManager:
             logging.error(f"Database error in get_or_create_plan_id for plan '{name}': {e}", exc_info=True)
             return None
 
-    def create_membership_record(
-        self,
-        member_id: int,
-        plan_id: int,
-        plan_duration_days: int,
-        amount_paid: float,
-        start_date: str,
-    ) -> Tuple[bool, str]:
+    def create_membership_record(self, data: Dict) -> Tuple[bool, str]:
+        member_id = data.get("member_id")
+        plan_id = data.get("plan_id")
+        plan_duration_days = data.get("plan_duration_days")
+        amount_paid = data.get("amount_paid")
+        start_date = data.get("start_date")
+
+        if not all([member_id, plan_id, plan_duration_days, amount_paid, start_date]):
+            missing_keys = [key for key, value in data.items() if not value and key in ["member_id", "plan_id", "plan_duration_days", "amount_paid", "start_date"]]
+            logging.error(f"Missing required data for creating membership record. Missing: {missing_keys}")
+            return False, f"Missing required data: {', '.join(missing_keys)}"
+
         cursor = self.conn.cursor()
         try:
             cursor.execute(
