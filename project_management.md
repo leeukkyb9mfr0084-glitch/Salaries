@@ -49,5 +49,5 @@
 **Phase 6: Final Cleanup**
 * **Task:** Remove all obsolete files from the repository.
     * **Instructions:**
-        1.  Delete any old `.csv` or `.xlsx` data files that were used for the previous version's data migration (e.g., `Kranos MMA Members.xlsx - GC.csv`).
-        2.  Review all scripts and utilities to ensure no code is left that references the old data structures.
+        1.  [DONE] Delete any old `.csv` or `.xlsx` data files that were used for the previous version's data migration (e.g., `Kranos MMA Members.xlsx - GC.csv`).
+        2.  [DONE] Review all scripts and utilities to ensure no code is left that references the old data structures. (Deleted `reporter/migrate_data.py` as it was obsolete and used the old data files)
