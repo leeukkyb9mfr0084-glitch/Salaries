@@ -9,7 +9,7 @@ from reporter.database import (
 )  # Import initialize_database and original DB_FILE
 
 # Expected table names
-EXPECTED_TABLES = ["members", "plans", "memberships"]
+EXPECTED_TABLES = ["members", "group_plans", "group_class_memberships", "pt_memberships"]
 EXPECTED_INITIAL_PLANS = [
     ("Monthly - Unrestricted", 30, 100.0, "Monthly Unrestricted"),
     ("3 Months - Unrestricted", 90, 270.0, "3 Months Unrestricted"),
@@ -71,7 +71,7 @@ def test_seed_initial_plans():
 
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT name, duration_days, default_amount, display_name FROM plans ORDER BY duration_days;"
+            "SELECT name, duration_days, default_amount, display_name FROM group_plans ORDER BY duration_days;"
         )
         seeded_plans = cursor.fetchall()
 
@@ -160,7 +160,7 @@ def test_initialize_database_runs_without_error(monkeypatch, tmp_path):
 
         # Verify initial plans
         cursor.execute(
-            "SELECT name, duration_days, default_amount, display_name FROM plans ORDER BY duration_days;"
+            "SELECT name, duration_days, default_amount, display_name FROM group_plans ORDER BY duration_days;"
         )
         seeded_plans_in_test_db = cursor.fetchall()
         assert len(seeded_plans_in_test_db) == len(
