@@ -80,22 +80,22 @@ def seed_initial_plans(conn: sqlite3.Connection):
         conn (sqlite3.Connection): The database connection object.
     """
     plans_to_seed = [
-        ("Monthly - Unrestricted", 30, 100, "Standard"),  # Example price and type
-        ("3 Months - Unrestricted", 90, 270, "Standard"),  # Example price and type
-        ("Annual - Unrestricted", 365, 1000, "Standard"),  # Example price and type
+        ("Monthly - Unrestricted", 30, 100.0, "Monthly Unrestricted"),
+        ("3 Months - Unrestricted", 90, 270.0, "3 Months Unrestricted"),
+        ("Annual - Unrestricted", 365, 1000.0, "Annual Unrestricted"),
     ]
     try:
         cursor = conn.cursor()
         for (
-            plan_name,
+            name,
             duration_days,
-            price,
-            type_text,
-        ) in plans_to_seed:  # Added price and type
+            default_amount,
+            display_name,
+        ) in plans_to_seed:
             cursor.execute(
-                "INSERT OR IGNORE INTO plans (name, default_duration, price, type) VALUES (?, ?, ?, ?)",
-                (plan_name, duration_days, price, type_text),
-            )  # Updated column names and added new ones
+                "INSERT OR IGNORE INTO plans (name, duration_days, default_amount, display_name) VALUES (?, ?, ?, ?)",
+                (name, duration_days, default_amount, display_name),
+            )
         conn.commit()
         print(f"Seeded {len(plans_to_seed)} initial plans.")
     except sqlite3.Error as e:

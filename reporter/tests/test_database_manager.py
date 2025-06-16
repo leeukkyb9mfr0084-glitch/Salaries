@@ -24,6 +24,7 @@ def db_manager():
     create_database(TEST_DB_PATH) # This creates tables
 
     conn = sqlite3.connect(TEST_DB_PATH)
+    conn.execute("PRAGMA foreign_keys = ON;") # Enforce foreign keys
     manager = DatabaseManager(conn)
 
     yield manager
@@ -51,69 +52,66 @@ def test_create_membership_record_success(db_manager: DatabaseManager):
     cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES (?, ?, ?, ?, ?)",
                    ("Test Member", "1234567890", "test@example.com", today_str(), 1))
     member_id = cursor.lastrowid
-    cursor.execute("INSERT INTO plans (name, price, type, is_active) VALUES (?, ?, ?, ?)",
-                   ("Test Plan", 100, "Standard", 1))
+    # Use new plan schema: name, duration_days, default_amount, display_name
+    cursor.execute("INSERT INTO plans (name, duration_days, default_amount, display_name, is_active) VALUES (?, ?, ?, ?, ?)",
+                   ("Test Plan", 30, 100.0, "Test Plan - 30 days", 1))
     plan_id = cursor.lastrowid
     db_manager.conn.commit()
 
-    # 2. Prepare valid data
-    membership_data = {
-        "member_id": member_id,
-        "plan_id": plan_id,
-        "plan_duration_days": 30,
-        "amount_paid": 100.0,
-        "start_date": today_str()
-    }
+    # 2. Call create_membership directly
+    start_date_val = today_str()
+    amount_paid_val = 100.0
+    membership_id = db_manager.create_membership(
+        member_id=member_id,
+        plan_id=plan_id,
+        start_date_str=start_date_val,
+        amount_paid=amount_paid_val
+    )
 
-    # 3. Call create_membership_record
-    success, message = db_manager.create_membership_record(membership_data)
+    # 3. Verify success (membership_id is not None)
+    assert membership_id is not None
+    assert isinstance(membership_id, int)
 
-    # 4. Verify success message
-    assert success is True
-    assert message == "Membership record created successfully."
-
-    # 5. Verify the record in the database
-    cursor.execute("SELECT member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active FROM memberships WHERE member_id = ?", (member_id,))
+    # 4. Verify the record in the database
+    cursor.execute("SELECT member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active FROM memberships WHERE id = ?", (membership_id,))
     record = cursor.fetchone()
     assert record is not None
     assert record[0] == member_id
     assert record[1] == plan_id
-    assert record[2] == today_str()
-    expected_end_date = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
+    assert record[2] == start_date_val
+    # End date calculation is (start_date + duration_days - 1 day)
+    expected_end_date = (datetime.strptime(start_date_val, "%Y-%m-%d").date() + timedelta(days=30-1)).strftime("%Y-%m-%d")
     assert record[3] == expected_end_date
-    assert record[4] == 100.0
-    assert record[5] == today_str() # purchase_date
+    assert record[4] == amount_paid_val
+    # purchase_date is approximately now
+    assert date.fromisoformat(record[5].split(" ")[0]) == date.today() # Check date part of purchase_date
     assert record[6] == "New" # membership_type
     assert record[7] == 1 # is_active (True)
 
 def test_create_membership_record_missing_member(db_manager: DatabaseManager):
     # 1. Create a dummy plan
     cursor = db_manager.conn.cursor()
-    cursor.execute("INSERT INTO plans (name, price, type, is_active) VALUES (?, ?, ?, ?)",
-                   ("Test Plan", 100, "Standard", 1))
+    cursor.execute("INSERT INTO plans (name, duration_days, default_amount, display_name, is_active) VALUES (?, ?, ?, ?, ?)",
+                   ("Test Plan", 30, 100.0, "Test Plan - 30 days", 1))
     plan_id = cursor.lastrowid
     db_manager.conn.commit()
 
-    # 2. Prepare data with a non-existent member_id
     non_existent_member_id = 99999
-    membership_data = {
-        "member_id": non_existent_member_id,
-        "plan_id": plan_id,
-        "plan_duration_days": 30,
-        "amount_paid": 100.0,
-        "start_date": today_str()
-    }
+    # 2. Attempt to create membership with non-existent member_id
+    with pytest.raises(sqlite3.IntegrityError) as excinfo: # Expecting an IntegrityError due to FK constraint
+        db_manager.create_membership(
+            member_id=non_existent_member_id,
+            plan_id=plan_id,
+            start_date_str=today_str(),
+            amount_paid=100.0
+        )
+    assert "FOREIGN KEY constraint failed" in str(excinfo.value)
 
-    # 3. Call create_membership_record
-    success, message = db_manager.create_membership_record(membership_data)
-
-    # 4. Verify failure and error message
-    assert success is False
-    assert "FOREIGN KEY constraint failed" in message or "Database error" in message
-
-    # 5. Verify no record was created
-    cursor.execute("SELECT COUNT(*) FROM memberships WHERE member_id = ?", (non_existent_member_id,))
-    count = cursor.fetchone()[0]
+    # 3. Verify no record was created
+    # Obtain a new cursor after the rollback has occurred
+    new_cursor = db_manager.conn.cursor()
+    new_cursor.execute("SELECT COUNT(*) FROM memberships WHERE member_id = ?", (non_existent_member_id,))
+    count = new_cursor.fetchone()[0]
     assert count == 0
 
 def test_create_membership_record_missing_plan(db_manager: DatabaseManager):
@@ -124,64 +122,46 @@ def test_create_membership_record_missing_plan(db_manager: DatabaseManager):
     member_id = cursor.lastrowid
     db_manager.conn.commit()
 
-    # 2. Prepare data with a non-existent plan_id
     non_existent_plan_id = 99998
-    membership_data = {
-        "member_id": member_id,
-        "plan_id": non_existent_plan_id,
-        "plan_duration_days": 30,
-        "amount_paid": 100.0,
-        "start_date": today_str()
-    }
+    # 2. Attempt to create membership with non-existent plan_id
+    with pytest.raises(ValueError) as excinfo: # Expecting ValueError from create_membership
+        db_manager.create_membership(
+            member_id=member_id,
+            plan_id=non_existent_plan_id,
+            start_date_str=today_str(),
+            amount_paid=100.0
+        )
+    assert f"Plan with ID {non_existent_plan_id} not found." in str(excinfo.value)
 
-    # 3. Call create_membership_record
-    success, message = db_manager.create_membership_record(membership_data)
-
-    # 4. Verify failure and error message
-    assert success is False
-    assert "FOREIGN KEY constraint failed" in message or "Database error" in message
-
-    # 5. Verify no record was created
+    # 3. Verify no record was created
     cursor.execute("SELECT COUNT(*) FROM memberships WHERE plan_id = ?", (non_existent_plan_id,))
     count = cursor.fetchone()[0]
     assert count == 0
 
 def test_create_membership_record_invalid_data(db_manager: DatabaseManager):
-    # Test with various missing keys
-    required_keys = ["member_id", "plan_id", "plan_duration_days", "amount_paid", "start_date"]
-
-    # Create valid dummy member and plan to ensure errors are due to missing keys, not FK constraints
+    # Create valid dummy member and plan
     cursor = db_manager.conn.cursor()
     cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES (?, ?, ?, ?, ?)",
                    ("Valid Member", "1112223333", "valid@example.com", today_str(), 1))
     member_id = cursor.lastrowid
-    cursor.execute("INSERT INTO plans (name, price, type, is_active) VALUES (?, ?, ?, ?)",
-                   ("Valid Plan", 50, "Basic", 1))
+    cursor.execute("INSERT INTO plans (name, duration_days, default_amount, display_name, is_active) VALUES (?, ?, ?, ?, ?)",
+                   ("Valid Plan", 30, 50.0, "Valid Plan - 30 days", 1))
     plan_id = cursor.lastrowid
     db_manager.conn.commit()
 
-    base_data = {
-        "member_id": member_id,
-        "plan_id": plan_id,
-        "plan_duration_days": 30,
-        "amount_paid": 50.0,
-        "start_date": today_str()
-    }
-
-    for key_to_remove in required_keys:
-        data_copy = base_data.copy()
-        del data_copy[key_to_remove]
-
-        success, message = db_manager.create_membership_record(data_copy)
-        assert success is False
-        assert f"Missing required data: {key_to_remove}" in message or "Missing required data" in message # More general check
-
     # Test with invalid start_date format
-    invalid_date_data = base_data.copy()
-    invalid_date_data["start_date"] = "invalid-date-format"
-    success, message = db_manager.create_membership_record(invalid_date_data)
-    assert success is False
-    assert "Date format error for start_date" in message
+    with pytest.raises(ValueError) as excinfo:
+        db_manager.create_membership(
+            member_id=member_id,
+            plan_id=plan_id,
+            start_date_str="invalid-date-format",
+            amount_paid=50.0
+        )
+    assert "Invalid start_date format: invalid-date-format. Expected YYYY-MM-DD." in str(excinfo.value)
+
+    # Test with missing arguments (TypeError will be raised by the method signature)
+    with pytest.raises(TypeError):
+        db_manager.create_membership(member_id=member_id, plan_id=plan_id)
 
 # --- Tests for generate_financial_report_data ---
 
@@ -205,42 +185,38 @@ def test_generate_financial_report_with_data(db_manager: DatabaseManager):
                    ("Member Two", "100000002", "two@example.com", past_date_str(40), 1))
     member2_id = cursor.lastrowid
     # Plan 1
-    cursor.execute("INSERT INTO plans (name, price, type, is_active) VALUES (?, ?, ?, ?)",
-                   ("Monthly Gold", 100, "Gold", 1))
+    cursor.execute("INSERT INTO plans (name, duration_days, default_amount, display_name, is_active) VALUES (?, ?, ?, ?, ?)",
+                   ("Monthly Gold", 30, 100.0, "Monthly Gold - 30 days", 1))
     plan1_id = cursor.lastrowid
     # Plan 2
-    cursor.execute("INSERT INTO plans (name, price, type, is_active) VALUES (?, ?, ?, ?)",
-                   ("Annual Silver", 500, "Silver", 1))
+    cursor.execute("INSERT INTO plans (name, duration_days, default_amount, display_name, is_active) VALUES (?, ?, ?, ?, ?)",
+                   ("Annual Silver", 365, 500.0, "Annual Silver - 365 days", 1))
     plan2_id = cursor.lastrowid
     db_manager.conn.commit()
 
     # Membership 1: purchased 15 days ago, within report period
-    m1_data = {"member_id": member1_id, "plan_id": plan1_id, "plan_duration_days": 30, "amount_paid": 100.0, "start_date": past_date_str(15)}
-    # Manually set purchase_date for precise testing, as create_membership_record uses today_str()
+    # Manually insert as create_membership sets purchase_date to now
     db_manager.conn.execute(
         "INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (member1_id, plan1_id, past_date_str(15), future_date_str(15), 100.0, past_date_str(15), "New", 1)
+        (member1_id, plan1_id, past_date_str(15), (datetime.strptime(past_date_str(15),"%Y-%m-%d")+timedelta(days=30-1)).strftime("%Y-%m-%d"), 100.0, past_date_str(15), "New", 1)
     )
 
     # Membership 2: purchased 5 days ago, within report period
-    m2_data = {"member_id": member2_id, "plan_id": plan1_id, "plan_duration_days": 30, "amount_paid": 120.0, "start_date": past_date_str(5)}
     db_manager.conn.execute(
         "INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (member2_id, plan1_id, past_date_str(5), future_date_str(25), 120.0, past_date_str(5), "New", 1)
+        (member2_id, plan1_id, past_date_str(5), (datetime.strptime(past_date_str(5),"%Y-%m-%d")+timedelta(days=30-1)).strftime("%Y-%m-%d"), 120.0, past_date_str(5), "New", 1)
     )
 
     # Membership 3: purchased 45 days ago, outside report period (before start)
-    m3_data = {"member_id": member1_id, "plan_id": plan2_id, "plan_duration_days": 365, "amount_paid": 500.0, "start_date": past_date_str(45)}
     db_manager.conn.execute(
         "INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (member1_id, plan2_id, past_date_str(45), future_date_str(320), 500.0, past_date_str(45), "New", 1)
+        (member1_id, plan2_id, past_date_str(45), (datetime.strptime(past_date_str(45),"%Y-%m-%d")+timedelta(days=365-1)).strftime("%Y-%m-%d"), 500.0, past_date_str(45), "New", 1)
     )
 
     # Membership 4: purchase_date is today, but start_date is in future (should be included based on purchase_date)
-    m4_data = {"member_id": member2_id, "plan_id": plan2_id, "plan_duration_days": 365, "amount_paid": 550.0, "start_date": future_date_str(10)}
     db_manager.conn.execute(
         "INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (member2_id, plan2_id, future_date_str(10), future_date_str(375), 550.0, today_str(), "New", 1)
+        (member2_id, plan2_id, future_date_str(10), (datetime.strptime(future_date_str(10),"%Y-%m-%d")+timedelta(days=365-1)).strftime("%Y-%m-%d"), 550.0, today_str(), "New", 1)
     )
     db_manager.conn.commit()
 
@@ -281,24 +257,27 @@ def test_generate_renewal_report_empty(db_manager: DatabaseManager):
     cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES (?, ?, ?, ?, ?)",
                    ("Test Member", "1234567890", "renewal@example.com", past_date_str(100), 1))
     member_id = cursor.lastrowid
-    cursor.execute("INSERT INTO plans (name, price, type, is_active) VALUES (?, ?, ?, ?)",
-                   ("Test Plan", 10, "Standard", 1))
+    cursor.execute("INSERT INTO plans (name, duration_days, default_amount, display_name, is_active) VALUES (?, ?, ?, ?, ?)",
+                   ("Test Plan", 30, 10.0, "Test Plan - 30 days", 1))
     plan_id = cursor.lastrowid
     db_manager.conn.commit()
 
     # Add a membership that ends far in the future
-    start_date = today_str()
-    end_date = future_date_str(60) # Ends in 60 days, so not in renewal window
-    db_manager.conn.execute(
-        "INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (member_id, plan_id, start_date, end_date, 10.0, today_str(), "New", 1)
-    )
+    start_date_val = today_str()
+    # end_date calculation: start + duration - 1
+    end_date_val = (datetime.strptime(start_date_val, "%Y-%m-%d").date() + timedelta(days=30-1+60)).strftime("%Y-%m-%d") # Ends in 60 days from end of plan
+    db_manager.create_membership(member_id, plan_id, start_date_val, 10.0) # This will end in 29 days from today_str
+    # Manually update end_date to be far in future for this test's purpose
+    cursor.execute("UPDATE memberships SET end_date = ? WHERE member_id = ? AND plan_id = ?", (future_date_str(60), member_id, plan_id))
+
+
     # Add a membership that ended in the past
     start_date_past = past_date_str(60)
     end_date_past = past_date_str(30) # Ended 30 days ago
+    # Manually insert this past membership
     db_manager.conn.execute(
         "INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (member_id, plan_id, start_date_past, end_date_past, 10.0, past_date_str(60), "Renewal", 1) # is_active might be False in reality
+        (member_id, plan_id, start_date_past, end_date_past, 10.0, past_date_str(60), "Renewal", 0) # is_active is False
     )
     db_manager.conn.commit()
 
@@ -317,33 +296,49 @@ def test_generate_renewal_report_with_upcoming_renewals(db_manager: DatabaseMana
     m7_id = cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES ('Inactive Member', '200000007', 'up7@example.com', ?, 1)", (past_date_str(50),)).lastrowid
 
     # Plans
-    p1_id = cursor.execute("INSERT INTO plans (name, price, type, is_active) VALUES ('Renewal Plan A', 50, 'A', 1)").lastrowid
-    p2_id = cursor.execute("INSERT INTO plans (name, price, type, is_active) VALUES ('Renewal Plan B', 60, 'B', 1)").lastrowid
+    p1_id = cursor.execute("INSERT INTO plans (name, duration_days, default_amount, display_name, is_active) VALUES ('Renewal Plan A', 30, 50.0, 'Renewal Plan A - 30 days', 1)").lastrowid
+    p2_id = cursor.execute("INSERT INTO plans (name, duration_days, default_amount, display_name, is_active) VALUES ('Renewal Plan B', 60, 60.0, 'Renewal Plan B - 60 days', 1)").lastrowid
     db_manager.conn.commit()
 
     # Memberships
-    # Ends in 15 days (upcoming)
-    cursor.execute("INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?,?,?,?,?,?,?,?)",
-                   (m1_id, p1_id, past_date_str(15), future_date_str(15), 50, past_date_str(15), "New", 1))
-    # Ends in 29 days (upcoming)
-    cursor.execute("INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?,?,?,?,?,?,?,?)",
-                   (m2_id, p1_id, past_date_str(1), future_date_str(29), 50, past_date_str(1), "New", 1))
-    # Ends today (upcoming)
-    cursor.execute("INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?,?,?,?,?,?,?,?)",
-                   (m3_id, p2_id, past_date_str(30), today_str(), 60, past_date_str(30), "Renewal", 1))
-    # Ends in 30 days (upcoming - edge of window)
-    cursor.execute("INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?,?,?,?,?,?,?,?)",
-                   (m4_id, p2_id, today_str(), future_date_str(30), 60, today_str(), "New", 1))
+    # create_membership calculates end_date based on plan's duration_days.
+    # For precise end_date control for testing renewals, manual insertion or updates are better.
 
-    # Ends in 31 days (outside window)
+    # Ends in 15 days (upcoming) - plan p1_id has duration 30 days
+    # So, start_date should be 15 days ago from today for it to end 15 days from today
+    start_m1 = (datetime.strptime(future_date_str(15), "%Y-%m-%d").date() - timedelta(days=30-1)).strftime("%Y-%m-%d")
     cursor.execute("INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?,?,?,?,?,?,?,?)",
-                   (m5_id, p1_id, today_str(), future_date_str(31), 50, today_str(), "New", 1))
-    # Ended 5 days ago (outside window)
+                   (m1_id, p1_id, start_m1, future_date_str(15), 50, start_m1, "New", 1))
+
+    # Ends in 29 days (upcoming) - plan p1_id has duration 30 days
+    start_m2 = (datetime.strptime(future_date_str(29), "%Y-%m-%d").date() - timedelta(days=30-1)).strftime("%Y-%m-%d")
     cursor.execute("INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?,?,?,?,?,?,?,?)",
-                   (m6_id, p1_id, past_date_str(35), past_date_str(5), 50, past_date_str(35), "Renewal", 1))
-    # Ends in 10 days but inactive (outside criteria)
+                   (m2_id, p1_id, start_m2, future_date_str(29), 50, start_m2, "New", 1))
+
+    # Ends today (upcoming) - plan p2_id has duration 60 days
+    start_m3 = (datetime.strptime(today_str(), "%Y-%m-%d").date() - timedelta(days=60-1)).strftime("%Y-%m-%d")
     cursor.execute("INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?,?,?,?,?,?,?,?)",
-                   (m7_id, p2_id, past_date_str(20), future_date_str(10), 60, past_date_str(20), "New", 0)) # is_active = 0
+                   (m3_id, p2_id, start_m3, today_str(), 60, start_m3, "Renewal", 1))
+
+    # Ends in 30 days (upcoming - edge of window) - plan p2_id has duration 60 days
+    start_m4 = (datetime.strptime(future_date_str(30), "%Y-%m-%d").date() - timedelta(days=60-1)).strftime("%Y-%m-%d")
+    cursor.execute("INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?,?,?,?,?,?,?,?)",
+                   (m4_id, p2_id, start_m4, future_date_str(30), 60, start_m4, "New", 1))
+
+    # Ends in 31 days (outside window) - plan p1_id has duration 30 days
+    start_m5 = (datetime.strptime(future_date_str(31), "%Y-%m-%d").date() - timedelta(days=30-1)).strftime("%Y-%m-%d")
+    cursor.execute("INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?,?,?,?,?,?,?,?)",
+                   (m5_id, p1_id, start_m5, future_date_str(31), 50, start_m5, "New", 1))
+
+    # Ended 5 days ago (outside window) - plan p1_id has duration 30 days
+    start_m6 = (datetime.strptime(past_date_str(5), "%Y-%m-%d").date() - timedelta(days=30-1)).strftime("%Y-%m-%d")
+    cursor.execute("INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?,?,?,?,?,?,?,?)",
+                   (m6_id, p1_id, start_m6, past_date_str(5), 50, start_m6, "Renewal", 1))
+
+    # Ends in 10 days but inactive (outside criteria) - plan p2_id has duration 60 days
+    start_m7 = (datetime.strptime(future_date_str(10), "%Y-%m-%d").date() - timedelta(days=60-1)).strftime("%Y-%m-%d")
+    cursor.execute("INSERT INTO memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?,?,?,?,?,?,?,?)",
+                   (m7_id, p2_id, start_m7, future_date_str(10), 60, start_m7, "New", 0)) # is_active = 0
     db_manager.conn.commit()
 
     report_data = db_manager.generate_renewal_report_data()
