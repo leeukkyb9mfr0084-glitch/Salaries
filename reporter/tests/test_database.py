@@ -9,11 +9,11 @@ from reporter.database import (
 )  # Import initialize_database and original DB_FILE
 
 # Expected table names
-EXPECTED_TABLES = ["members", "plans", "transactions", "monthly_book_status"]
+EXPECTED_TABLES = ["members", "plans", "memberships"]
 EXPECTED_INITIAL_PLANS = [
-    ("Monthly - Unrestricted", 30),
-    ("3 Months - Unrestricted", 90),
-    ("Annual - Unrestricted", 365),
+    ("Monthly - Unrestricted", 30, 100.0, "Monthly Unrestricted"),
+    ("3 Months - Unrestricted", 90, 270.0, "3 Months Unrestricted"),
+    ("Annual - Unrestricted", 365, 1000.0, "Annual Unrestricted"),
 ]
 
 
@@ -71,7 +71,7 @@ def test_seed_initial_plans():
 
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT plan_name, duration_days FROM plans ORDER BY duration_days;"
+            "SELECT name, duration_days, default_amount, display_name FROM plans ORDER BY duration_days;"
         )
         seeded_plans = cursor.fetchall()
 
@@ -86,6 +86,12 @@ def test_seed_initial_plans():
             assert (
                 seeded_plans[i][1] == expected_plan[1]
             ), f"Plan duration mismatch for '{expected_plan[0]}': Expected {expected_plan[1]}, got {seeded_plans[i][1]}"
+            assert (
+                seeded_plans[i][2] == expected_plan[2]
+            ), f"Plan default_amount mismatch for '{expected_plan[0]}': Expected {expected_plan[2]}, got {seeded_plans[i][2]}"
+            assert (
+                seeded_plans[i][3] == expected_plan[3]
+            ), f"Plan display_name mismatch for '{expected_plan[0]}': Expected {expected_plan[3]}, got {seeded_plans[i][3]}"
 
     except sqlite3.Error as e:
         pytest.fail(f"Database operation failed during seeding or verification: {e}")
@@ -154,7 +160,7 @@ def test_initialize_database_runs_without_error(monkeypatch, tmp_path):
 
         # Verify initial plans
         cursor.execute(
-            "SELECT plan_name, duration_days FROM plans ORDER BY duration_days;"
+            "SELECT name, duration_days, default_amount, display_name FROM plans ORDER BY duration_days;"
         )
         seeded_plans_in_test_db = cursor.fetchall()
         assert len(seeded_plans_in_test_db) == len(
@@ -170,6 +176,12 @@ def test_initialize_database_runs_without_error(monkeypatch, tmp_path):
             assert (
                 seeded_plans_in_test_db[i][1] == expected_plan[1]
             ), f"Plan duration mismatch for '{expected_plan[0]}': Expected {expected_plan[1]}, got {seeded_plans_in_test_db[i][1]}"
+            assert (
+                seeded_plans_in_test_db[i][2] == expected_plan[2]
+            ), f"Plan default_amount mismatch for '{expected_plan[0]}': Expected {expected_plan[2]}, got {seeded_plans_in_test_db[i][2]}"
+            assert (
+                seeded_plans_in_test_db[i][3] == expected_plan[3]
+            ), f"Plan display_name mismatch for '{expected_plan[0]}': Expected {expected_plan[3]}, got {seeded_plans_in_test_db[i][3]}"
 
     except Exception as e:
         pytest.fail(f"initialize_database test failed: {e}")

@@ -395,6 +395,10 @@ class DatabaseManager:
             if notes:
                 logging.info(f"Membership ID {membership_id} - Notes (not stored): {notes}")
             return membership_id
+        except sqlite3.IntegrityError as ie: # Specifically catch IntegrityError
+            self.conn.rollback()
+            logging.error(f"DB integrity error creating membership for member {member_id}, plan {plan_id}: {ie}", exc_info=True)
+            raise # Re-raise the IntegrityError
         except sqlite3.Error as e:
             self.conn.rollback()
             logging.error(f"DB error creating membership for member {member_id}, plan {plan_id}: {e}", exc_info=True)
@@ -487,11 +491,11 @@ class DatabaseManager:
     # def get_all_memberships_for_view( # Commenting out this function as well
     #     self,
     #     name_filter: Optional[str] = None,
-        phone_filter: Optional[str] = None,
-        status_filter: Optional[str] = None,  # 'Active', 'Inactive', or None
-    ) -> list:
-        try:
-            cursor = self.conn.cursor()
+    #     phone_filter: Optional[str] = None,
+    #     status_filter: Optional[str] = None,  # 'Active', 'Inactive', or None
+    # ) -> list:
+    #     try:
+    #         cursor = self.conn.cursor()
             # These are the columns as per app_specs.md for the memberships table
             # plus the joined columns needed for the view.
             # Adjust column names if they differ in your actual schema (e.g. members.name vs members.client_name)

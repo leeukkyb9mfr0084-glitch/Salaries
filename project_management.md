@@ -39,11 +39,11 @@
 **Phase 5: Testing and Validation**
 * **Task:** Update the test suite in `reporter/tests/` to reflect all backend changes.
     * **Instructions:**
-        1.  **Cleanup:** Delete obsolete test files. `test_business_logic.py` is likely outdated and should be removed.
-        2.  **Update `test_database.py`:** Ensure tests pass with the new table schemas.
-        3.  **Create `test_member_management.py`:** Write unit tests for the new Member CRUD functions.
-        4.  **Create `test_plan_management.py`:** Write unit tests for the new Plan CRUD functions, including the `display_name` uniqueness check.
-        5.  Review and update any data migration tests in `test_migrate_data.py` to align with the new structure.
+        1.  **Cleanup:** [DONE] Delete obsolete test files. `test_business_logic.py` is likely outdated and should be removed.
+        2.  **Update `test_database.py`:** [DONE] Ensure tests pass with the new table schemas.
+        3.  **Create `test_member_management.py`:** [DONE] Write unit tests for the new Member CRUD functions.
+        4.  **Create `test_plan_management.py`:** [DONE] Write unit tests for the new Plan CRUD functions, including the `display_name` uniqueness check.
+        5.  [SKIPPED] Review and update any data migration tests in `test_migrate_data.py` to align with the new structure. **Note:** Skipped because `reporter/migrate_data.py` is incompatible with the current `DatabaseManager` and schema. `migrate_data.py` requires significant updates before tests can be written or updated.
 
 ---
 **Phase 6: Final Cleanup**

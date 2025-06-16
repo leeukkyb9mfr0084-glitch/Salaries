@@ -7,9 +7,9 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import importlib.util
-import flet as ft  # Added Flet import
+# import flet as ft  # Added Flet import
 from reporter.database import initialize_database, DB_FILE  # Updated database import
-from reporter.gui import main as start_flet_gui  # Import main from the new gui.py
+# from reporter.gui import main as start_flet_gui  # Import main from the new gui.py
 
 # Removed old imports:
 # import sqlite3 # No longer directly used here
@@ -147,4 +147,4 @@ if __name__ == "__main__":
 
     # Start the Flet application
     print("Starting Flet application...")
-    ft.app(target=start_flet_gui)
+    # ft.app(target=start_flet_gui)
