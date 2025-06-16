@@ -14,23 +14,23 @@
 
 *Goal: Establish a single, correct database schema and remove all outdated code, tests, and documentation that contradict the `app_specs.md`. This is the most critical phase.*
 
-- [ ] **1.1: Align `plans` Table with Spec**
+- [x] **1.1: Align `plans` Table with Spec**
   - **Why:** The spec states that a plan's duration is flexible and should be decided when a membership is created, not fixed to the plan itself. The `default_duration` column contradicts this fundamental requirement.
   - **Action:** In `reporter/database.py`, find the `create_plans_table` function. Delete the line that adds the `default_duration` column to the SQL `CREATE TABLE` statement.
 
-- [ ] **1.2: Delete Outdated Project Documentation**
+- [x] **1.2: Delete Outdated Project Documentation**
   - **Why:** The old `project_management.md` contains outdated information about a `transactions` table that confuses the project's direction.
   - **Action:** Delete the old `project_management.md` file from the project. This new file is its replacement.
 
-- [ ] **1.3: Update Core Documentation**
+- [x] **1.3: Update Core Documentation**
   - **Why:** The `README.md` is the first thing a new developer sees. It must reflect the current architecture.
   - **Action:** In `README.md`, read through the file and remove any sentences or sections that talk about a `transactions` table. Ensure it correctly refers to the `memberships` table as the core data store.
 
-- [ ] **1.4: Fix Broken Data Migration Script**
+- [x] **1.4: Fix Broken Data Migration Script**
   - **Why:** This script is essential for loading initial data, but it's completely broken because it's trying to write to a `transactions` table that doesn't exist.
   - **Action:** In `reporter/migrate_data.py`, modify the script. Change all SQL queries that `INSERT` into or `DELETE` from the `transactions` table to target the `memberships` table instead. You will also need to adjust the columns in the `INSERT` statement to match the columns in the `memberships` table.
 
-- [ ] **1.5: Delete Unusable Tests**
+- [x] **1.5: Delete Unusable Tests**
   - **Why:** These tests are worse than useless; they are misleading. They test for functionality and tables that no longer exist and cannot be salvaged.
   - **Action:** Delete the following three test files entirely:
     - `reporter/tests/test_book_closing.py`
