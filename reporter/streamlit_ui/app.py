@@ -326,30 +326,45 @@ def render_members_tab():
                     if not name or not phone:
                         st.warning("Name and Phone are required.")
                     else:
-                        member_id = api.add_member(name=name, phone=phone, email=email)
-                        if member_id:
-                            st.success(f"Member '{name}' added successfully with ID: {member_id}")
-                            clear_member_form(clear_selection=True)
+                        try:
+                            member_id = api.add_member(name=name, phone=phone, email=email)
+                            if member_id: # Assuming add_member returns member_id on success, None or raises error on fail
+                                st.success(f"Member '{name}' added successfully with ID: {member_id}")
+                                clear_member_form(clear_selection=True) # Rerun handled by clear_member_form or needs st.rerun()
+                                st.rerun()
+                            else:
+                                # This else might not be reached if add_member raises ValueError for duplicates
+                                st.error("Failed to add member. Please check details.")
+                        except ValueError as e:
+                            st.error(f"Error: {e}")
+                        # Removed the generic Exception catch to let Streamlit handle unexpected errors,
+                        # or it can be added back if specific logging/handling is needed.
+                else: # This is the update block
+                    try:
+                        success = api.update_member(
+                            member_id=st.session_state.member_selected_id,
+                            name=name,
+                            phone=phone,
+                            email=email,
+                            is_active=is_active_form
+                        )
+                        if success:
+                            st.success(f"Member '{name}' updated successfully.")
+                            clear_member_form(clear_selection=True) # Rerun handled by clear_member_form or needs st.rerun()
+                            # st.session_state.edit_member_id = None # This was in snippet, but seems not used here
                             st.rerun()
                         else:
-                            st.error("Failed to add member. Phone number might already exist or other error.")
-                else:
-                    success = api.update_member(
-                        member_id=st.session_state.member_selected_id,
-                        name=name,
-                        phone=phone,
-                        email=email,
-                        is_active=is_active_form
-                    )
-                    if success:
-                        st.success(f"Member '{name}' updated successfully.")
-                        clear_member_form(clear_selection=True)
-                        st.rerun()
-                    else:
-                        st.error("Failed to update member. Phone number might already exist or other error.")
-            except ValueError as ve:
-                 st.error(f"Validation error: {ve}")
-            except Exception as e:
+                            # This else might not be reached if update_member raises ValueError for duplicates
+                            st.error("Failed to update member. Please check details.")
+                    except ValueError as e:
+                        st.error(f"Error: {e}")
+                    # Removed the generic Exception catch here as well for similar reasons.
+            # The existing ValueError catch below this block seems to be from a previous structure.
+            # It might be redundant now or might need to be integrated if it serves a different purpose.
+            # For now, I'm commenting it out as the try-except blocks are added directly around API calls.
+            # except ValueError as ve:
+            #      st.error(f"Validation error: {ve}")
+            except Exception as e: # This can be kept as a fallback for other unexpected errors
                 st.error(f"An error occurred: {e}")
 
         if st.session_state.member_selected_id is not None and delete_button:
