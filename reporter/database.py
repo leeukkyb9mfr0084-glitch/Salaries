@@ -80,12 +80,12 @@ def create_database(db_name: str):
         print(f"Database '{db_name}' created and tables ensured.")
     except sqlite3.Error as e:
         print(f"Error creating database or tables: {e}")
-    finally:
-        if conn and db_name != ":memory:":  # Only close if it's a file-based DB
+        if conn: # If connection was established before error, close it
             conn.close()
-        elif db_name == ":memory:":
-            return conn  # Return the connection for in-memory DBs
-    return None  # Explicitly return None for file-based DBs after closing
+        return None # Return None if an error occurred
+    # If successful, return the connection object
+    # The caller will be responsible for closing the connection.
+    return conn
 
 
 def seed_initial_plans(conn: sqlite3.Connection):

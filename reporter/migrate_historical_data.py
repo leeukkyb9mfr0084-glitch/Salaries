@@ -241,7 +241,7 @@ def migrate_pt_data(db_mngr: DatabaseManager, processed_members: dict):
             print(f"  PT Row {r_num}: {r_error} - Data: {dict(r_data)}")
     return success_count, len(failed_rows)
 
-def main():
+def migrate_historical_data():
     print("Starting data migration script...")
     conn = None
     total_gc_success = 0
@@ -258,48 +258,59 @@ def main():
              print(f"Created database directory: {db_dir}")
 
         conn = create_database(DB_FILE)
-        conn.execute("PRAGMA foreign_keys = ON;")
-        db_mngr = DatabaseManager(connection=conn)
-        print(f"Connected to database: {DB_FILE}") # Changed to DB_FILE
 
-        db_group_plans = db_mngr.get_all_group_plans()
-        group_plans_map = {}
+        if conn is None:
+            print(f"Failed to create or connect to database {DB_FILE}. Migration aborted.")
+            # No need to return here, finally will execute, and summary will show 0s.
+            # Or, could raise an exception if preferred, to be caught by the outer try-except.
+        else:
+            conn.execute("PRAGMA foreign_keys = ON;")
+            db_mngr = DatabaseManager(connection=conn)
+            print(f"Connected to database: {DB_FILE}") # Changed to DB_FILE
 
-        for plan in db_group_plans:
-            group_plans_map[(plan['name'], str(plan['duration_days']))] = {'id': plan['id'], 'duration_days': plan['duration_days']}
+            db_group_plans = db_mngr.get_all_group_plans()
+            group_plans_map = {}
 
-        potential_mappings = {
-            ("MMA Focus", "30"): ("MMA Starter", "30"),
-            ("MMS Focus", "30"): ("MMA Starter", "30"),
-            ("MMA Focus", "60"): ("MMA Starter", "60"),
-            ("MMS Focus", "60"): ("MMA Starter", "60"),
-            ("MMA Focus", "90"): ("MMA Intermediate", "90"),
-            ("MMA Mastery", "30"): ("MMA Starter", "30"),
-            ("MMA Mastery", "90"): ("MMA Intermediate", "90"),
-            ("MMA Mastery", "180"): ("MMA Advanced", "180"),
-            ("MMA Day Pass", "3"): ("MMA Day Pass", "3")
-        }
+            for plan in db_group_plans:
+                group_plans_map[(plan['name'], str(plan['duration_days']))] = {'id': plan['id'], 'duration_days': plan['duration_days']}
 
-        for csv_key, db_key in potential_mappings.items():
-            if db_key in group_plans_map:
-                group_plans_map[csv_key] = group_plans_map[db_key]
+            potential_mappings = {
+                ("MMA Focus", "30"): ("MMA Starter", "30"),
+                ("MMS Focus", "30"): ("MMA Starter", "30"),
+                ("MMA Focus", "60"): ("MMA Starter", "60"),
+                ("MMS Focus", "60"): ("MMA Starter", "60"),
+                ("MMA Focus", "90"): ("MMA Intermediate", "90"),
+                ("MMA Mastery", "30"): ("MMA Starter", "30"),
+                ("MMA Mastery", "90"): ("MMA Intermediate", "90"),
+                ("MMA Mastery", "180"): ("MMA Advanced", "180"),
+                ("MMA Day Pass", "3"): ("MMA Day Pass", "3")
+            }
 
-        print(f"Loaded and mapped {len(group_plans_map)} group plans from DB. Sample keys: {list(group_plans_map.keys())[:5]}")
-        if not db_group_plans:
-            print("Warning: No group plans found in DB. GC migration likely to fail mapping.")
+            for csv_key, db_key in potential_mappings.items():
+                if db_key in group_plans_map:
+                    group_plans_map[csv_key] = group_plans_map[db_key]
 
-        processed_members = {}
-        total_gc_success, total_gc_failed = migrate_gc_data(db_mngr, group_plans_map, processed_members)
-        total_pt_success, total_pt_failed = migrate_pt_data(db_mngr, processed_members)
+            print(f"Loaded and mapped {len(group_plans_map)} group plans from DB. Sample keys: {list(group_plans_map.keys())[:5]}")
+            if not db_group_plans:
+                print("Warning: No group plans found in DB. GC migration likely to fail mapping.")
+
+            processed_members = {}
+            total_gc_success, total_gc_failed = migrate_gc_data(db_mngr, group_plans_map, processed_members)
+            total_pt_success, total_pt_failed = migrate_pt_data(db_mngr, processed_members)
 
     except Exception as e:
-        print(f"A critical error occurred in main: {e}")
-        if conn:
+        print(f"A critical error occurred in migrate_historical_data: {e}") # Changed main to migrate_historical_data
+        # Rollback might fail if conn is None or if the error was before conn was assigned.
+        # Also, DatabaseManager might have its own connection if not given one.
+        # For now, this rollback attempt is okay.
+        if conn: # Check if conn is not None before trying to rollback
             try:
                 conn.rollback()
-            except Exception: pass
+                print("Transaction rolled back due to error.")
+            except Exception as rb_e:
+                print(f"Error during rollback: {rb_e}")
     finally:
-        if conn:
+        if conn: # Check if conn is not None before trying to close
             conn.close()
             print("Database connection closed.")
 
@@ -307,4 +318,4 @@ def main():
     print(f"Summary: GC (Success: {total_gc_success}, Failed: {total_gc_failed}), PT (Success: {total_pt_success}, Failed: {total_pt_failed})")
 
 if __name__ == "__main__":
-    main()
+    migrate_historical_data()
