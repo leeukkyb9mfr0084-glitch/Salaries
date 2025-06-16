@@ -377,7 +377,10 @@ class DatabaseManager:
 
             transaction_date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             is_active = 1  # True
-            membership_type = "New" # Default for new memberships
+            # membership_type = "New" # Default for new memberships
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT 1 FROM group_class_memberships WHERE member_id = ?", (member_id,))
+            membership_type = "Renewal" if cursor.fetchone() else "New"
 
             # Note: payment_method and notes are not part of the current 'group_class_memberships' table schema.
             # They are included in the function signature as per the prompt, but will not be inserted.
