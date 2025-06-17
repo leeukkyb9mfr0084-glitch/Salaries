@@ -58,12 +58,11 @@ class AppAPI:
         records = self.db_manager.get_all_group_class_memberships_for_view(name_filter, phone_filter, status_filter)
         return records if records is not None else []
 
-    def update_group_class_membership_record(self, membership_id: int, member_id: int, plan_id: int, plan_duration_days: int, amount_paid: float, start_date: str) -> bool:
-        # Note: The signature for update_group_class_membership_record in DatabaseManager takes individual fields.
-        # This API function might need to adapt if it was expecting a 'data' dict.
-        # For now, assuming direct pass-through of parameters as per DatabaseManager.
-        # is_active parameter removed as it's dynamically calculated.
-        return self.db_manager.update_group_class_membership_record(membership_id, member_id, plan_id, plan_duration_days, amount_paid, start_date)
+    def update_group_class_membership_record(self, membership_id: int, member_id: int, plan_id: int, start_date: str, amount_paid: float) -> bool:
+        # Signature updated to match DatabaseManager: (self, membership_id: int, member_id: int, plan_id: int, start_date_str: str, amount_paid: float)
+        # The plan_duration_days is no longer passed from here; it's fetched in DatabaseManager.
+        success, _ = self.db_manager.update_group_class_membership_record(membership_id, member_id, plan_id, start_date, amount_paid)
+        return success
 
     def delete_group_class_membership_record(self, membership_id: int) -> bool:
         success, message = self.db_manager.delete_group_class_membership_record(membership_id)
@@ -79,6 +78,13 @@ class AppAPI:
 
     def delete_pt_membership(self, membership_id: int) -> bool:
         return self.db_manager.delete_pt_membership(membership_id)
+
+    def update_pt_membership(self, membership_id: int, purchase_date: Optional[str] = None, amount_paid: Optional[float] = None, sessions_purchased: Optional[int] = None) -> bool:
+        """
+        Updates an existing Personal Training (PT) membership record.
+        Passes arguments directly to the DatabaseManager.
+        """
+        return self.db_manager.update_pt_membership(membership_id, purchase_date, amount_paid, sessions_purchased)
 
     # Report generation
     def generate_financial_report(self, start_date: str, end_date: str) -> Dict[str, Any]:

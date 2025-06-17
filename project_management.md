@@ -34,7 +34,7 @@ Here is the project management task list. It includes previously completed work 
 
 ---
 
-### **Task 5: Refactor Group Class Membership Editing - PENDING**
+### **Task 5: Refactor Group Class Membership Editing - DONE**
 
 * **Objective:** Implement a full CRUD interface for Group Class Memberships, replacing the current separate Create and Delete forms with a unified system.
 
@@ -45,6 +45,7 @@ Here is the project management task list. It includes previously completed work 
         2.  Modify its signature. Remove the `plan_duration_days` and `is_active` parameters. The function should only accept `membership_id` and the fields that can be changed: `member_id`, `plan_id`, `start_date`, `amount_paid`.
         3.  Inside the function, fetch the `duration_days` from the `group_plans` table using the provided `plan_id` to calculate the `end_date`.
         4.  Remove all logic related to the old `is_active` parameter.
+        Completed. Backend function `update_group_class_membership_record` in `database_manager.py` and `app_api.py` updated to fetch plan duration dynamically and remove `is_active` parameter. Signature changed to `(membership_id, member_id, plan_id, start_date_str, amount_paid)`.
     * **File to Modify:** `reporter/app_api.py`
     * **Instructions:**
         1.  Find the `update_group_class_membership_record` function.
@@ -59,10 +60,11 @@ Here is the project management task list. It includes previously completed work 
         4.  **Right Column:** Use a single form (`st.form`) for both adding and editing.
         5.  When a membership is selected from the left, populate the form on the right with its data. When "Add New" is selected, the form should be blank.
         6.  The form's "Save" button should call `api.create_group_class_membership` for new records or the updated `api.update_group_class_membership_record` for existing ones.
+        Completed. UI in `streamlit_ui/app.py` for Group Class Memberships refactored to a two-column CRUD layout, integrating add, edit, and delete functionalities into a unified interface.
 
 ---
 
-### **Task 6: Implement Full CRUD for Personal Training Memberships - PENDING**
+### **Task 6: Implement Full CRUD for Personal Training Memberships - DONE**
 
 * **Objective:** Add `Update` functionality to Personal Training (PT) memberships and refactor the UI to be consistent with other tabs.
 
@@ -72,6 +74,7 @@ Here is the project management task list. It includes previously completed work 
         1.  Create a new function: `update_pt_membership`.
         2.  It should accept `membership_id` and optional parameters for fields that can be changed: `purchase_date`, `amount_paid`, `sessions_purchased`.
         3.  Implement the `UPDATE` SQL query to save the changes.
+        Completed. Added `update_pt_membership` function to `database_manager.py` and `app_api.py` to allow updating purchase date, amount paid, and sessions purchased for PT memberships.
     * **File to Modify:** `reporter/app_api.py`
     * **Instructions:**
         1.  Create a new function: `update_pt_membership` that calls the corresponding new function in the `DatabaseManager`.
@@ -83,3 +86,4 @@ Here is the project management task list. It includes previously completed work 
         2.  Remove the current UI for displaying the dataframe and the separate delete selectbox.
         3.  Replicate the standard two-column CRUD layout here.
         4.  The form's "Save" button should call `api.create_pt_membership` for new records and the new `api.update_pt_membership` for existing records.
+        Completed. UI in `streamlit_ui/app.py` for Personal Training Memberships refactored to a two-column CRUD layout, integrating add, edit, and delete functionalities. Update functionality now available.
