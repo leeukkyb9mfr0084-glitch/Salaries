@@ -1,89 +1,90 @@
-Here is the project management task list. It includes previously completed work and the new pending tasks for implementing full CRUD functionality across the app.
+### **Task List: Codebase Hardening**
+
+**Objective:** To systematically review the application code, identify weak points, and implement fixes to prevent common runtime errors.
 
 ---
 
-### **Task 1: Fix `display_name` in `group_plans` for Migrated Data - DONE**
+#### **Phase 1: Fortify the Data Layer Contracts**
 
-* **Objective:** Ensure the `display_name` is correctly populated by the migration script.
-* **File to Modify:** `reporter/database_manager.py`
-* **Instructions:** Completed as per original task. Logic to generate and save `display_name` was added to `find_or_create_group_plan`.
+**Instruction:** Your highest priority is to create explicit, unbreakable contracts for data moving between application layers. We will complete the DTO (Data Transfer Object) pattern implementation we discussed previously.
 
----
+1.  **Define All DTOs:**
+    * In `reporter/models.py`, create a unique `@dataclass` for every type of data view the application needs. Based on the UI tabs, you will need to create or verify the existence of the following:
+        * `MemberView`
+        * `GroupPlanView`
+        * `GroupClassMembershipView`
+        * `PTMembershipView`
 
-### **Task 2: Make `is_active` Status for Group Memberships a Runtime Calculation - DONE**
+2.  **Update Database Manager:**
+    * Go to `reporter/database_manager.py`.
+    * For every `get_all_..._for_view` function, change its return signature to use the appropriate DTO list (e.g., `-> List[GroupPlanView]`).
+    * Inside each function, convert the raw database results into your DTOs before returning them.
+        ```python
+        # Example for get_all_group_plans_for_view
+        rows = cursor.execute(query).fetchall()
+        return [GroupPlanView(**row) for row in rows]
+        ```
 
-* **Objective:** Remove the stored `is_active` column and calculate it dynamically.
-* **Files Modified:** `reporter/database.py`, `reporter/database_manager.py`, `reporter/app_api.py`, `reporter/migrate_historical_data.py`
-* **Instructions:** Completed. The `is_active` column was removed from the schema and all related create/update logic. The `get_all_group_class_memberships_for_view` function now calculates `status` at runtime.
-
----
-
-### **Task 3: Refine `join_date` Logic for New Members - DONE**
-
-* **Objective:** Set a member's `join_date` to their first-ever membership start date during migration.
-* **Files Modified:** `reporter/database_manager.py`, `reporter/migrate_historical_data.py`
-* **Instructions:** Completed. The `add_member` function was updated to accept an optional `join_date`.
-
----
-
-### **Task 4: Simplify `pt_memberships` Table - DONE**
-
-* **Objective:** Remove unused columns from the `pt_memberships` table and associated logic.
-* **Files Modified:** `reporter/database.py`, `reporter/database_manager.py`, `reporter/app_api.py`, `reporter/streamlit_ui/app.py`, `reporter/migrate_historical_data.py`
-* **Instructions:** Completed. The `sessions_remaining` and `notes` columns were removed from the `pt_memberships` table and all related backend/UI code.
+3.  **Update API and UI Layers:**
+    * In `reporter/app_api.py`, update the return type hints for all data-fetching functions to match the DTOs from the step above.
+    * In `reporter/streamlit_ui/app.py`, search for every location where this data is used. Change all dictionary-style access (`data['key']`) to attribute-style access (`data.key`). Your IDE should flag these locations as errors once the API signatures are updated, making them easy to find.
 
 ---
 
-### **Task 5: Refactor Group Class Membership Editing - DONE**
+#### **Phase 2: Harden Database Interactions**
 
-* **Objective:** Implement a full CRUD interface for Group Class Memberships, replacing the current separate Create and Delete forms with a unified system.
+**Instruction:** We must ensure all database queries are safe and that the application gracefully handles cases where data is not found.
 
-* **Phase 5.1: Refactor Backend Update Logic**
-    * **File to Modify:** `reporter/database_manager.py`
-    * **Instructions:**
-        1.  Locate the `update_group_class_membership_record` function.
-        2.  Modify its signature. Remove the `plan_duration_days` and `is_active` parameters. The function should only accept `membership_id` and the fields that can be changed: `member_id`, `plan_id`, `start_date`, `amount_paid`.
-        3.  Inside the function, fetch the `duration_days` from the `group_plans` table using the provided `plan_id` to calculate the `end_date`.
-        4.  Remove all logic related to the old `is_active` parameter.
-        Completed. Backend function `update_group_class_membership_record` in `database_manager.py` and `app_api.py` updated to fetch plan duration dynamically and remove `is_active` parameter. Signature changed to `(membership_id, member_id, plan_id, start_date_str, amount_paid)`.
-    * **File to Modify:** `reporter/app_api.py`
-    * **Instructions:**
-        1.  Find the `update_group_class_membership_record` function.
-        2.  Update its signature to match the changes made in the `DatabaseManager`. Remove the `plan_duration_days` parameter.
+1.  **Verify SQL Parameterization:**
+    * Manually inspect every function in `reporter/database_manager.py`.
+    * Confirm that no Python variables are ever formatted directly into a SQL query string using f-strings or `%`. This is non-negotiable to prevent SQL injection.
+    * **Invalid:** `cursor.execute(f"SELECT * FROM members WHERE id = {member_id}")`
+    * **Correct:** `cursor.execute("SELECT * FROM members WHERE id = ?", (member_id,))`
 
-* **Phase 5.2: Implement UI for Editing**
-    * **File to Modify:** `reporter/streamlit_ui/app.py`
-    * **Instructions:**
-        1.  In `render_memberships_tab`, under the `if membership_mode == 'Group Class Memberships':` block, remove the existing UI for displaying and deleting memberships (the `st.dataframe` and the `st.selectbox` for deletion).
-        2.  Implement the standard two-column CRUD layout (similar to the Members tab).
-        3.  **Left Column:** Use `st.selectbox` to list all existing group class memberships for selection, including an "Add New" option.
-        4.  **Right Column:** Use a single form (`st.form`) for both adding and editing.
-        5.  When a membership is selected from the left, populate the form on the right with its data. When "Add New" is selected, the form should be blank.
-        6.  The form's "Save" button should call `api.create_group_class_membership` for new records or the updated `api.update_group_class_membership_record` for existing ones.
-        Completed. UI in `streamlit_ui/app.py` for Group Class Memberships refactored to a two-column CRUD layout, integrating add, edit, and delete functionalities into a unified interface.
+2.  **Check for `None` Return Values:**
+    * Identify every function that uses `cursor.fetchone()` (e.g., `get_member_by_id`). These functions return `None` when no record is found.
+    * Trace every call to these functions in the UI layer (`reporter/streamlit_ui/app.py`).
+    * Before attempting to use the returned object, you **must** add a check:
+        ```python
+        # Example in the UI, when populating a form
+        member_data = api.get_member_by_id(selected_id)
+        if member_data is None:
+            st.error(f"Member with ID {selected_id} not found.")
+            return # Stop further execution
+        
+        # Now it's safe to use member_data
+        st.text_input("Name", value=member_data.name) 
+        ```
+    * Failure to do this will result in an `AttributeError: 'NoneType' object has no attribute 'name'`.
 
 ---
 
-### **Task 6: Implement Full CRUD for Personal Training Memberships - DONE**
+#### **Phase 3: Validate All User Input**
 
-* **Objective:** Add `Update` functionality to Personal Training (PT) memberships and refactor the UI to be consistent with other tabs.
+**Instruction:** Never trust input from the UI. All data must be validated before it is sent to the database.
 
-* **Phase 6.1: Add Backend Update Logic**
-    * **File to Modify:** `reporter/database_manager.py`
-    * **Instructions:**
-        1.  Create a new function: `update_pt_membership`.
-        2.  It should accept `membership_id` and optional parameters for fields that can be changed: `purchase_date`, `amount_paid`, `sessions_purchased`.
-        3.  Implement the `UPDATE` SQL query to save the changes.
-        Completed. Added `update_pt_membership` function to `database_manager.py` and `app_api.py` to allow updating purchase date, amount paid, and sessions purchased for PT memberships.
-    * **File to Modify:** `reporter/app_api.py`
-    * **Instructions:**
-        1.  Create a new function: `update_pt_membership` that calls the corresponding new function in the `DatabaseManager`.
+1.  **Enforce Required Fields:**
+    * In `reporter/streamlit_ui/app.py`, go to every `st.form`.
+    * Before the `api.create_...` or `api.update_...` call, add `if/else` checks to ensure that mandatory fields are not empty. If a field is empty, use `st.error()` to inform the user and `return` to stop the submission.
 
-* **Phase 6.2: Implement UI for Editing**
-    * **File to Modify:** `reporter/streamlit_ui/app.py`
-    * **Instructions:**
-        1.  In `render_memberships_tab`, find the `elif membership_mode == 'Personal Training Memberships':` block.
-        2.  Remove the current UI for displaying the dataframe and the separate delete selectbox.
-        3.  Replicate the standard two-column CRUD layout here.
-        4.  The form's "Save" button should call `api.create_pt_membership` for new records and the new `api.update_pt_membership` for existing records.
-        Completed. UI in `streamlit_ui/app.py` for Personal Training Memberships refactored to a two-column CRUD layout, integrating add, edit, and delete functionalities. Update functionality now available.
+2.  **Sanitize Data Types:**
+    * Look at all numeric inputs (`st.number_input`). The API layer expects numbers (`int`, `float`), not strings. Ensure the data is in the correct format. `st.number_input` helps with this, but be mindful of any `st.text_input` used for numbers.
+    * Verify all date inputs. The `st.date_input` returns a `date` object. The database manager expects a string. Ensure every date object is formatted correctly (`my_date.strftime('%Y-%m-%d')`) before being passed to the API.
+
+---
+
+#### **Phase 4: Stabilize UI State**
+
+**Instruction:** Prevent errors caused by Streamlit's re-run behavior and state management.
+
+1.  **Initialize All Session State Keys:**
+    * Create a list of all keys you use in `st.session_state` (e.g., `selected_member_id`, `selected_gc_membership_id`).
+    * At the beginning of your main app function, write a block that initializes all of them if they don't already exist.
+        ```python
+        if 'selected_member_id' not in st.session_state:
+            st.session_state.selected_member_id = "add_new"
+        if 'selected_pt_membership_id' not in st.session_state:
+            st.session_state.selected_pt_membership_id = "add_new"
+        # ... and so on for all keys
+        ```
+    * This will prevent `KeyError` exceptions the first time a user interacts with a widget.
