@@ -3,8 +3,8 @@ import pandas as pd
 from datetime import date, datetime  # Added datetime
 import sqlite3
 import io  # For Excel download
-from app_api import AppAPI
-from database import DB_FILE
+from reporter.app_api import AppAPI
+from reporter.database import DB_FILE
 # --- Database Connection & API Initialization ---
 from reporter.database_manager import DatabaseManager
 import sqlite3 # Added for connection for DB Manager
@@ -453,8 +453,12 @@ def render_group_plans_tab():
 
         def format_func_group_plan(plan_id):
             if plan_id is None:
-                return "➕ Add New Group Plan"
-            return plan_options.get(plan_id, "Unknown Group Plan")
+                return "➕ Add New Group Plan"  # Restoring the emoji
+            # This part makes the function robust against missing names in the database
+            display_name = plan_options.get(plan_id)
+            if not display_name:
+                return f"Unnamed Plan (ID: {plan_id})"
+            return display_name
 
         selected_group_plan_id_widget = st.selectbox(
             "Select Group Plan (or Add New)",

@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS pt_memberships (
 5.  **Run the Application:**
     Once the initial setup is complete, or for subsequent uses, run the Streamlit application:
     ```bash
-    streamlit run reporter/streamlit_ui/app.py
+    python -m streamlit run reporter/streamlit_ui/app.py
     ```
 
 ## Data Migration

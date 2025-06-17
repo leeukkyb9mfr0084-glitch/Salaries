@@ -1,6 +1,5 @@
 from typing import Any, Dict, List, Optional
-
-from database_manager import DatabaseManager
+from reporter.database_manager import DatabaseManager
 
 
 class AppAPI:
