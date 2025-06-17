@@ -23,7 +23,7 @@ def create_database(db_name: str):
             phone TEXT UNIQUE,
             email TEXT,
     join_date TEXT,
-    is_active INTEGER NOT NULL DEFAULT 1 -- << ADD THIS COLUMN
+    is_active INTEGER NOT NULL DEFAULT 1
         );
         """
         )
@@ -75,32 +75,14 @@ def create_database(db_name: str):
         """
         )
         conn.commit()
-        print(f"Database '{db_name}' created and tables ensured.")
     except sqlite3.Error as e:
-        print(f"Error creating database or tables: {e}")
+        # print(f"Error creating database or tables: {e}") # Removed
         if conn: # If connection was established before error, close it
             conn.close()
         return None # Return None if an error occurred
     # If successful, return the connection object
     # The caller will be responsible for closing the connection.
     return conn
-
-
-def seed_initial_plans(conn: sqlite3.Connection):
-    """
-    Inserts initial plans into the group_plans table.
-    Args:
-        conn (sqlite3.Connection): The database connection object.
-    """
-    # plans_to_seed list and the loop for inserting them have been removed.
-    try:
-        # The seeding logic has been removed as per requirements.
-        # Initial plans are now expected to be handled by migration scripts or other setup processes.
-        print("Initial plan seeding in seed_initial_plans is disabled. Plans should be migrated via ETL process.")
-    except sqlite3.Error as e:
-        # This error block might be less relevant now but kept for structural integrity
-        # or if other non-seeding operations were to be added here later.
-        print(f"Error in (now mostly empty) seed_initial_plans function: {e}")
 
 
 def initialize_database():
@@ -114,9 +96,9 @@ def initialize_database():
     if not os.path.exists(data_dir):
         try:
             os.makedirs(data_dir)
-            print(f"Created directory: {data_dir}")
+            # print(f"Created directory: {data_dir}") # Removed
         except OSError as e:
-            print(f"Error creating directory {data_dir}: {e}")
+            # print(f"Error creating directory {data_dir}: {e}") # Removed
             return  # Stop if directory creation fails
 
     # Call create_database(DB_FILE)
@@ -129,10 +111,10 @@ def initialize_database():
     try:
         conn = sqlite3.connect(DB_FILE)
         # If the connection is successful, call seed_initial_plans(conn)
-        seed_initial_plans(conn)
-        print(f"Database initialized and seeded at {DB_FILE}.")
+        # seed_initial_plans(conn) # Call removed
+        # print(f"Database initialized at {DB_FILE}.") # Removed
     except sqlite3.Error as e:
-        print(f"Error during database initialization or seeding: {e}")
+        # print(f"Error during database initialization: {e}") # Removed
     finally:
         # Ensure the connection is closed in a finally block
         if conn:
@@ -141,4 +123,4 @@ def initialize_database():
 
 if __name__ == "__main__":
     initialize_database()
-    print("Database setup complete.")
+    # print("Database setup complete.") # Removed

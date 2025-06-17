@@ -34,7 +34,6 @@ def clean_amount(amount_str: str) -> float:
         return float(cleaned_str)
     except ValueError:
         # Updated logging for consistency, though this function wasn't explicitly asked to be changed.
-        # logging.warning(f"Could not parse amount: '{amount_str}'. Returning 0.0.")
         if cleaned_str == '-' or cleaned_str == '':
             return 0.0
         return 0.0 # Or raise error, depending on desired strictness
