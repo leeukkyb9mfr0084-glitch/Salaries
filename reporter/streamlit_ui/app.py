@@ -180,8 +180,10 @@ def render_new_group_class_membership_form():
         if submitted:
             if not selected_member_id or not selected_plan_id:
                 st.error("Member and Plan must be selected.")
+                return
             elif amount_paid <= 0:
                 st.error("Amount paid must be greater than zero.")
+                return
             else:
                 try:
                     record_id = api.create_group_class_membership(
@@ -222,8 +224,10 @@ def render_new_pt_membership_form():
         if submitted:
             if not selected_member_id or sessions_purchased <= 0:
                 st.error("Member must be selected and sessions purchased must be greater than zero.")
+                return
             elif amount_paid <= 0:
                  st.error("Amount paid must be greater than zero.")
+                 return
             else:
                 try:
                     record_id = api.create_pt_membership(
@@ -415,9 +419,11 @@ def render_memberships_tab():
 
             if save_button:
                 if not form_member_id or not form_plan_id:
-                    st.warning("Member and Plan must be selected.")
+                    st.error("Member and Plan must be selected.")
+                    return
                 elif form_amount_paid <= 0 and st.session_state.selected_gc_membership_id == "add_new": # Allow 0 for edit if needed, but typically not
-                    st.warning("Amount paid must be greater than zero for new memberships.")
+                    st.error("Amount paid must be greater than zero for new memberships.")
+                    return
                 else:
                     try:
                         if st.session_state.selected_gc_membership_id == "add_new":
@@ -634,11 +640,14 @@ def render_memberships_tab():
             if pt_save_button:
                 if st.session_state.selected_pt_membership_id == "add_new":
                     if not form_pt_member_id_select:
-                        st.warning("Member must be selected.")
+                        st.error("Member must be selected.")
+                        return
                     elif form_pt_amount_paid <= 0:
-                        st.warning("Amount paid must be greater than zero.")
+                        st.error("Amount paid must be greater than zero.")
+                        return
                     elif form_pt_sessions_purchased <= 0:
-                        st.warning("Sessions purchased must be greater than zero.")
+                        st.error("Sessions purchased must be greater than zero.")
+                        return
                     else:
                         try:
                             record_id = api.create_pt_membership(
@@ -659,8 +668,10 @@ def render_memberships_tab():
                 else: # Editing existing
                     if form_pt_amount_paid <= 0:
                         st.error("Amount paid must be greater than zero.")
+                        return
                     elif form_pt_sessions_purchased <= 0:
                         st.error("Sessions purchased must be greater than zero.")
+                        return
                     else:
                         try:
                             success = api.update_pt_membership(
@@ -806,7 +817,8 @@ def render_members_tab():
             try:
                 if st.session_state.member_selected_id is None:
                     if not name or not phone:
-                        st.warning("Name and Phone are required.")
+                        st.error("Name and Phone are required.")
+                        return
                     else:
                         try:
                             member_id = api.add_member(name=name, phone=phone, email=email)
@@ -821,8 +833,10 @@ def render_members_tab():
                 else: # This is the update block
                     if not name: # Validation for name
                         st.error("Name cannot be empty.")
+                        return
                     elif not phone: # Validation for phone
                         st.error("Phone cannot be empty.")
+                        return
                     else:
                         try:
                             success = api.update_member( # Original update logic
@@ -977,7 +991,8 @@ def render_group_plans_tab():
         if save_plan_button:
             try:
                 if not plan_name_form or duration_days_form <= 0:
-                     st.warning("Group Plan Name and valid Duration (days > 0) are required.")
+                     st.error("Group Plan Name and valid Duration (days > 0) are required.")
+                     return
                 elif st.session_state.group_plan_selected_id is None:
                     plan_id = api.add_group_plan(
                         name=plan_name_form,
