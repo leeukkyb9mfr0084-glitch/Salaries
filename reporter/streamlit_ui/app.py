@@ -110,7 +110,7 @@ def render_new_pt_membership_form():
         purchase_date = st.date_input("Purchase Date", value=date.today())
         amount_paid = st.number_input("Amount Paid (₹)", min_value=0.0, format="%.2f")
         sessions_purchased = st.number_input("Sessions Purchased", min_value=1, step=1)
-        notes = st.text_area("Notes (Optional)")
+        # notes = st.text_area("Notes (Optional)") # Removed
 
         submitted = st.form_submit_button("Create Personal Training Membership")
         if submitted:
@@ -124,8 +124,8 @@ def render_new_pt_membership_form():
                         member_id=selected_member_id,
                         purchase_date=purchase_date.strftime("%Y-%m-%d"),
                         amount_paid=amount_paid,
-                        sessions_purchased=sessions_purchased,
-                        notes=notes
+                        sessions_purchased=sessions_purchased
+                        # notes=notes # Removed
                     )
                     if record_id:
                         st.success(f"Personal Training Membership created with ID: {record_id}")
@@ -191,7 +191,7 @@ def render_memberships_tab():
             if pt_memberships:
                 df_pt = pd.DataFrame(pt_memberships)
                 # Select and order columns for display
-                cols_pt = ['id', 'member_name', 'purchase_date', 'amount_paid', 'sessions_purchased', 'sessions_remaining', 'notes']
+                cols_pt = ['id', 'member_name', 'purchase_date', 'amount_paid', 'sessions_purchased'] # Removed 'sessions_remaining', 'notes'
                 df_pt_display = df_pt[cols_pt]
                 st.dataframe(df_pt_display, hide_index=True, use_container_width=True)
 

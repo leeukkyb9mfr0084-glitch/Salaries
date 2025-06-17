@@ -18,7 +18,7 @@ class DatabaseManager:
         # Optional, can be kept or removed
         # self.conn.row_factory = sqlite3.Row
 
-    def add_member(self, name: str, phone: str, email: Optional[str] = None) -> Optional[int]:
+    def add_member(self, name: str, phone_number: str, email: Optional[str] = None, is_active=True, join_date=None) -> Optional[int]:
         """Adds a new member to the database.
         Sets join_date to current date and is_active to True by default.
         Raises ValueError if phone number already exists.
@@ -27,17 +27,18 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         try:
             # Check for phone uniqueness
-            cursor.execute("SELECT id FROM members WHERE phone = ?", (phone,))
+            cursor.execute("SELECT id FROM members WHERE phone = ?", (phone_number,))
             if cursor.fetchone():
-                logging.warning(f"Attempt to add member with existing phone number: {phone}")
-                raise ValueError(f"Phone number {phone} already exists.")
+                logging.warning(f"Attempt to add member with existing phone number: {phone_number}")
+                raise ValueError(f"Phone number {phone_number} already exists.")
 
-            join_date = date.today().strftime("%Y-%m-%d")
-            is_active = 1  # True
+            join_date_to_use = join_date if join_date else date.today().isoformat()
+            # Ensure is_active is 1 or 0 for SQLite
+            is_active_int = 1 if is_active else 0
 
             cursor.execute(
                 "INSERT INTO members (name, phone, email, join_date, is_active) VALUES (?, ?, ?, ?, ?)",
-                (name, phone, email, join_date, is_active),
+                (name, phone_number, email, join_date_to_use, is_active_int),
             )
             self.conn.commit()
             member_id = cursor.lastrowid
@@ -340,10 +341,11 @@ class DatabaseManager:
         else:
             # If not found, create it
             # Ensure logging is imported if not already: import logging
+            display_name = f"{name} - {duration_days} days - ₹{price}"
             logging.info(f"Creating new group plan: {name} ({duration_days} days)")
             cursor.execute(
-                "INSERT INTO group_plans (name, duration_days, default_amount) VALUES (?, ?, ?)", # Changed price to default_amount
-                (name, duration_days, price) # price parameter now maps to default_amount column
+                "INSERT INTO group_plans (name, display_name, duration_days, default_amount) VALUES (?, ?, ?, ?)", # Changed price to default_amount
+                (name, display_name, duration_days, price) # price parameter now maps to default_amount column
             )
             self.conn.commit()
             return cursor.lastrowid
@@ -376,7 +378,7 @@ class DatabaseManager:
         """Creates a new group_class_membership record.
         Calculates end_date based on group_plan's duration_days.
         Sets transaction_date (purchase_date) to current timestamp.
-        Sets is_active to True and membership_type to "New" by default.
+        membership_type to "New" or "Renewal" by default.
         Raises ValueError if plan_id is not found or start_date_str is invalid.
         Returns the id of the newly created group_class_membership, or None if an error occurs.
         """
@@ -404,7 +406,6 @@ class DatabaseManager:
             end_date_str_calculated = end_date_obj.strftime("%Y-%m-%d")
 
             transaction_date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            is_active = 1  # True
             # membership_type = "New" # Default for new memberships
             cursor = self.conn.cursor()
             cursor.execute("SELECT 1 FROM group_class_memberships WHERE member_id = ?", (member_id,))
@@ -417,8 +418,8 @@ class DatabaseManager:
             sql_insert = """
             INSERT INTO group_class_memberships (
                 member_id, plan_id, start_date, end_date, amount_paid,
-                purchase_date, membership_type, is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                purchase_date, membership_type
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """
             cursor.execute(
                 sql_insert,
@@ -430,7 +431,6 @@ class DatabaseManager:
                     amount_paid,
                     transaction_date_str, # Stored in purchase_date
                     membership_type,
-                    is_active,
                 ),
             )
             self.conn.commit()
@@ -559,7 +559,10 @@ class DatabaseManager:
                 gcm.amount_paid,
                 gcm.purchase_date,
                 gcm.membership_type,
-                gcm.is_active
+                CASE
+                    WHEN date('now') BETWEEN gcm.start_date AND gcm.end_date THEN 'Active'
+                    ELSE 'Inactive'
+                END as status
             FROM group_class_memberships gcm
             JOIN members m ON gcm.member_id = m.id
             JOIN group_plans gp ON gcm.plan_id = gp.id
@@ -574,12 +577,23 @@ class DatabaseManager:
                 conditions.append("m.phone LIKE ?")
                 params.append(f"%{phone_filter}%")
             if status_filter:
+                # Adjusted to filter by the new 'status' column logic
+                # This requires filtering after the CASE statement is applied.
+                # For direct SQL, this means a subquery or HAVING clause if aggregated.
+                # Here, we'll adjust the Python filtering part or assume the SQL handles it.
+                # For simplicity, let's assume status_filter will be used to filter results *after* fetching
+                # OR the SQL query is modified to use a subquery/CTE if direct filtering on CASE is complex/inefficient.
+                # For now, this part of the code will need careful review if status_filter is used.
+                # A simple approach is to fetch all and filter in Python, or build a more complex query.
+                # Let's adjust the condition to reflect the new 'status' logic if possible,
+                # otherwise this filter might not work as expected without further SQL changes.
+                # This is a placeholder for demonstration; actual implementation might need a subquery.
                 if status_filter.lower() == "active":
-                    conditions.append("gcm.is_active = ?")
-                    params.append(1)  # Assuming 1 for True
+                    conditions.append("date('now') BETWEEN gcm.start_date AND gcm.end_date")
+                    # No parameter needed for this part of the condition
                 elif status_filter.lower() == "inactive":
-                    conditions.append("gcm.is_active = ?")
-                    params.append(0)  # Assuming 0 for False
+                    conditions.append("NOT (date('now') BETWEEN gcm.start_date AND gcm.end_date)")
+                    # No parameter needed for this part of the condition
 
             if conditions:
                 sql_select += " WHERE " + " AND ".join(conditions)
@@ -630,11 +644,11 @@ class DatabaseManager:
                 plan_id = ?,
                 start_date = ?,
                 end_date = ?,
-                amount_paid = ?,
-                is_active = ?
+                amount_paid = ?
             WHERE id = ?
             """
             # Note: purchase_date and membership_type are intentionally not updated.
+            # Note: is_active is also removed from update as it's dynamically calculated.
             cursor.execute(
                 sql_update,  # Renamed sql to sql_update
                 (
@@ -643,7 +657,6 @@ class DatabaseManager:
                     start_date,
                     end_date_str,
                     amount_paid,
-                    1 if is_active else 0,  # Convert boolean to int for SQLite
                     membership_id,
                 ),
             )
@@ -700,21 +713,20 @@ class DatabaseManager:
             return False, f"Database error: {e}"
 
     # Personal Training (PT) Membership CRUD operations
-    def add_pt_membership(self, member_id: int, purchase_date: str, amount_paid: float, sessions_purchased: int, notes: Optional[str] = None) -> Optional[int]:
+    def add_pt_membership(self, member_id: int, purchase_date: str, amount_paid: float, sessions_purchased: int) -> Optional[int]:
         """Adds a new PT membership record.
-        Sessions_remaining is initialized with sessions_purchased.
+        sessions_remaining and notes have been removed from this table.
         Returns the id of the newly created PT membership, or None if an error occurs.
         """
         cursor = self.conn.cursor()
-        sessions_remaining = sessions_purchased # Initialize remaining with purchased
         try:
             sql_insert = """
-            INSERT INTO pt_memberships (member_id, purchase_date, amount_paid, sessions_purchased, sessions_remaining, notes)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO pt_memberships (member_id, purchase_date, amount_paid, sessions_purchased)
+            VALUES (?, ?, ?, ?)
             """
             cursor.execute(
                 sql_insert,
-                (member_id, purchase_date, amount_paid, sessions_purchased, sessions_remaining, notes),
+                (member_id, purchase_date, amount_paid, sessions_purchased),
             )
             self.conn.commit()
             pt_membership_id = cursor.lastrowid
@@ -736,7 +748,7 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         try:
             sql_select = """
-            SELECT pt.*, m.name as member_name
+            SELECT pt.id, pt.member_id, pt.purchase_date, pt.amount_paid, pt.sessions_purchased, m.name as member_name
             FROM pt_memberships pt
             JOIN members m ON pt.member_id = m.id
             ORDER BY pt.purchase_date DESC, pt.id DESC;
@@ -839,7 +851,8 @@ class DatabaseManager:
 
             # Query for renewal data
             # Joins with members and group_plans to get names.
-            # Filters for active group_class_memberships ending in the next 30 days.
+            # Filters for group_class_memberships ending in the next 30 days.
+            # The check for gcm.is_active = 1 is replaced by date comparison.
             # PT memberships are not included here as they are session-based.
             sql_select_renewals = """
             SELECT
@@ -853,8 +866,8 @@ class DatabaseManager:
             FROM group_class_memberships gcm
             JOIN members m ON gcm.member_id = m.id
             JOIN group_plans gp ON gcm.plan_id = gp.id
-            WHERE gcm.is_active = 1  -- Assuming 1 for True
-            AND gcm.end_date BETWEEN ? AND ?
+            WHERE date('now') BETWEEN gcm.start_date AND gcm.end_date -- Check for current active status
+            AND gcm.end_date BETWEEN ? AND ? -- Check for renewal period
             ORDER BY gcm.end_date ASC, m.name ASC;
             """
             # Parameters for the query: current_date and 30_days_from_current_date

@@ -3,6 +3,7 @@ import sqlite3
 from datetime import datetime, timedelta
 import os
 import logging # Added logging
+import pandas as pd # Ensure pandas is imported
 from database_manager import DatabaseManager
 from database import DB_FILE, create_database
 
@@ -38,7 +39,7 @@ def clean_amount(amount_str: str) -> float:
             return 0.0
         return 0.0 # Or raise error, depending on desired strictness
 
-def migrate_gc_data(db_mngr: DatabaseManager, processed_members: dict): # group_plans_map removed
+def migrate_gc_data(db_mngr: DatabaseManager, processed_members: dict, earliest_start_dates: dict): # group_plans_map removed, added earliest_start_dates
     logging.info(f"Starting GC data migration from {GC_MEMBERS_CSV}...")
     if not os.path.exists(GC_MEMBERS_CSV):
         logging.error(f"GC CSV file not found at {GC_MEMBERS_CSV}")
@@ -65,7 +66,11 @@ def migrate_gc_data(db_mngr: DatabaseManager, processed_members: dict): # group_
                     member_id = processed_members[phone]
                 else:
                     try:
-                        member_id = db_mngr.add_member(name=name, phone=phone, email=None)
+                        # phone from CSV is row.get('Phone', '').strip()
+                        # name from CSV is row.get('Client Name', '').strip()
+                        # email can be None
+                        member_join_date = earliest_start_dates.get(phone)
+                        member_id = db_mngr.add_member(name=name, phone_number=phone, email=row.get('Email'), join_date=member_join_date) # Use phone_number to match new signature
                         if member_id:
                             processed_members[phone] = member_id
                         else:
@@ -129,14 +134,14 @@ def migrate_gc_data(db_mngr: DatabaseManager, processed_members: dict): # group_
                 start_date_csv = row.get('Plan Start Date', '').strip()
                 amount_csv = row.get(' Amount ', '').strip()
                 membership_type_csv = row.get('Membership Type', 'Fresh').strip()
-                plan_status_csv = row.get('Plan Status', 'EXPIRED').strip()
+                # plan_status_csv = row.get('Plan Status', 'EXPIRED').strip() # Removed
 
                 purchase_date = parse_date_dmy_to_ymd(purchase_date_csv)
                 start_date = parse_date_dmy_to_ymd(start_date_csv)
                 amount_paid = clean_amount(amount_csv)
 
                 db_membership_type = "New" if membership_type_csv.lower() == "fresh" else "Renewal"
-                db_is_active = 1 if plan_status_csv.lower() == "active" else 0
+                # db_is_active = 1 if plan_status_csv.lower() == "active" else 0 # Removed
 
                 if not start_date:
                     logging.warning(f"Invalid start date for row {line_count}. Value: '{start_date_csv}'. Skipping.")
@@ -156,13 +161,13 @@ def migrate_gc_data(db_mngr: DatabaseManager, processed_members: dict): # group_
                 sql_insert_gc = """
                 INSERT INTO group_class_memberships (
                     member_id, plan_id, start_date, end_date, amount_paid,
-                    purchase_date, membership_type, is_active
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    purchase_date, membership_type
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(member_id, plan_id, start_date) DO NOTHING;
                 """
                 cursor.execute(sql_insert_gc, (
                     member_id, plan_id, start_date, end_date, amount_paid,
-                    purchase_date, db_membership_type, db_is_active
+                    purchase_date, db_membership_type
                 ))
                 if cursor.rowcount > 0:
                     success_count += 1
@@ -180,7 +185,7 @@ def migrate_gc_data(db_mngr: DatabaseManager, processed_members: dict): # group_
             logging.warning(f"  GC Row {r_num}: {r_error} - Data: {dict(r_data)}")
     return success_count, len(failed_rows)
 
-def migrate_pt_data(db_mngr: DatabaseManager, processed_members: dict):
+def migrate_pt_data(db_mngr: DatabaseManager, processed_members: dict, earliest_start_dates: dict): # Added earliest_start_dates
     logging.info(f"Starting PT data migration from {PT_MEMBERS_CSV}...")
 
     if not os.path.exists(PT_MEMBERS_CSV):
@@ -208,7 +213,8 @@ def migrate_pt_data(db_mngr: DatabaseManager, processed_members: dict):
                     member_id = processed_members[phone]
                 else:
                     try:
-                        member_id = db_mngr.add_member(name=name, phone=phone, email=None)
+                        member_join_date = earliest_start_dates.get(phone)
+                        member_id = db_mngr.add_member(name=name, phone_number=phone, email=row.get('Email'), join_date=member_join_date) # Use phone_number
                         if member_id:
                             processed_members[phone] = member_id
                         else:
@@ -260,8 +266,7 @@ def migrate_pt_data(db_mngr: DatabaseManager, processed_members: dict):
 
                 pt_id = db_mngr.add_pt_membership(
                     member_id=member_id, purchase_date=purchase_date, amount_paid=amount_paid,
-                    sessions_purchased=sessions_purchased,
-                    notes=f"Migrated from {PT_MEMBERS_CSV} row {line_count}"
+                    sessions_purchased=sessions_purchased
                 )
                 if pt_id:
                     success_count +=1
@@ -290,10 +295,7 @@ def migrate_historical_data():
     total_pt_success = 0
     total_pt_failed = 0
     try:
-        # The following lines related to db_dir and ACTUAL_APP_DB_PATH might cause errors
-        # as ACTUAL_APP_DB_PATH is no longer defined.
-        # However, the instructions are specific about changing the create_database line.
-        db_dir = os.path.dirname(DB_FILE) # Assuming DB_FILE can be used here
+        db_dir = os.path.dirname(DB_FILE)
         if db_dir and not os.path.exists(db_dir):
              os.makedirs(db_dir, exist_ok=True)
              logging.info(f"Created database directory: {db_dir}")
@@ -302,19 +304,59 @@ def migrate_historical_data():
 
         if conn is None:
             logging.error(f"Failed to create or connect to database {DB_FILE}. Migration aborted.")
-            # No need to return here, finally will execute, and summary will show 0s.
-            # Or, could raise an exception if preferred, to be caught by the outer try-except.
         else:
             conn.execute("PRAGMA foreign_keys = ON;")
             db_mngr = DatabaseManager(connection=conn)
             logging.info(f"Connected to database: {DB_FILE}")
 
-            # Removed group_plans_map initialization and population logic
+            # --- Start of new logic for earliest_start_dates ---
+            gc_csv_path = GC_MEMBERS_CSV # Using constant defined at the top
+            pt_csv_path = PT_MEMBERS_CSV # Using constant defined at the top
+            earliest_start_dates = {}
+
+            if os.path.exists(gc_csv_path):
+                df_gc = pd.read_csv(gc_csv_path)
+                for index, row in df_gc.iterrows():
+                    phone = str(row.get('Phone', '')).strip() # Changed 'Phone Number' to 'Phone'
+                    if not phone: continue # Skip if phone is empty
+                    try:
+                        # Assuming 'Plan Start Date' is in 'dd/mm/yy' or 'dd/mm/yyyy'
+                        # parse_date_dmy_to_ymd handles both and returns 'YYYY-MM-DD' or empty
+                        start_date_iso = parse_date_dmy_to_ymd(str(row.get('Plan Start Date', '')).strip())
+                        if start_date_iso: # Only process if date is valid
+                            if phone in earliest_start_dates:
+                                if start_date_iso < earliest_start_dates[phone]:
+                                    earliest_start_dates[phone] = start_date_iso
+                            else:
+                                earliest_start_dates[phone] = start_date_iso
+                    except Exception as e_gc_date: # Catch generic exception for date processing
+                        logging.warning(f"Warning: Could not parse date for GC member {row.get('Client Name')} with phone {phone}: {row.get('Plan Start Date')}. Error: {e_gc_date}")
+            else:
+                logging.warning(f"GC CSV file not found at {gc_csv_path} for earliest date processing.")
+
+            if os.path.exists(pt_csv_path):
+                df_pt = pd.read_csv(pt_csv_path)
+                for index, row in df_pt.iterrows():
+                    phone = str(row.get('Phone', '')).strip() # Changed 'Phone Number' to 'Phone'
+                    if not phone: continue
+                    try:
+                        # Assuming 'Payment Date' is in 'dd/mm/yy' or 'dd/mm/yyyy'
+                        payment_date_iso = parse_date_dmy_to_ymd(str(row.get('Payment Date', '')).strip())
+                        if payment_date_iso:
+                            if phone in earliest_start_dates:
+                                if payment_date_iso < earliest_start_dates[phone]:
+                                    earliest_start_dates[phone] = payment_date_iso
+                            else:
+                                earliest_start_dates[phone] = payment_date_iso
+                    except Exception as e_pt_date:
+                        logging.warning(f"Warning: Could not parse date for PT member {row.get('Client Name')} with phone {phone}: {row.get('Payment Date')}. Error: {e_pt_date}")
+            else:
+                logging.warning(f"PT CSV file not found at {pt_csv_path} for earliest date processing.")
+            # --- End of new logic for earliest_start_dates ---
 
             processed_members = {}
-            # Updated call to migrate_gc_data
-            total_gc_success, total_gc_failed = migrate_gc_data(db_mngr, processed_members)
-            total_pt_success, total_pt_failed = migrate_pt_data(db_mngr, processed_members)
+            total_gc_success, total_gc_failed = migrate_gc_data(db_mngr, processed_members, earliest_start_dates)
+            total_pt_success, total_pt_failed = migrate_pt_data(db_mngr, processed_members, earliest_start_dates)
 
     except Exception as e:
         logging.critical(f"A critical error occurred in migrate_historical_data: {e}", exc_info=True)
