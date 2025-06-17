@@ -1,6 +1,6 @@
 
 
-#### **Task 1: Fix `display_name` in `group_plans` for Migrated Data**
+#### **Task 1: Fix `display_name` in `group_plans` for Migrated Data - DONE**
 
 * **Objective:** Ensure the `display_name` is correctly populated by the migration script.
 * **File to Modify:** `reporter/database_manager.py`
@@ -17,7 +17,7 @@
 
 ---
 
-#### **Task 2: Make `is_active` Status for Group Memberships a Runtime Calculation**
+#### **Task 2: Make `is_active` Status for Group Memberships a Runtime Calculation - DONE**
 
 * **Objective:** Remove the stored `is_active` column and calculate it dynamically.
 
@@ -65,7 +65,7 @@
 
 ---
 
-#### **Task 3: Refine `join_date` Logic for New Members**
+#### **Task 3: Refine `join_date` Logic for New Members - DONE**
 
 * **Objective:** Set a member's `join_date` to their first-ever membership start date during migration.
 
@@ -99,7 +99,7 @@
 
 ---
 
-#### **Task 4: Simplify `pt_memberships` Table**
+#### **Task 4: Simplify `pt_memberships` Table - DONE**
 
 * **Objective:** Remove unused columns from the `pt_memberships` table and associated logic.
 
