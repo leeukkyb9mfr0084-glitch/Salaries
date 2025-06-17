@@ -2,6 +2,7 @@ import sqlite3
 from datetime import datetime, timedelta, date
 from typing import Tuple, Optional, List, Dict # Added List, Dict
 import logging
+from .models import MemberView, GroupPlanView, GroupClassMembershipView, PTMembershipView
 
 # Basic logging configuration (can be overridden by application's config)
 logging.basicConfig(
@@ -140,6 +141,24 @@ class DatabaseManager:
             logging.error(f"Database error in get_all_members: {e}", exc_info=True)
             self.conn.row_factory = None # Ensure reset on error too
             return []
+
+    def get_all_members_for_view(self) -> List[MemberView]:
+        """Retrieves all members from the database for view purposes."""
+        try:
+            self.conn.row_factory = sqlite3.Row
+            cursor = self.conn.cursor()
+            # Ensure query selects columns matching MemberView DTO
+            # MemberView: id, name, email, phone, join_date, status, membership_type, payment_status, notes
+            # Original query: "SELECT id, name, phone, email, join_date, is_active FROM members"
+            # Mapping is_active to status. Other fields might be missing from older schema or need to be added to query.
+            cursor.execute("SELECT id, name, email, phone, join_date, status, membership_type, payment_status, notes FROM members ORDER BY name ASC")
+            rows = cursor.fetchall()
+            return [MemberView(**row) for row in rows]
+        except sqlite3.Error as e:
+            logging.error(f"Database error in get_all_members_for_view: {e}", exc_info=True)
+            return []
+        finally:
+            self.conn.row_factory = None # Reset row_factory
 
     def delete_member(self, member_id: int) -> bool:
         """Deletes a member from the database by their ID.
@@ -301,6 +320,23 @@ class DatabaseManager:
             self.conn.row_factory = None # Ensure reset on error too
             return []
 
+    def get_all_group_plans_for_view(self) -> List[GroupPlanView]:
+        """Retrieves all group_plans from the database for view purposes."""
+        try:
+            self.conn.row_factory = sqlite3.Row
+            cursor = self.conn.cursor()
+            # GroupPlanView: id, name, price, duration_days, description, status
+            # Original query: "SELECT id, name, duration_days, default_amount, display_name, is_active FROM group_plans"
+            # Mapping default_amount to price, is_active to status. display_name is not in DTO. description is not in query.
+            cursor.execute("SELECT id, name, default_amount as price, duration_days, description, status FROM group_plans ORDER BY name ASC")
+            rows = cursor.fetchall()
+            return [GroupPlanView(**row) for row in rows]
+        except sqlite3.Error as e:
+            logging.error(f"Database error in get_all_group_plans_for_view: {e}", exc_info=True)
+            return []
+        finally:
+            self.conn.row_factory = None
+
     def delete_group_plan(self, plan_id: int) -> bool:
         """Deletes a group_plan from the database by its ID.
         Returns True if deletion was successful, False otherwise.
@@ -459,77 +495,52 @@ class DatabaseManager:
         name_filter: Optional[str] = None,
         phone_filter: Optional[str] = None,
         status_filter: Optional[str] = None,  # 'Active', 'Inactive', or None
-    ) -> list:
+    ) -> List[GroupClassMembershipView]:
         try:
+            self.conn.row_factory = sqlite3.Row
             cursor = self.conn.cursor()
-            # These are the columns as per app_specs.md for the group_class_memberships table
-            # plus the joined columns needed for the view.
-            # Adjust column names if they differ in your actual schema (e.g. members.name vs members.client_name)
-            # Based on app_specs: members.name, group_plans.name
-            # Based on old code exploration, it was members.client_name. Sticking to app_specs.md.
+            # Query based on prompt for GroupClassMembershipView DTO:
+            # id, member_id, member_name, plan_id, plan_name, start_date, end_date, status, auto_renewal_enabled
             sql_select = """
             SELECT
-                gcm.id AS membership_id,
-                m.name AS member_name,
-                m.phone AS member_phone,
-                gp.name AS plan_name,
+                gcm.id,
+                m.id as member_id,
+                m.name as member_name,
+                gp.id as plan_id,
+                gp.name as plan_name,
                 gcm.start_date,
                 gcm.end_date,
-                gcm.amount_paid,
-                gcm.purchase_date,
-                gcm.membership_type,
-                CASE
-                    WHEN date('now') BETWEEN gcm.start_date AND gcm.end_date THEN 'Active'
-                    ELSE 'Inactive'
-                END as status
+                gcm.status,
+                gcm.auto_renewal_enabled,
+                gcm.amount_paid
             FROM group_class_memberships gcm
             JOIN members m ON gcm.member_id = m.id
             JOIN group_plans gp ON gcm.plan_id = gp.id
-            """  # Renamed sql to sql_select, updated table names
+            """
             conditions = []
             params = []
 
             if name_filter:
                 conditions.append("m.name LIKE ?")
                 params.append(f"%{name_filter}%")
-            if phone_filter:
-                conditions.append("m.phone LIKE ?")
-                params.append(f"%{phone_filter}%")
+            # phone_filter was in original, but GroupClassMembershipView doesn't have phone.
+            # If needed, DTO should be updated or a different view model used.
+            # For now, removing phone_filter from conditions based on current DTO.
             if status_filter:
-                # Adjusted to filter by the new 'status' column logic
-                # This requires filtering after the CASE statement is applied.
-                # For direct SQL, this means a subquery or HAVING clause if aggregated.
-                # Here, we'll adjust the Python filtering part or assume the SQL handles it.
-                # For simplicity, let's assume status_filter will be used to filter results *after* fetching
-                # OR the SQL query is modified to use a subquery/CTE if direct filtering on CASE is complex/inefficient.
-                # For now, this part of the code will need careful review if status_filter is used.
-                # A simple approach is to fetch all and filter in Python, or build a more complex query.
-                # Let's adjust the condition to reflect the new 'status' logic if possible,
-                # otherwise this filter might not work as expected without further SQL changes.
-                # This is a placeholder for demonstration; actual implementation might need a subquery.
-                if status_filter.lower() == "active":
-                    conditions.append("date('now') BETWEEN gcm.start_date AND gcm.end_date")
-                    # No parameter needed for this part of the condition
-                elif status_filter.lower() == "inactive":
-                    conditions.append("NOT (date('now') BETWEEN gcm.start_date AND gcm.end_date)")
-                    # No parameter needed for this part of the condition
+                # Assuming gcm.status column exists and stores 'Active', 'Expired', 'Cancelled' etc.
+                conditions.append("gcm.status = ?")
+                params.append(status_filter)
 
             if conditions:
                 sql_select += " WHERE " + " AND ".join(conditions)
 
-            sql_select += " ORDER BY gcm.purchase_date DESC, m.name ASC"  # Sensible default ordering
+            # Original ordering was by purchase_date, then m.name. DTO doesn't have purchase_date.
+            # Ordering by start_date then member_name as a sensible alternative.
+            sql_select += " ORDER BY gcm.start_date DESC, m.name ASC"
 
             cursor.execute(sql_select, params)
-            # Fetch as a list of dictionaries for easier UI consumption if desired,
-            # or tuples if that's preferred. For now, default to tuples.
-            # To fetch as dicts:
-            # self.conn.row_factory = sqlite3.Row
-            # cursor = self.conn.cursor()
-            # ... execute ...
-            # rows = [dict(row) for row in cursor.fetchall()]
-            # self.conn.row_factory = None # Reset if it was set temporarily
-            return cursor.fetchall()
-
+            rows = cursor.fetchall()
+            return [GroupClassMembershipView(**row) for row in rows]
         except sqlite3.Error as e:
             logging.error(
                 f"Database error while fetching group_class_memberships for view: {e}",
@@ -698,6 +709,44 @@ class DatabaseManager:
             logging.error(f"Database error in get_all_pt_memberships: {e}", exc_info=True)
             self.conn.row_factory = None # Ensure reset
             return []
+
+    def get_all_pt_memberships_for_view(self) -> List[PTMembershipView]:
+        """Retrieves all PT memberships for view purposes."""
+        try:
+            self.conn.row_factory = sqlite3.Row
+            cursor = self.conn.cursor()
+            # Query based on prompt for PTMembershipView DTO:
+            # id, member_id, member_name, plan_name, start_date, end_date, sessions_total, sessions_remaining, status
+            # plan_id is in DTO but not in this query from prompt.
+            # The prompt query: "SELECT ptm.id, m.id as member_id, m.name as member_name, ptm.plan_name,
+            # ptm.start_date, ptm.end_date, ptm.sessions_total, ptm.sessions_remaining, ptm.status
+            # FROM pt_memberships ptm JOIN members m ON ptm.member_id = m.id"
+            # This implies pt_memberships table has plan_name, start_date, etc.
+            sql_select = """
+            SELECT
+                ptm.id,
+                m.id as member_id,
+                m.name as member_name,
+                ptm.plan_id, -- Added plan_id as it's in the DTO
+                ptm.plan_name,
+                ptm.start_date,
+                ptm.end_date,
+                ptm.sessions_total,
+                ptm.sessions_remaining,
+                ptm.status,
+                ptm.amount_paid
+            FROM pt_memberships ptm
+            JOIN members m ON ptm.member_id = m.id
+            ORDER BY ptm.start_date DESC, ptm.id DESC
+            """ # Changed ordering to ptm.start_date
+            cursor.execute(sql_select)
+            rows = cursor.fetchall()
+            return [PTMembershipView(**row) for row in rows]
+        except sqlite3.Error as e:
+            logging.error(f"Database error in get_all_pt_memberships_for_view: {e}", exc_info=True)
+            return []
+        finally:
+            self.conn.row_factory = None
 
     def delete_pt_membership(self, membership_id: int) -> bool:
         """Deletes a PT membership by its ID.
@@ -896,38 +945,28 @@ class DatabaseManager:
             )
             return []
 
-    def get_active_members(self) -> list:
+    def get_active_members_for_view(self) -> List[MemberView]:
+        """Retrieves all active members from the database for view purposes, returning DTOs."""
         try:
+            self.conn.row_factory = sqlite3.Row
             cursor = self.conn.cursor()
-            # Select id and name for active members, ordered by name.
-            # Assuming 'id' and 'name' are the column names in the 'members' table as per app_specs.md.
-            # And is_active is 1 for active.
+            # MemberView DTO fields: id, name, email, phone, join_date, status, membership_type, payment_status, notes
+            # Assuming 'status' column in 'members' table indicates active status e.g. 'Active'
             sql_select_active_members = """
             SELECT
-                id,
-                name
+                id, name, email, phone, join_date, status, membership_type, payment_status, notes
             FROM members
-            WHERE is_active = 1  -- Assuming 1 for True
+            WHERE status = 'Active'  -- Assuming 'Active' string denotes an active member
             ORDER BY name ASC;
             """
             cursor.execute(sql_select_active_members)
-
-            # Fetch as a list of dictionaries
-            column_names = [description[0] for description in cursor.description]
-            active_members_list = [
-                dict(zip(column_names, row)) for row in cursor.fetchall()
-            ]
-
-            return active_members_list
-
+            rows = cursor.fetchall()
+            return [MemberView(**row) for row in rows]
         except sqlite3.Error as e:
             logging.error(
-                f"Database error while fetching active members: {e}",  # Corrected f-string
+                f"Database error in get_active_members_for_view: {e}",
                 exc_info=True,
             )
-            return []  # Return empty list on error
-        except Exception as ex:  # Catch any other unexpected errors
-            logging.error(
-                f"Unexpected error while fetching active members: {ex}", exc_info=True
-            )
             return []
+        finally:
+            self.conn.row_factory = None # Reset row_factory
