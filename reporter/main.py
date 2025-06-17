@@ -115,5 +115,4 @@ if __name__ == "__main__":
 
     handle_database_migration()  # Call the refactored function
 
-    # Start the Flet application
-    print("Starting Flet application...")
+    
