@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional
 from reporter.database_manager import DatabaseManager
+from .models import MemberView, GroupPlanView, GroupClassMembershipView, PTMembershipView
 
 
 class AppAPI:
@@ -24,22 +25,22 @@ class AppAPI:
     def update_member(self, member_id: int, name: Optional[str] = None, phone: Optional[str] = None, email: Optional[str] = None, is_active: Optional[bool] = None) -> bool:
         return self.db_manager.update_member(member_id, name, phone, email, is_active)
 
-    def get_all_members(self) -> List[Dict]:
-        return self.db_manager.get_all_members()
+    def get_all_members_for_view(self) -> List[MemberView]:
+        return self.db_manager.get_all_members_for_view()
 
     def delete_member(self, member_id: int) -> bool:
         return self.db_manager.delete_member(member_id)
 
-    def get_active_members(self) -> List[Dict[str, Any]]:
-        members = self.db_manager.get_active_members()
-        return members if members is not None else []
+    def get_active_members_for_view(self) -> List[MemberView]:
+        members = self.db_manager.get_active_members_for_view()
+        return members
 
     # Group Plan operations
     def add_group_plan(self, name: str, duration_days: int, default_amount: float) -> Optional[int]:
         return self.db_manager.add_group_plan(name, duration_days, default_amount)
 
-    def get_all_group_plans(self) -> List[Dict]:
-        return self.db_manager.get_all_group_plans()
+    def get_all_group_plans_for_view(self) -> List[GroupPlanView]:
+        return self.db_manager.get_all_group_plans_for_view()
 
     def update_group_plan(self, plan_id: int, name: Optional[str] = None, duration_days: Optional[int] = None, default_amount: Optional[float] = None, is_active: Optional[bool] = None) -> bool:
         return self.db_manager.update_group_plan(plan_id, name, duration_days, default_amount, is_active)
@@ -54,9 +55,9 @@ class AppAPI:
     def create_group_class_membership(self, member_id: int, plan_id: int, start_date_str: str, amount_paid: float, payment_method: Optional[str] = None, notes: Optional[str] = None) -> Optional[int]:
         return self.db_manager.create_group_class_membership(member_id, plan_id, start_date_str, amount_paid, payment_method, notes)
 
-    def get_all_group_class_memberships_for_view(self, name_filter: Optional[str] = None, phone_filter: Optional[str] = None, status_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_all_group_class_memberships_for_view(self, name_filter: Optional[str] = None, phone_filter: Optional[str] = None, status_filter: Optional[str] = None) -> List[GroupClassMembershipView]:
         records = self.db_manager.get_all_group_class_memberships_for_view(name_filter, phone_filter, status_filter)
-        return records if records is not None else []
+        return records # db_manager method now returns empty list on error or if None
 
     def update_group_class_membership_record(self, membership_id: int, member_id: int, plan_id: int, start_date: str, amount_paid: float) -> bool:
         # Signature updated to match DatabaseManager: (self, membership_id: int, member_id: int, plan_id: int, start_date_str: str, amount_paid: float)
@@ -72,9 +73,9 @@ class AppAPI:
     def create_pt_membership(self, member_id: int, purchase_date: str, amount_paid: float, sessions_purchased: int) -> Optional[int]:
         return self.db_manager.add_pt_membership(member_id, purchase_date, amount_paid, sessions_purchased)
 
-    def get_all_pt_memberships(self) -> List[Dict[str, Any]]:
-        records = self.db_manager.get_all_pt_memberships()
-        return records if records is not None else []
+    def get_all_pt_memberships_for_view(self) -> List[PTMembershipView]:
+        records = self.db_manager.get_all_pt_memberships_for_view()
+        return records # db_manager method now returns empty list on error or if None
 
     def delete_pt_membership(self, membership_id: int) -> bool:
         return self.db_manager.delete_pt_membership(membership_id)

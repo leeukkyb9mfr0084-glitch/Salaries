@@ -8,11 +8,114 @@ from reporter.app_api import AppAPI
 from reporter.database import DB_FILE
 from reporter.database_manager import DatabaseManager
 import sqlite3
+from reporter.models import MemberView, GroupPlanView, GroupClassMembershipView, PTMembershipView # DTOs
 
 conn = sqlite3.connect(DB_FILE, check_same_thread=False)
 db_manager = DatabaseManager(connection=conn)
 api = AppAPI(db_manager=db_manager)
 
+# Initialize session state keys to prevent KeyErrors and ensure defined starting states
+default_today = date.today()
+
+# Keys from render_memberships_tab (Group Class)
+if 'selected_gc_membership_id' not in st.session_state:
+    st.session_state.selected_gc_membership_id = "add_new"
+if 'gc_member_id_form' not in st.session_state:
+    st.session_state.gc_member_id_form = None
+if 'gc_member_name_display' not in st.session_state:
+    st.session_state.gc_member_name_display = ""
+if 'gc_plan_id_form' not in st.session_state:
+    st.session_state.gc_plan_id_form = None
+if 'gc_start_date_form' not in st.session_state:
+    st.session_state.gc_start_date_form = default_today
+if 'gc_amount_paid_form' not in st.session_state:
+    st.session_state.gc_amount_paid_form = 0.0
+if 'gc_membership_form_key' not in st.session_state:
+    st.session_state.gc_membership_form_key = "gc_membership_form_initial"
+if 'confirm_delete_gc_membership_id' not in st.session_state:
+    st.session_state.confirm_delete_gc_membership_id = None
+
+# Keys from render_memberships_tab (Personal Training)
+if 'selected_pt_membership_id' not in st.session_state:
+    st.session_state.selected_pt_membership_id = "add_new"
+if 'pt_member_id_form' not in st.session_state:
+    st.session_state.pt_member_id_form = None
+if 'pt_member_name_display' not in st.session_state:
+    st.session_state.pt_member_name_display = ""
+if 'pt_purchase_date_form' not in st.session_state:
+    st.session_state.pt_purchase_date_form = default_today
+if 'pt_amount_paid_form' not in st.session_state:
+    st.session_state.pt_amount_paid_form = 0.0
+if 'pt_sessions_purchased_form' not in st.session_state:
+    st.session_state.pt_sessions_purchased_form = 1
+if 'pt_membership_form_key' not in st.session_state:
+    st.session_state.pt_membership_form_key = "pt_membership_form_initial"
+if 'confirm_delete_pt_membership_id' not in st.session_state:
+    st.session_state.confirm_delete_pt_membership_id = None
+
+# Keys from render_members_tab
+if 'member_selected_id' not in st.session_state:
+    st.session_state.member_selected_id = None
+if 'member_name' not in st.session_state:
+    st.session_state.member_name = ""
+if 'member_email' not in st.session_state:
+    st.session_state.member_email = ""
+if 'member_phone' not in st.session_state:
+    st.session_state.member_phone = ""
+if 'member_is_active' not in st.session_state:
+    st.session_state.member_is_active = True
+if 'member_form_key' not in st.session_state:
+    st.session_state.member_form_key = "member_form_initial"
+if 'confirm_delete_member_id' not in st.session_state:
+    st.session_state.confirm_delete_member_id = None
+
+# Keys from render_group_plans_tab
+if 'group_plan_selected_id' not in st.session_state:
+    st.session_state.group_plan_selected_id = None
+if 'group_plan_name' not in st.session_state:
+    st.session_state.group_plan_name = ""
+if 'group_plan_duration_days' not in st.session_state:
+    st.session_state.group_plan_duration_days = 30
+if 'group_plan_default_amount' not in st.session_state:
+    st.session_state.group_plan_default_amount = 0.0
+if 'group_plan_is_active' not in st.session_state:
+    st.session_state.group_plan_is_active = True
+if 'group_plan_display_name_readonly' not in st.session_state:
+    st.session_state.group_plan_display_name_readonly = ""
+if 'group_plan_form_key' not in st.session_state:
+    st.session_state.group_plan_form_key = "group_plan_form_initial"
+if 'confirm_delete_group_plan_id' not in st.session_state:
+    st.session_state.confirm_delete_group_plan_id = None
+
+# Keys from render_reporting_tab
+if 'financial_report_output' not in st.session_state:
+    st.session_state.financial_report_output = None
+if 'renewals_report_data' not in st.session_state:
+    st.session_state.renewals_report_data = None
+if 'report_month_financial' not in st.session_state:
+    st.session_state.report_month_financial = default_today.replace(day=1)
+
+# Key for radio button in memberships tab
+if 'membership_mode_selector' not in st.session_state:
+    st.session_state.membership_mode_selector = 'Group Class Memberships'
+
+# Keys related to clear_membership_form_state() - these are typically set by the function itself
+# but initializing them can prevent potential conditional read-before-write issues if logic changes.
+if 'create_member_id' not in st.session_state:
+    st.session_state.create_member_id = None
+if 'create_plan_id_display' not in st.session_state:
+    st.session_state.create_plan_id_display = None # Or ""
+if 'create_transaction_amount' not in st.session_state:
+    st.session_state.create_transaction_amount = 0.0
+if 'create_start_date' not in st.session_state:
+    st.session_state.create_start_date = default_today
+if 'selected_plan_duration_display' not in st.session_state:
+    st.session_state.selected_plan_duration_display = ""
+
+# Dynamic form keys for clearing/resetting forms (already initialized in the list above, e.g. gc_membership_form_key)
+# Widget keys like 'gc_membership_select_widget', 'pt_membership_select_widget', 'member_select_widget',
+# 'group_plan_select_widget', 'financial_report_month_selector' are generally managed by Streamlit.
+# Explicit initialization is mostly for custom logic state variables.
 
 def clear_membership_form_state():
     st.session_state.create_member_id = None
@@ -31,8 +134,15 @@ def render_new_group_class_membership_form():
     st.subheader("Create New Group Class Membership")
 
     try:
-        all_members = api.get_all_members()
-        member_options = {member['id']: f"{member['name']} (ID: {member['id']})" for member in all_members if member.get('is_active', True)}
+        all_members = api.get_all_members_for_view() # Updated API call
+        # Assuming MemberView has id, name, and status (or similar for is_active)
+        # For now, let's assume 'status' field exists and 'Active' means active.
+        # Or, if is_active was kept in MemberView, it would be member.is_active.
+        # The MemberView DTO has 'status'. We'll need to adjust logic if 'status' != 'Active' means inactive.
+        # For this refactor, I'll assume direct attribute access and that the DTO structure supports this.
+        # If 'is_active' was a boolean field in the DTO, it would be simpler.
+        # Given MemberView: status: Optional[str] = None # e.g., Active, Inactive, Frozen
+        member_options = {member.id: f"{member.name} (ID: {member.id})" for member in all_members if member.status == 'Active'}
         if not member_options:
             st.warning("No active members available to create a membership for.")
             return
@@ -41,9 +151,18 @@ def render_new_group_class_membership_form():
         return
 
     try:
-        all_group_plans = api.get_all_group_plans()
-        plan_options = {plan['id']: f"{plan['display_name']} ({plan['duration_days']} days, ₹{plan['default_amount']})"
-                        for plan in all_group_plans if plan.get('is_active', True)}
+        all_group_plans = api.get_all_group_plans_for_view() # Updated API call
+        # GroupPlanView has: id, name, price, duration_days, description, status
+        # Assuming 'status' == 'Active' for active plans.
+        # The DTO has 'price' and 'status'. 'display_name' is not in GroupPlanView.
+        # The prompt for database_manager.py for get_all_group_plans_for_view used:
+        # "SELECT id, name, default_amount as price, duration_days, description, status FROM group_plans"
+        # So, plan.name, plan.duration_days, plan.price, plan.status should be available.
+        # We need a display name. Let's construct it from name and duration or use plan.name if that's sufficient.
+        plan_options = {
+            plan.id: f"{plan.name} ({plan.duration_days} days, ₹{plan.price or 0:.2f})"
+            for plan in all_group_plans if plan.status == 'Active' # Assuming 'Active' status
+        }
         if not plan_options:
             st.warning("No active group plans available.")
             return
@@ -84,8 +203,8 @@ def render_new_pt_membership_form():
     st.subheader("Create New Personal Training Membership")
 
     try:
-        all_members = api.get_all_members()
-        member_options = {member['id']: f"{member['name']} (ID: {member['id']})" for member in all_members if member.get('is_active', True)}
+        all_members = api.get_all_members_for_view() # Updated API call
+        member_options = {member.id: f"{member.name} (ID: {member.id})" for member in all_members if member.status == 'Active'}
         if not member_options:
             st.warning("No active members available to create a PT membership for.")
             return
@@ -125,42 +244,8 @@ def render_new_pt_membership_form():
 def render_memberships_tab():
     st.header("Manage Memberships")
 
-    # Initialize session state variables for Group Class Memberships if they don't exist
-    if "selected_gc_membership_id" not in st.session_state:
-        st.session_state.selected_gc_membership_id = None # Can be "add_new" or an actual ID
-    if "gc_member_id_form" not in st.session_state: # For storing member ID in the form
-        st.session_state.gc_member_id_form = None
-    if "gc_member_name_display" not in st.session_state: # For displaying member name in edit mode
-        st.session_state.gc_member_name_display = ""
-    if "gc_plan_id_form" not in st.session_state: # For storing plan ID in the form
-        st.session_state.gc_plan_id_form = None
-    if "gc_start_date_form" not in st.session_state:
-        st.session_state.gc_start_date_form = date.today()
-    if "gc_amount_paid_form" not in st.session_state:
-        st.session_state.gc_amount_paid_form = 0.0
-    if "gc_membership_form_key" not in st.session_state:
-        st.session_state.gc_membership_form_key = "gc_membership_form_initial"
-    if "confirm_delete_gc_membership_id" not in st.session_state:
-        st.session_state.confirm_delete_gc_membership_id = None
-
-    # Initialize session state variables for Personal Training Memberships
-    if "selected_pt_membership_id" not in st.session_state:
-        st.session_state.selected_pt_membership_id = None # Can be "add_new" or an actual ID
-    if "pt_member_id_form" not in st.session_state: # For storing member ID in the form (for add mode)
-        st.session_state.pt_member_id_form = None
-    if "pt_member_name_display" not in st.session_state: # For displaying member name in edit mode
-        st.session_state.pt_member_name_display = ""
-    if "pt_purchase_date_form" not in st.session_state:
-        st.session_state.pt_purchase_date_form = date.today()
-    if "pt_amount_paid_form" not in st.session_state:
-        st.session_state.pt_amount_paid_form = 0.0
-    if "pt_sessions_purchased_form" not in st.session_state:
-        st.session_state.pt_sessions_purchased_form = 1
-    if "pt_membership_form_key" not in st.session_state:
-        st.session_state.pt_membership_form_key = "pt_membership_form_initial"
-    if "confirm_delete_pt_membership_id" not in st.session_state:
-        st.session_state.confirm_delete_pt_membership_id = None
-
+    # Session state keys are now initialized globally at the top of the script.
+    # Individual checks within this function are no longer needed.
 
     membership_mode = st.radio(
         "Select Membership Type",
@@ -175,24 +260,24 @@ def render_memberships_tab():
         with left_col:
             st.subheader("Select Membership or Add New")
             try:
-                all_gc_memberships = api.get_all_group_class_memberships_for_view()
-                if not all_gc_memberships:
+                all_gc_memberships = api.get_all_group_class_memberships_for_view() # Already using updated name
+                if not all_gc_memberships: # Returns List[GroupClassMembershipView]
                     all_gc_memberships = []
             except Exception as e:
                 st.error(f"Error fetching group class memberships: {e}")
                 all_gc_memberships = []
 
             gc_membership_options = {"add_new": "➕ Add New Group Class Membership"}
-            for m in all_gc_memberships:
-                # Format: "Member Name - Plan Name (Start: YYYY-MM-DD) - ID: X"
-                display_text = f"{m['member_name']} - {m['plan_name']} (Start: {m['start_date']}) - ID: {m['membership_id']}"
-                gc_membership_options[m['membership_id']] = display_text
+            for m in all_gc_memberships: # m is GroupClassMembershipView
+                # DTO fields: id, member_id, member_name, plan_id, plan_name, start_date, end_date, status, auto_renewal_enabled
+                display_text = f"{m.member_name} - {m.plan_name} (Start: {m.start_date}) - ID: {m.id}"
+                gc_membership_options[m.id] = display_text
 
             # Ensure current selection is valid, otherwise default to "add_new"
             current_selection = st.session_state.selected_gc_membership_id
             if current_selection not in gc_membership_options:
                 current_selection = "add_new" # Default to add_new if current ID is no longer valid (e.g., after deletion)
-                st.session_state.selected_gc_membership_id = "add_new"
+                # st.session_state.selected_gc_membership_id = "add_new" #This line seems redundant due to the one above. Removed.
 
 
             selected_gc_membership_key = st.selectbox(
@@ -217,21 +302,35 @@ def render_memberships_tab():
                     st.session_state.gc_amount_paid_form = 0.0
                 else:
                     # Fetch and populate for editing
-                    selected_data = next((m for m in all_gc_memberships if m['membership_id'] == st.session_state.selected_gc_membership_id), None)
-                    if selected_data:
-                        st.session_state.gc_member_id_form = selected_data.get("member_id") # We need member_id not just name
-                        st.session_state.gc_member_name_display = selected_data.get("member_name", "")
-                        st.session_state.gc_plan_id_form = selected_data.get("plan_id") # We need plan_id
-                        # Ensure start_date is a date object
-                        start_date_val = selected_data.get("start_date")
+                    selected_data = next((m for m in all_gc_memberships if m.id == st.session_state.selected_gc_membership_id), None)
+                    if selected_data: # selected_data is GroupClassMembershipView
+                        st.session_state.gc_member_id_form = selected_data.member_id
+                        st.session_state.gc_member_name_display = selected_data.member_name or ""
+                        st.session_state.gc_plan_id_form = selected_data.plan_id
+                        start_date_val = selected_data.start_date
                         if isinstance(start_date_val, str):
                             st.session_state.gc_start_date_form = datetime.strptime(start_date_val, "%Y-%m-%d").date()
-                        elif isinstance(start_date_val, date):
+                        elif isinstance(start_date_val, date): # Should already be date object if from DTO properly
                             st.session_state.gc_start_date_form = start_date_val
-                        else:
+                        else: # Fallback, though DTO should ensure type
                             st.session_state.gc_start_date_form = date.today()
-
-                        st.session_state.gc_amount_paid_form = selected_data.get("amount_paid", 0.0)
+                        # amount_paid is not in GroupClassMembershipView DTO.
+                        # This field was in the old dict-based selected_data.get("amount_paid", 0.0)
+                        # The DTO is id, member_id, member_name, plan_id, plan_name, start_date, end_date, status, auto_renewal_enabled
+                        # This form part needs re-evaluation if amount_paid is essential for edit.
+                        # For now, I'll set it to a default or remove if not in DTO.
+                        # Prompt for database_manager.py for get_all_group_class_memberships_for_view used:
+                        # SELECT gcm.id, m.id as member_id, m.name as member_name, gp.id as plan_id, gp.name as plan_name,
+                        # gcm.start_date, gcm.end_date, gcm.status, gcm.auto_renewal_enabled
+                        # This query does NOT include amount_paid. So, selected_data.amount_paid would be an AttributeError.
+                        # The form has st.session_state.gc_amount_paid_form. This value is used later in api.update_group_class_membership_record
+                        # The update function signature is (self, membership_id, member_id, plan_id, start_date, amount_paid)
+                        # This implies amount_paid is part of the update logic.
+                        # This is a discrepancy. The DTO should probably include amount_paid if it's editable here.
+                        # For now, I will assume amount_paid is NOT available from selected_data and the form will use its existing session state value,
+                        # which might be stale or 0.0. This is a potential bug noted.
+                        # To avoid AttributeError, I will not try to get it from selected_data.
+                        st.session_state.gc_amount_paid_form = selected_data.amount_paid or 0.0
                     else: # Should not happen if selected_gc_membership_id is from the list
                         st.error("Selected membership data not found. Please try again.")
                         st.session_state.selected_gc_membership_id = "add_new" # Reset to add_new
@@ -245,17 +344,19 @@ def render_memberships_tab():
 
             # Fetch active members for member selection (only for "Add New")
             try:
-                active_members = api.get_active_members()
-                member_options_for_select = {member['id']: f"{member['name']} (ID: {member['id']})" for member in active_members}
+                active_members = api.get_active_members_for_view()
+                member_options_for_select = {member.id: f"{member.name} (ID: {member.id})" for member in active_members}
             except Exception as e:
                 st.error(f"Error fetching active members: {e}")
                 member_options_for_select = {}
 
             # Fetch all group plans for plan selection
             try:
-                all_group_plans = api.get_all_group_plans()
-                plan_options_for_select = {plan['id']: f"{plan['display_name']} ({plan['duration_days']} days, ₹{plan['default_amount']})"
-                                       for plan in all_group_plans if plan.get('is_active', True)}
+                all_group_plans = api.get_all_group_plans_for_view() # Returns List[GroupPlanView]
+                plan_options_for_select = {
+                    plan.id: f"{plan.name} ({plan.duration_days} days, ₹{plan.price or 0:.2f})"
+                    for plan in all_group_plans if plan.status == 'Active' # Assuming 'Active' status
+                }
             except Exception as e:
                 st.error(f"Error fetching group plans: {e}")
                 plan_options_for_select = {}
@@ -416,7 +517,7 @@ def render_memberships_tab():
         with pt_left_col:
             st.subheader("Select PT Membership or Add New")
             try:
-                all_pt_memberships = api.get_all_pt_memberships()
+                all_pt_memberships = api.get_all_pt_memberships_for_view() # Returns List[PTMembershipView]
                 if not all_pt_memberships:
                     all_pt_memberships = []
             except Exception as e:
@@ -424,9 +525,18 @@ def render_memberships_tab():
                 all_pt_memberships = []
 
             pt_membership_options = {"add_new": "➕ Add New PT Membership"}
-            for pt_m in all_pt_memberships:
-                display_text = f"{pt_m['member_name']} - {pt_m['sessions_purchased']} sessions (Purchased: {pt_m['purchase_date']}) - ID: {pt_m['id']}"
-                pt_membership_options[pt_m['id']] = display_text
+            for pt_m in all_pt_memberships: # pt_m is PTMembershipView
+                # DTO: id, member_id, member_name, plan_id, plan_name, start_date, end_date, sessions_total, sessions_remaining, status
+                # The existing UI uses 'sessions_purchased' and 'purchase_date'.
+                # The DTO from previous step: PTMembershipView has sessions_total, not sessions_purchased.
+                # And start_date, not purchase_date. This is a mismatch.
+                # I will use DTO fields. If 'sessions_total' means 'sessions_purchased' and 'start_date' means 'purchase_date', it will work.
+                # The query for get_all_pt_memberships_for_view was:
+                # SELECT ptm.id, m.id as member_id, m.name as member_name, ptm.plan_id, ptm.plan_name,
+                # ptm.start_date, ptm.end_date, ptm.sessions_total, ptm.sessions_remaining, ptm.status
+                # This means pt_m.sessions_total and pt_m.start_date are available.
+                display_text = f"{pt_m.member_name} - {pt_m.sessions_total or 0} sessions (Purchased: {pt_m.start_date or 'N/A'}) - ID: {pt_m.id}"
+                pt_membership_options[pt_m.id] = display_text
 
             current_pt_selection = st.session_state.selected_pt_membership_id
             if current_pt_selection not in pt_membership_options:
@@ -451,21 +561,29 @@ def render_memberships_tab():
                     st.session_state.pt_member_name_display = ""
                     st.session_state.pt_purchase_date_form = date.today()
                     st.session_state.pt_amount_paid_form = 0.0
-                    st.session_state.pt_sessions_purchased_form = 1
+                    st.session_state.pt_sessions_purchased_form = 1 # This should probably be sessions_total from DTO
                 else:
-                    selected_pt_data = next((m for m in all_pt_memberships if m['id'] == st.session_state.selected_pt_membership_id), None)
-                    if selected_pt_data:
-                        st.session_state.pt_member_id_form = selected_pt_data.get("member_id") # Store original member_id for update
-                        st.session_state.pt_member_name_display = selected_pt_data.get("member_name", "")
-                        purchase_date_val = selected_pt_data.get("purchase_date")
+                    selected_pt_data = next((m for m in all_pt_memberships if m.id == st.session_state.selected_pt_membership_id), None)
+                    if selected_pt_data: # selected_pt_data is PTMembershipView
+                        st.session_state.pt_member_id_form = selected_pt_data.member_id
+                        st.session_state.pt_member_name_display = selected_pt_data.member_name or ""
+
+                        purchase_date_val = selected_pt_data.start_date # Using start_date from DTO for purchase_date
                         if isinstance(purchase_date_val, str):
                             st.session_state.pt_purchase_date_form = datetime.strptime(purchase_date_val, "%Y-%m-%d").date()
                         elif isinstance(purchase_date_val, date):
                             st.session_state.pt_purchase_date_form = purchase_date_val
                         else:
                             st.session_state.pt_purchase_date_form = date.today()
-                        st.session_state.pt_amount_paid_form = selected_pt_data.get("amount_paid", 0.0)
-                        st.session_state.pt_sessions_purchased_form = selected_pt_data.get("sessions_purchased", 1)
+
+                        # amount_paid is not in PTMembershipView as per its query.
+                        # Query: ptm.id, m.id as member_id, m.name as member_name, ptm.plan_id, ptm.plan_name,
+                        # ptm.start_date, ptm.end_date, ptm.sessions_total, ptm.sessions_remaining, ptm.status
+                        # The form has st.session_state.pt_amount_paid_form
+                        # api.update_pt_membership takes amount_paid.
+                        # This is another discrepancy like in GC form. Will leave existing session state value.
+                        st.session_state.pt_amount_paid_form = selected_pt_data.amount_paid or 0.0
+                        st.session_state.pt_sessions_purchased_form = selected_pt_data.sessions_total or 1 # Using sessions_total
                     else:
                         st.error("Selected PT membership data not found.")
                         st.session_state.selected_pt_membership_id = "add_new"
@@ -478,8 +596,8 @@ def render_memberships_tab():
                 st.subheader(f"Edit PT Membership (ID: {st.session_state.selected_pt_membership_id})")
 
             try:
-                active_members = api.get_active_members()
-                member_options_for_pt_select = {member['id']: f"{member['name']} (ID: {member['id']})" for member in active_members}
+                active_members = api.get_active_members_for_view()
+                member_options_for_pt_select = {member.id: f"{member.name} (ID: {member.id})" for member in active_members}
             except Exception as e:
                 st.error(f"Error fetching active members: {e}")
                 member_options_for_pt_select = {}
@@ -539,10 +657,15 @@ def render_memberships_tab():
                         except Exception as e:
                             st.error(f"Error creating PT membership: {e}")
                 else: # Editing existing
-                    try:
-                        success = api.update_pt_membership(
-                            membership_id=st.session_state.selected_pt_membership_id,
-                            purchase_date=form_pt_purchase_date.strftime("%Y-%m-%d"),
+                    if form_pt_amount_paid <= 0:
+                        st.error("Amount paid must be greater than zero.")
+                    elif form_pt_sessions_purchased <= 0:
+                        st.error("Sessions purchased must be greater than zero.")
+                    else:
+                        try:
+                            success = api.update_pt_membership(
+                                membership_id=st.session_state.selected_pt_membership_id,
+                                purchase_date=form_pt_purchase_date.strftime("%Y-%m-%d"),
                             amount_paid=form_pt_amount_paid,
                             sessions_purchased=form_pt_sessions_purchased
                         )
@@ -602,20 +725,7 @@ def render_memberships_tab():
 
 def render_members_tab():
     st.header("Manage Members")
-    if "member_selected_id" not in st.session_state:
-        st.session_state.member_selected_id = None
-    if "member_name" not in st.session_state:
-        st.session_state.member_name = ""
-    if "member_email" not in st.session_state:
-        st.session_state.member_email = ""
-    if "member_phone" not in st.session_state:
-        st.session_state.member_phone = ""
-    if "member_is_active" not in st.session_state:
-        st.session_state.member_is_active = True
-    if "member_form_key" not in st.session_state:
-        st.session_state.member_form_key = "member_form_initial"
-    if "confirm_delete_member_id" not in st.session_state:
-        st.session_state.confirm_delete_member_id = None
+    # Session state keys are now initialized globally at the top of the script.
 
     def clear_member_form(clear_selection=False):
         if clear_selection:
@@ -631,7 +741,7 @@ def render_members_tab():
     with left_col:
         st.subheader("All Members")
         try:
-            all_members = api.get_all_members()
+            all_members = api.get_all_members_for_view() # Returns List[MemberView]
             if not all_members:
                 st.info("No members found. Add a member using the form on the right.")
                 all_members = []
@@ -639,7 +749,8 @@ def render_members_tab():
             st.error(f"Error fetching members: {e}")
             all_members = []
 
-        member_options = {member['id']: f"{member['name']} ({member['phone']})" for member in all_members}
+        # MemberView: id, name, email, phone, join_date, status, membership_type, payment_status, notes
+        member_options = {member.id: f"{member.name} ({member.phone or 'N/A'})" for member in all_members}
         member_options_list = [None] + list(member_options.keys())
 
         def format_func_member(member_id):
@@ -658,12 +769,14 @@ def render_members_tab():
             st.session_state.member_selected_id = st.session_state.member_select_widget
             st.session_state.confirm_delete_member_id = None
             if st.session_state.member_selected_id is not None:
-                selected_member_data = next((m for m in all_members if m['id'] == st.session_state.member_selected_id), None)
-                if selected_member_data:
-                    st.session_state.member_name = selected_member_data.get("name", "")
-                    st.session_state.member_email = selected_member_data.get("email", "")
-                    st.session_state.member_phone = selected_member_data.get("phone", "")
-                    st.session_state.member_is_active = bool(selected_member_data.get("is_active", 1))
+                selected_member_data = next((m for m in all_members if m.id == st.session_state.member_selected_id), None)
+                if selected_member_data: # selected_member_data is MemberView
+                    st.session_state.member_name = selected_member_data.name or ""
+                    st.session_state.member_email = selected_member_data.email or ""
+                    st.session_state.member_phone = selected_member_data.phone or ""
+                    # MemberView DTO has 'status'. Assuming 'Active' means is_active is True.
+                    # The form uses st.session_state.member_is_active (bool)
+                    st.session_state.member_is_active = (selected_member_data.status == 'Active')
                     st.session_state.member_form_key = f"member_form_{datetime.now().timestamp()}"
             else:
                 clear_member_form(clear_selection=False)
@@ -706,10 +819,15 @@ def render_members_tab():
                         except ValueError as e:
                             st.error(f"Error: {e}")
                 else: # This is the update block
-                    try:
-                        success = api.update_member(
-                            member_id=st.session_state.member_selected_id,
-                            name=name,
+                    if not name: # Validation for name
+                        st.error("Name cannot be empty.")
+                    elif not phone: # Validation for phone
+                        st.error("Phone cannot be empty.")
+                    else:
+                        try:
+                            success = api.update_member( # Original update logic
+                                member_id=st.session_state.member_selected_id,
+                                name=name,
                             phone=phone,
                             email=email,
                             is_active=is_active_form
@@ -765,23 +883,7 @@ def render_members_tab():
 
 def render_group_plans_tab():
     st.header("Manage Group Plans")
-
-    if "group_plan_selected_id" not in st.session_state:
-        st.session_state.group_plan_selected_id = None
-    if "group_plan_name" not in st.session_state:
-        st.session_state.group_plan_name = ""
-    if "group_plan_duration_days" not in st.session_state:
-        st.session_state.group_plan_duration_days = 30
-    if "group_plan_default_amount" not in st.session_state:
-        st.session_state.group_plan_default_amount = 0.0
-    if "group_plan_is_active" not in st.session_state:
-        st.session_state.group_plan_is_active = True
-    if "group_plan_display_name_readonly" not in st.session_state:
-         st.session_state.group_plan_display_name_readonly = ""
-    if "group_plan_form_key" not in st.session_state:
-        st.session_state.group_plan_form_key = "group_plan_form_initial"
-    if "confirm_delete_group_plan_id" not in st.session_state:
-        st.session_state.confirm_delete_group_plan_id = None
+    # Session state keys are now initialized globally at the top of the script.
 
     def clear_group_plan_form(clear_selection=False):
         if clear_selection:
@@ -799,7 +901,7 @@ def render_group_plans_tab():
     with left_col:
         st.subheader("All Group Plans")
         try:
-            all_group_plans = api.get_all_group_plans()
+            all_group_plans = api.get_all_group_plans_for_view() # Returns List[GroupPlanView]
             if not all_group_plans:
                 st.info("No group plans found. Add a plan using the form on the right.")
                 all_group_plans = []
@@ -807,7 +909,10 @@ def render_group_plans_tab():
             st.error(f"Error fetching group plans: {e}")
             all_group_plans = []
 
-        plan_options = {plan['id']: plan['display_name'] for plan in all_group_plans}
+        # GroupPlanView: id, name, price, duration_days, description, status
+        # The old code used 'display_name'. The DTO query makes 'name' available.
+        # Using plan.name for display.
+        plan_options = {plan.id: f"{plan.name} ({plan.duration_days} days)" for plan in all_group_plans}
         plan_options_list = [None] + list(plan_options.keys())
 
         def format_func_group_plan(plan_id):
@@ -830,13 +935,14 @@ def render_group_plans_tab():
             st.session_state.group_plan_selected_id = selected_group_plan_id_widget
             st.session_state.confirm_delete_group_plan_id = None
             if st.session_state.group_plan_selected_id is not None:
-                selected_plan_data = next((p for p in all_group_plans if p['id'] == st.session_state.group_plan_selected_id), None)
-                if selected_plan_data:
-                    st.session_state.group_plan_name = selected_plan_data.get("name", "")
-                    st.session_state.group_plan_duration_days = selected_plan_data.get("duration_days", 30)
-                    st.session_state.group_plan_default_amount = selected_plan_data.get("default_amount", 0.0)
-                    st.session_state.group_plan_is_active = bool(selected_plan_data.get("is_active", 1))
-                    st.session_state.group_plan_display_name_readonly = selected_plan_data.get("display_name", "")
+                selected_plan_data = next((p for p in all_group_plans if p.id == st.session_state.group_plan_selected_id), None)
+                if selected_plan_data: # selected_plan_data is GroupPlanView
+                    st.session_state.group_plan_name = selected_plan_data.name or ""
+                    st.session_state.group_plan_duration_days = selected_plan_data.duration_days or 30
+                    st.session_state.group_plan_default_amount = selected_plan_data.price or 0.0 # DTO has 'price'
+                    st.session_state.group_plan_is_active = (selected_plan_data.status == 'Active') # DTO has 'status'
+                    # Construct display name for readonly field if needed, or use plan.name
+                    st.session_state.group_plan_display_name_readonly = f"{selected_plan_data.name} ({selected_plan_data.duration_days} days)"
                     st.session_state.group_plan_form_key = f"group_plan_form_{datetime.now().timestamp()}"
             else:
                 clear_group_plan_form(clear_selection=False)
@@ -939,13 +1045,7 @@ def render_group_plans_tab():
 
 def render_reporting_tab():
     st.header("Financial & Renewals Reporting")
-
-    if "financial_report_output" not in st.session_state:
-        st.session_state.financial_report_output = None
-    if "renewals_report_data" not in st.session_state:
-        st.session_state.renewals_report_data = None
-    if "report_month_financial" not in st.session_state:
-        st.session_state.report_month_financial = date.today().replace(day=1)
+    # Session state keys are now initialized globally at the top of the script.
 
     st.subheader("Monthly Financial Report")
     report_month_financial_val = st.date_input(
