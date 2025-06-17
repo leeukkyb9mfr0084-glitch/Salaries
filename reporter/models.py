@@ -47,10 +47,10 @@ class PTMembershipView:
     plan_id: int # Assuming PT plans might be structured differently or share a table
     plan_name: str # Denormalized for easy display
     start_date: str # Assuming YYYY-MM-DD
+    status: str # e.g., Active, Completed, Cancelled
     end_date: Optional[str] = None # PT might be session-based, end_date might be flexible
     sessions_total: Optional[int] = None
     sessions_remaining: Optional[int] = None
-    status: str # e.g., Active, Completed, Cancelled
     amount_paid: Optional[float] = None
     # Added due to common column names observed in database_manager.py later
     member_display_name: Optional[str] = None

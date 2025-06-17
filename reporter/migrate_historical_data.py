@@ -4,8 +4,8 @@ from datetime import datetime, timedelta
 import os
 import logging # Added logging
 import pandas as pd # Ensure pandas is imported
-from database_manager import DatabaseManager
-from database import DB_FILE, create_database
+from .database_manager import DatabaseManager
+from .database import DB_FILE, create_database
 
 # Source CSV files (expected in the project root directory)
 GC_MEMBERS_CSV = "Kranos MMA Members.xlsx - GC.csv"
