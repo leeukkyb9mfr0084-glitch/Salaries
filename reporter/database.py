@@ -58,7 +58,8 @@ def create_database(db_name: str):
             membership_type TEXT, -- 'New' or 'Renewal'
             is_active BOOLEAN,
             FOREIGN KEY (member_id) REFERENCES members(id),
-            FOREIGN KEY (plan_id) REFERENCES group_plans(id)
+            FOREIGN KEY (plan_id) REFERENCES group_plans(id),
+            UNIQUE(member_id, plan_id, start_date)
         );
         """
         )
@@ -94,27 +95,15 @@ def seed_initial_plans(conn: sqlite3.Connection):
     Args:
         conn (sqlite3.Connection): The database connection object.
     """
-    plans_to_seed = [
-        ("Monthly - Unrestricted", 30, 100.0, "Monthly Unrestricted"),
-        ("3 Months - Unrestricted", 90, 270.0, "3 Months Unrestricted"),
-        ("Annual - Unrestricted", 365, 1000.0, "Annual Unrestricted"),
-    ]
+    # plans_to_seed list and the loop for inserting them have been removed.
     try:
-        cursor = conn.cursor()
-        for (
-            name,
-            duration_days,
-            default_amount,
-            display_name,
-        ) in plans_to_seed:
-            cursor.execute(
-                "INSERT OR IGNORE INTO group_plans (name, duration_days, default_amount, display_name) VALUES (?, ?, ?, ?)",
-                (name, duration_days, default_amount, display_name),
-            )
-        conn.commit()
-        print(f"Seeded {len(plans_to_seed)} initial plans.")
+        # The seeding logic has been removed as per requirements.
+        # Initial plans are now expected to be handled by migration scripts or other setup processes.
+        print("Initial plan seeding in seed_initial_plans is disabled. Plans should be migrated via ETL process.")
     except sqlite3.Error as e:
-        print(f"Error seeding initial plans: {e}")
+        # This error block might be less relevant now but kept for structural integrity
+        # or if other non-seeding operations were to be added here later.
+        print(f"Error in (now mostly empty) seed_initial_plans function: {e}")
 
 
 def initialize_database():

@@ -320,6 +320,34 @@ class DatabaseManager:
             logging.error(f"Database error in delete_group_plan for ID {plan_id}: {e}", exc_info=True)
             return False
 
+    def find_or_create_group_plan(self, name: str, duration_days: int, price: float):
+        """
+        Finds a group plan by name and duration, or creates it if it doesn't exist.
+        Returns the plan_id.
+        """
+        cursor = self.conn.cursor()
+
+        # First, try to find the plan
+        cursor.execute(
+            "SELECT id FROM group_plans WHERE name = ? AND duration_days = ?",
+            (name, duration_days)
+        )
+        result = cursor.fetchone()
+
+        if result:
+            # If found, return the existing plan_id
+            return result[0]
+        else:
+            # If not found, create it
+            # Ensure logging is imported if not already: import logging
+            logging.info(f"Creating new group plan: {name} ({duration_days} days)")
+            cursor.execute(
+                "INSERT INTO group_plans (name, duration_days, default_amount) VALUES (?, ?, ?)", # Changed price to default_amount
+                (name, duration_days, price) # price parameter now maps to default_amount column
+            )
+            self.conn.commit()
+            return cursor.lastrowid
+
     def get_group_plan_by_display_name(self, display_name: str) -> Optional[Dict]:
         """Retrieves a specific group_plan by its display_name."""
         self.conn.row_factory = sqlite3.Row
