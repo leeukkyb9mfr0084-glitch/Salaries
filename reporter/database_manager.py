@@ -537,25 +537,37 @@ class DatabaseManager:
             )
             return []
 
-    def update_group_class_membership_record( # Renamed function
+    def update_group_class_membership_record(
         self,
         membership_id: int,
-        member_id: int,  # Assuming member_id might be updatable for a membership, or plan_id
+        member_id: int,
         plan_id: int,
-        plan_duration_days: int, # This is from group_plans
+        start_date_str: str,
         amount_paid: float,
-        start_date: str,  # Date as string e.g., "YYYY-MM-DD"
-        is_active: bool,
     ) -> Tuple[bool, str]:
+        cursor = self.conn.cursor()
         try:
-            # Calculate end_date
-            start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
-            # Duration comes from the group_plan, ensure it's fetched or passed correctly if not fixed per plan_id
-            # Assuming plan_duration_days is correctly passed based on the chosen plan_id's current duration
-            end_date_obj = start_date_obj + timedelta(days=plan_duration_days) # Removed -1, standard end date calc
-            end_date_str = end_date_obj.strftime("%Y-%m-%d")
+            # Fetch plan duration from group_plans table
+            cursor.execute("SELECT duration_days FROM group_plans WHERE id = ?", (plan_id,))
+            plan_row = cursor.fetchone()
+            if not plan_row:
+                logging.warning(f"Group Plan with ID {plan_id} not found during membership update for ID {membership_id}.")
+                return False, f"Group Plan with ID {plan_id} not found."
+            duration_days = plan_row[0]
 
-            cursor = self.conn.cursor()
+            # Calculate end_date
+            try:
+                start_date_obj = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+            except ValueError as ve:
+                logging.error(f"Invalid start_date format: {start_date_str} for membership ID {membership_id}. Error: {ve}")
+                return False, f"Invalid start_date format: {start_date_str}. Expected YYYY-MM-DD."
+
+            if duration_days is not None and duration_days > 0:
+                end_date_obj = start_date_obj + timedelta(days=duration_days -1) # Inclusive end date
+            else: # if duration_days is 0, None, or negative, end_date is same as start_date
+                end_date_obj = start_date_obj
+            end_date_str_calculated = end_date_obj.strftime("%Y-%m-%d")
+
             sql_update = """
             UPDATE group_class_memberships
             SET
@@ -566,15 +578,15 @@ class DatabaseManager:
                 amount_paid = ?
             WHERE id = ?
             """
-            # Note: purchase_date and membership_type are intentionally not updated.
-            # Note: is_active is also removed from update as it's dynamically calculated.
+            # purchase_date and membership_type are not updated here.
+            # is_active is not stored; it's derived.
             cursor.execute(
-                sql_update,  # Renamed sql to sql_update
+                sql_update,
                 (
                     member_id,
                     plan_id,
-                    start_date,
-                    end_date_str,
+                    start_date_str,
+                    end_date_str_calculated,
                     amount_paid,
                     membership_id,
                 ),
@@ -583,9 +595,14 @@ class DatabaseManager:
 
             if cursor.rowcount == 0:
                 logging.warning(
-                    f"No group_class_membership record found with id {membership_id} to update."
+                    f"No group_class_membership record found with id {membership_id} to update, or data was the same."
                 )
-                return False, "No group_class_membership record found with the given ID to update."
+                # Check if the record actually exists to differentiate
+                cursor.execute("SELECT id FROM group_class_memberships WHERE id = ?", (membership_id,))
+                if not cursor.fetchone():
+                    return False, "No group_class_membership record found with the given ID to update."
+                return True, "Membership data was the same; no update performed, but operation considered successful."
+
 
             logging.info(f"Group Class Membership record {membership_id} updated successfully.")
             return True, "Group Class Membership record updated successfully."
@@ -597,13 +614,14 @@ class DatabaseManager:
                 exc_info=True,
             )
             return False, f"Database error: {e}"
-        except ValueError as ve:
-            # Handle potential errors from strptime if start_date format is wrong
+        except ValueError as ve: # Should be caught by the specific strptime check now
+            self.conn.rollback() # Ensure rollback on ValueErrors too, if they escape initial checks
             logging.error(
-                f"Date format error for start_date '{start_date}' during update: {ve}",
+                f"Value error during update for membership ID {membership_id}: {ve}",
                 exc_info=True,
             )
-            return False, f"Date format error for start_date: {ve}"
+            return False, str(ve)
+
 
     def delete_group_class_membership_record(self, membership_id: int) -> Tuple[bool, str]: # Renamed function
         try:
@@ -697,6 +715,69 @@ class DatabaseManager:
         except sqlite3.Error as e:
             self.conn.rollback()
             logging.error(f"Database error deleting PT membership ID {membership_id}: {e}", exc_info=True)
+            return False
+
+    def update_pt_membership(self, membership_id: int, purchase_date: Optional[str] = None, amount_paid: Optional[float] = None, sessions_purchased: Optional[int] = None) -> bool:
+        """Updates an existing PT membership's details.
+        Only includes fields in the UPDATE statement if they are provided.
+        Returns True if update was successful or no changes were needed, False otherwise.
+        """
+        cursor = self.conn.cursor()
+
+        # Check if the PT membership exists
+        cursor.execute("SELECT id FROM pt_memberships WHERE id = ?", (membership_id,))
+        if not cursor.fetchone():
+            logging.warning(f"PT Membership with ID {membership_id} not found for update.")
+            return False
+
+        fields_to_update = []
+        params = []
+
+        if purchase_date is not None:
+            # Basic validation for date format, can be expanded
+            try:
+                datetime.strptime(purchase_date, "%Y-%m-%d")
+                fields_to_update.append("purchase_date = ?")
+                params.append(purchase_date)
+            except ValueError:
+                logging.error(f"Invalid purchase_date format: {purchase_date}. Expected YYYY-MM-DD.")
+                return False # Or raise ValueError
+
+        if amount_paid is not None:
+            if amount_paid < 0:
+                logging.error(f"Invalid amount_paid: {amount_paid}. Cannot be negative.")
+                return False # Or raise ValueError
+            fields_to_update.append("amount_paid = ?")
+            params.append(amount_paid)
+
+        if sessions_purchased is not None:
+            if sessions_purchased < 0: # Assuming sessions cannot be negative
+                logging.error(f"Invalid sessions_purchased: {sessions_purchased}. Cannot be negative.")
+                return False # Or raise ValueError
+            fields_to_update.append("sessions_purchased = ?")
+            params.append(sessions_purchased)
+
+        if not fields_to_update:
+            logging.info(f"No fields provided to update for PT Membership ID {membership_id}.")
+            return True # No update needed, operation considered successful
+
+        sql_update_stmt = f"UPDATE pt_memberships SET {', '.join(fields_to_update)} WHERE id = ?"
+        params.append(membership_id)
+
+        try:
+            cursor.execute(sql_update_stmt, tuple(params))
+            self.conn.commit()
+
+            if cursor.rowcount == 0:
+                # This could happen if data provided is identical to existing data.
+                # The initial check ensures the record exists.
+                logging.info(f"PT Membership ID {membership_id} data was the same, no update performed in DB, but operation considered successful.")
+            else:
+                logging.info(f"PT Membership ID {membership_id} updated successfully.")
+            return True
+        except sqlite3.Error as e:
+            self.conn.rollback()
+            logging.error(f"Database error in update_pt_membership for ID {membership_id}: {e}", exc_info=True)
             return False
 
     def generate_financial_report_data(self, start_date: str, end_date: str) -> dict:
