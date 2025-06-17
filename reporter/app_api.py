@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional
-from reporter.database_manager import DatabaseManager
+from .database_manager import DatabaseManager
 from .models import MemberView, GroupPlanView, GroupClassMembershipView, PTMembershipView
 
 

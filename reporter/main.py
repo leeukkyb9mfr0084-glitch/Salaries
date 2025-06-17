@@ -1,14 +1,9 @@
 import sys
 import subprocess
 import os
-
-# Add the project root to sys.path
-# This allows 'from reporter.database...' to work correctly after restart
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 import importlib.util
-from reporter.database import initialize_database, DB_FILE  # Updated database import
-from reporter.migrate_historical_data import migrate_historical_data
+from .database import initialize_database, DB_FILE  # Updated database import
+from .migrate_historical_data import migrate_historical_data
 
 # Removed old imports:
 # import sqlite3 # No longer directly used here
