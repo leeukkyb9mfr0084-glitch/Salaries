@@ -124,13 +124,8 @@ CREATE TABLE IF NOT EXISTS pt_memberships (
 |   |-- data/
 |   |   |-- kranos_data.db      # SQLite database file
 |   |-- tests/                  # Contains all pytest tests for the 'reporter' module
-|-- scripts/
-|   |-- process_data.py         # Example utility script for processing raw_data.csv
-|-- tests/                      # Contains tests for scripts (e.g., test_process_data.py)
 |-- Kranos MMA Members.xlsx - GC.csv  # Data file used by 'migrate_historical_data.py'
 |-- Kranos MMA Members.xlsx - PT.csv  # Data file used by 'migrate_historical_data.py'
-|-- data/
-|   |-- raw_data.csv            # Raw data CSV file for 'scripts/process_data.py'
 |-- README.md                   # This file
 |-- requirements.txt            # Project dependencies
 |-- Developers_Guide.md         # In-depth guide for developers
@@ -184,30 +179,10 @@ The `reporter/migrate_historical_data.py` script is provided to import existing 
 
 **How to Run:**
 *   **Automated (during initial setup):**
-    The `python reporter/main.py` script (used for initial setup as described in "Setup and Run") attempts to execute the migration process automatically. If the CSV files are in place, this might be sufficient for the initial data load. *Note: The `reporter/main.py` script may currently try to call an older version of the migration script name (`reporter.migrate_data` instead of `reporter.migrate_historical_data`). This may require an update in `reporter/main.py` itself for seamless automatic execution. Until then, manual execution is more reliable.*
+    The `python reporter/main.py` script (used for initial setup as described in "Setup and Run") attempts to execute the migration process automatically by calling `reporter.migrate_historical_data.py`. If the CSV files are in place in the root directory, this should handle the initial data load.
 *   **Manual Execution:**
-    To ensure the migration runs correctly, or if the automated step via `reporter/main.py` encounters issues, you can execute the migration script directly from the project's root directory:
+    If you need to run the migration separately or if the automated step encounters issues, you can execute the migration script directly from the project's root directory:
     ```bash
     python reporter/migrate_historical_data.py
     ```
     Remember the destructive nature of this script and ensure the required CSV files are correctly placed in the root directory.
-
-## Data Processing Script
-
-The `scripts/process_data.py` script reads data from `data/raw_data.csv`, calculates the sum of the 'value' column, and prints the result.
-
-### Running the Script
-
-To run the script, use the following command:
-
-```bash
-python scripts/process_data.py
-```
-
-### Running the Tests
-
-To run the tests for the script, use the following command:
-
-```bash
-python -m unittest tests.test_process_data
-```

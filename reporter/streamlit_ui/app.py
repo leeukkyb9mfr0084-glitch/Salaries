@@ -6,19 +6,15 @@ import sqlite3
 import io  # For Excel download
 from reporter.app_api import AppAPI
 from reporter.database import DB_FILE
-# --- Database Connection & API Initialization ---
 from reporter.database_manager import DatabaseManager
-import sqlite3 # Added for connection for DB Manager
+import sqlite3
 
-# Create a single connection for the app session for DatabaseManager
-conn = sqlite3.connect(DB_FILE, check_same_thread=False) # check_same_thread for Streamlit
-db_manager = DatabaseManager(connection=conn) # Pass the connection
+conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+db_manager = DatabaseManager(connection=conn)
 api = AppAPI(db_manager=db_manager)
 
 
-# --- Helper function to clear form state ---
-# This function might need to be adapted or split if forms become too different
-def clear_membership_form_state(): # Keep for now, might be useful for GC form
+def clear_membership_form_state():
     st.session_state.create_member_id = None
     st.session_state.create_plan_id_display = None
     st.session_state.create_transaction_amount = 0.0
@@ -31,14 +27,9 @@ def clear_membership_form_state(): # Keep for now, might be useful for GC form
         st.session_state.pt_form_key = f"form_pt_{datetime.now().timestamp()}"
 
 
-# --- Tab Rendering Functions ---
-
-# Helper function for new GROUP CLASS membership creation (adapted from old render_new_membership_form_section)
-# This will be part of the 'Memberships' tab now.
 def render_new_group_class_membership_form():
     st.subheader("Create New Group Class Membership")
 
-    # Fetch active members for selectbox
     try:
         all_members = api.get_all_members()
         member_options = {member['id']: f"{member['name']} (ID: {member['id']})" for member in all_members if member.get('is_active', True)}
@@ -49,7 +40,6 @@ def render_new_group_class_membership_form():
         st.error(f"Error fetching members: {e}")
         return
 
-    # Fetch active group plans for selectbox
     try:
         all_group_plans = api.get_all_group_plans()
         plan_options = {plan['id']: f"{plan['display_name']} ({plan['duration_days']} days, ₹{plan['default_amount']})"
@@ -66,8 +56,6 @@ def render_new_group_class_membership_form():
         selected_plan_id = st.selectbox("Select Group Plan", options=list(plan_options.keys()), format_func=lambda id: plan_options[id])
         start_date = st.date_input("Start Date", value=date.today())
         amount_paid = st.number_input("Amount Paid (₹)", min_value=0.0, format="%.2f")
-        # purchase_date is auto-set by DBManager/API
-        # membership_type ('New'/'Renewal') is also auto-set by DBManager/API
 
         submitted = st.form_submit_button("Create Group Class Membership")
         if submitted:
@@ -91,7 +79,7 @@ def render_new_group_class_membership_form():
                 except Exception as e:
                     st.error(f"Error creating membership: {e}")
 
-# Helper function for new PERSONAL TRAINING membership creation
+
 def render_new_pt_membership_form():
     st.subheader("Create New Personal Training Membership")
 
@@ -110,7 +98,6 @@ def render_new_pt_membership_form():
         purchase_date = st.date_input("Purchase Date", value=date.today())
         amount_paid = st.number_input("Amount Paid (₹)", min_value=0.0, format="%.2f")
         sessions_purchased = st.number_input("Sessions Purchased", min_value=1, step=1)
-        # notes = st.text_area("Notes (Optional)") # Removed
 
         submitted = st.form_submit_button("Create Personal Training Membership")
         if submitted:
@@ -125,7 +112,6 @@ def render_new_pt_membership_form():
                         purchase_date=purchase_date.strftime("%Y-%m-%d"),
                         amount_paid=amount_paid,
                         sessions_purchased=sessions_purchased
-                        # notes=notes # Removed
                     )
                     if record_id:
                         st.success(f"Personal Training Membership created with ID: {record_id}")
@@ -152,13 +138,11 @@ def render_memberships_tab():
             gc_memberships = api.get_all_group_class_memberships_for_view() # This API takes optional filters
             if gc_memberships:
                 df_gc = pd.DataFrame(gc_memberships)
-                # Select and order columns for display
                 cols_gc = ['membership_id', 'member_name', 'plan_name', 'start_date', 'end_date', 'amount_paid', 'purchase_date', 'membership_type', 'is_active']
                 df_gc_display = df_gc[cols_gc]
                 df_gc_display['is_active'] = df_gc_display['is_active'].apply(lambda x: 'Active' if x else 'Inactive')
                 st.dataframe(df_gc_display, hide_index=True, use_container_width=True)
 
-                # Simple Delete for GC Memberships (can be enhanced with selection like other tabs)
                 if 'delete_gc_membership_id' not in st.session_state:
                     st.session_state.delete_gc_membership_id = ""
 
@@ -190,12 +174,10 @@ def render_memberships_tab():
             pt_memberships = api.get_all_pt_memberships()
             if pt_memberships:
                 df_pt = pd.DataFrame(pt_memberships)
-                # Select and order columns for display
-                cols_pt = ['id', 'member_name', 'purchase_date', 'amount_paid', 'sessions_purchased'] # Removed 'sessions_remaining', 'notes'
+                cols_pt = ['id', 'member_name', 'purchase_date', 'amount_paid', 'sessions_purchased']
                 df_pt_display = df_pt[cols_pt]
                 st.dataframe(df_pt_display, hide_index=True, use_container_width=True)
 
-                # Simple Delete for PT Memberships
                 if 'delete_pt_membership_id' not in st.session_state:
                     st.session_state.delete_pt_membership_id = ""
 
@@ -220,14 +202,7 @@ def render_memberships_tab():
         except Exception as e:
             st.error(f"Error fetching Personal Training Memberships: {e}")
 
-    # Note: The old detailed edit form from render_memberships_tab for group class memberships
-    # has been removed for simplicity in this overhaul. It was also incompatible with new API.
-    # A new edit mechanism would need to be designed for both GC and PT if required.
-    # The "Create Membership for Member X" button on Members tab is currently non-functional
-    # as render_new_membership_form_section was removed. This functionality is now part of this tab.
 
-
-# --- Members Tab ---
 def render_members_tab():
     st.header("Manage Members")
     if "member_selected_id" not in st.session_state:
@@ -244,7 +219,6 @@ def render_members_tab():
         st.session_state.member_form_key = "member_form_initial"
     if "confirm_delete_member_id" not in st.session_state:
         st.session_state.confirm_delete_member_id = None
-    # Removed trigger_membership_creation states, as that form is now part of Memberships tab.
 
     def clear_member_form(clear_selection=False):
         if clear_selection:
@@ -331,12 +305,9 @@ def render_members_tab():
                                 clear_member_form(clear_selection=True) # Rerun handled by clear_member_form or needs st.rerun()
                                 st.rerun()
                             else:
-                                # This else might not be reached if add_member raises ValueError for duplicates
                                 st.error("Failed to add member. Please check details.")
                         except ValueError as e:
                             st.error(f"Error: {e}")
-                        # Removed the generic Exception catch to let Streamlit handle unexpected errors,
-                        # or it can be added back if specific logging/handling is needed.
                 else: # This is the update block
                     try:
                         success = api.update_member(
@@ -348,21 +319,13 @@ def render_members_tab():
                         )
                         if success:
                             st.success(f"Member '{name}' updated successfully.")
-                            clear_member_form(clear_selection=True) # Rerun handled by clear_member_form or needs st.rerun()
-                            # st.session_state.edit_member_id = None # This was in snippet, but seems not used here
+                            clear_member_form(clear_selection=True)
                             st.rerun()
                         else:
-                            # This else might not be reached if update_member raises ValueError for duplicates
                             st.error("Failed to update member. Please check details.")
                     except ValueError as e:
                         st.error(f"Error: {e}")
-                    # Removed the generic Exception catch here as well for similar reasons.
-            # The existing ValueError catch below this block seems to be from a previous structure.
-            # It might be redundant now or might need to be integrated if it serves a different purpose.
-            # For now, I'm commenting it out as the try-except blocks are added directly around API calls.
-            # except ValueError as ve:
-            #      st.error(f"Validation error: {ve}")
-            except Exception as e: # This can be kept as a fallback for other unexpected errors
+            except Exception as e:
                 st.error(f"An error occurred: {e}")
 
         if st.session_state.member_selected_id is not None and delete_button:
@@ -402,9 +365,7 @@ def render_members_tab():
             clear_member_form(clear_selection=True)
             st.rerun()
 
-        # Removed "Create Membership for this member" button as this functionality is now in Memberships tab.
 
-# --- Group Plans Tab ---
 def render_group_plans_tab():
     st.header("Manage Group Plans")
 
@@ -454,8 +415,7 @@ def render_group_plans_tab():
 
         def format_func_group_plan(plan_id):
             if plan_id is None:
-                return "➕ Add New Group Plan"  # Restoring the emoji
-            # This part makes the function robust against missing names in the database
+                return "➕ Add New Group Plan"
             display_name = plan_options.get(plan_id)
             if not display_name:
                 return f"Unnamed Plan (ID: {plan_id})"
@@ -691,7 +651,6 @@ def render_reporting_tab():
     elif st.session_state.renewals_report_data == []:
         st.info("No upcoming group class renewals found (e.g., in the next 30 days).")
 
-# Main UI Tabs
 tab_titles = ["Members", "Group Plans", "Memberships", "Reporting"]
 tab_members, tab_group_plans, tab_memberships, tab_reporting = st.tabs(tab_titles)
 
@@ -702,11 +661,7 @@ with tab_group_plans:
     render_group_plans_tab()
 
 with tab_memberships:
-    render_memberships_tab() # This will be overhauled next
+    render_memberships_tab()
 
 with tab_reporting:
     render_reporting_tab()
-
-# Removed render_new_membership_form_section as it's integrated or replaced.
-# The old render_memberships_tab is replaced by the new one.
-# The old render_plans_tab is replaced by render_group_plans_tab.
