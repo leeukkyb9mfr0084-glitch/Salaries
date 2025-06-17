@@ -1,4 +1,5 @@
 import streamlit as st
+st.set_page_config(layout="wide")
 import pandas as pd
 from datetime import date, datetime  # Added datetime
 import sqlite3
@@ -51,7 +52,7 @@ def render_new_group_class_membership_form():
     # Fetch active group plans for selectbox
     try:
         all_group_plans = api.get_all_group_plans()
-        plan_options = {plan['id']: f"{plan['display_name']} ({plan['duration_days']} days, ${plan['default_amount']})"
+        plan_options = {plan['id']: f"{plan['display_name']} ({plan['duration_days']} days, ₹{plan['default_amount']})"
                         for plan in all_group_plans if plan.get('is_active', True)}
         if not plan_options:
             st.warning("No active group plans available.")
@@ -64,7 +65,7 @@ def render_new_group_class_membership_form():
         selected_member_id = st.selectbox("Select Member", options=list(member_options.keys()), format_func=lambda id: member_options[id])
         selected_plan_id = st.selectbox("Select Group Plan", options=list(plan_options.keys()), format_func=lambda id: plan_options[id])
         start_date = st.date_input("Start Date", value=date.today())
-        amount_paid = st.number_input("Amount Paid ($)", min_value=0.0, format="%.2f")
+        amount_paid = st.number_input("Amount Paid (₹)", min_value=0.0, format="%.2f")
         # purchase_date is auto-set by DBManager/API
         # membership_type ('New'/'Renewal') is also auto-set by DBManager/API
 
@@ -107,7 +108,7 @@ def render_new_pt_membership_form():
     with st.form("new_pt_membership_form", clear_on_submit=True):
         selected_member_id = st.selectbox("Select Member", options=list(member_options.keys()), format_func=lambda id: member_options[id])
         purchase_date = st.date_input("Purchase Date", value=date.today())
-        amount_paid = st.number_input("Amount Paid ($)", min_value=0.0, format="%.2f")
+        amount_paid = st.number_input("Amount Paid (₹)", min_value=0.0, format="%.2f")
         sessions_purchased = st.number_input("Sessions Purchased", min_value=1, step=1)
         notes = st.text_area("Notes (Optional)")
 
@@ -489,7 +490,7 @@ def render_group_plans_tab():
         with st.form(key=st.session_state.group_plan_form_key, clear_on_submit=False):
             plan_name_form = st.text_input("Group Plan Name (e.g., Gold, Monthly)", value=st.session_state.group_plan_name, key="group_plan_form_name")
             duration_days_form = st.number_input("Duration (Days)", value=st.session_state.group_plan_duration_days, min_value=1, step=1, key="group_plan_form_duration")
-            default_amount_form = st.number_input("Default Amount ($)", value=st.session_state.group_plan_default_amount, min_value=0.0, format="%.2f", key="group_plan_form_amount")
+            default_amount_form = st.number_input("Default Amount (₹)", value=st.session_state.group_plan_default_amount, min_value=0.0, format="%.2f", key="group_plan_form_amount")
             is_active_form = st.checkbox("Is Active", value=st.session_state.group_plan_is_active, key="group_plan_form_is_active")
 
             if st.session_state.group_plan_selected_id is not None and st.session_state.group_plan_display_name_readonly:
@@ -623,7 +624,7 @@ def render_reporting_tab():
 
         st.metric(
             label=f"Total Income for {st.session_state.report_month_financial.strftime('%B %Y')}",
-            value=f"${total_income:.2f}",
+            value=f"₹{total_income:.2f}",
         )
 
         if details_data:
@@ -634,7 +635,7 @@ def render_reporting_tab():
                 use_container_width=True,
                 column_config={
                     "purchase_date": st.column_config.DateColumn("Purchase Date", format="YYYY-MM-DD"),
-                    "amount_paid": st.column_config.NumberColumn("Amount Paid ($)", format="%.2f"),
+                    "amount_paid": st.column_config.NumberColumn("Amount Paid (₹)", format="%.2f"),
                     "type": "Type",
                     "member_name": "Member Name",
                     "item_name": "Item/Plan Name"
@@ -679,7 +680,7 @@ def render_reporting_tab():
                 "plan_name": "Plan Name",
                 "start_date": st.column_config.DateColumn("Start Date", format="YYYY-MM-DD"),
                 "end_date": st.column_config.DateColumn("End Date", format="YYYY-MM-DD"),
-                "amount_paid": st.column_config.NumberColumn("Amount Paid ($)", format="%.2f"),
+                "amount_paid": st.column_config.NumberColumn("Amount Paid (₹)", format="%.2f"),
                 "membership_type": "Type"
             }
         )
