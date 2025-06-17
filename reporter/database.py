@@ -114,6 +114,7 @@ def initialize_database():
         # seed_initial_plans(conn) # Call removed
         # print(f"Database initialized at {DB_FILE}.") # Removed
     except sqlite3.Error as e:
+        pass
         # print(f"Error during database initialization: {e}") # Removed
     finally:
         # Ensure the connection is closed in a finally block

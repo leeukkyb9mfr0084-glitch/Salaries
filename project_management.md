@@ -1,132 +1,85 @@
+Here is the project management task list. It includes previously completed work and the new pending tasks for implementing full CRUD functionality across the app.
 
+---
 
-#### **Task 1: Fix `display_name` in `group_plans` for Migrated Data - DONE**
+### **Task 1: Fix `display_name` in `group_plans` for Migrated Data - DONE**
 
 * **Objective:** Ensure the `display_name` is correctly populated by the migration script.
 * **File to Modify:** `reporter/database_manager.py`
-* **Instructions:**
-    1.  Locate the function `find_or_create_group_plan`.
-    2.  Inside this function, right before the `INSERT` statement, add the logic to generate the `display_name`.
-        ```python
-        display_name = f"{name} - {duration_days} days - ₹{price}"
-        ```
-    3.  Modify the `INSERT` statement to include and save the new `display_name` value.
-        * **Old:** `(name, duration_days, default_amount)`
-        * **New:** `(name, display_name, duration_days, default_amount)`
-        * Make sure to update the `VALUES` part of the query accordingly.
+* **Instructions:** Completed as per original task. Logic to generate and save `display_name` was added to `find_or_create_group_plan`.
 
 ---
 
-#### **Task 2: Make `is_active` Status for Group Memberships a Runtime Calculation - DONE**
+### **Task 2: Make `is_active` Status for Group Memberships a Runtime Calculation - DONE**
 
 * **Objective:** Remove the stored `is_active` column and calculate it dynamically.
-
-* **Phase 2.1: Update Database Schema**
-    * **File to Modify:** `reporter/database.py`
-    * **Instructions:**
-        1.  In the `create_tables` function, find the `CREATE TABLE group_class_memberships` statement.
-        2.  Delete the line `is_active INTEGER,`.
-
-* **Phase 2.2: Update Data Fetching Logic**
-    * **File to Modify:** `reporter/database_manager.py`
-    * **Instructions:**
-        1.  Locate the function `get_all_group_class_memberships_for_view`.
-        2.  Modify the `SELECT` query.
-        3.  Instead of selecting `is_active`, add a calculated column that checks if the current date is between the start and end dates.
-            ```sql
-            -- Replace this:
-            -- m.is_active,
-            -- With this:
-            CASE
-                WHEN date('now') BETWEEN m.start_date AND m.end_date THEN 'Active'
-                ELSE 'Inactive'
-            END as status,
-            ```
-
-* **Phase 2.3: Update Data Creation Logic**
-    * **File to Modify:** `reporter/database_manager.py`
-    * **Instructions:**
-        1.  Locate the `create_group_class_membership` function.
-        2.  Remove the `is_active` parameter from the function definition.
-        3.  Remove the line that adds `is_active` to the `INSERT` statement.
-
-* **Phase 2.4: Update API Endpoint**
-    * **File to Modify:** `reporter/app_api.py`
-    * **Instructions:**
-        1.  Locate the `add_group_class_membership` function.
-        2.  In the call to `db_mngr.create_group_class_membership`, remove the `is_active=is_active` argument.
-
-* **Phase 2.5: Update Migration Script**
-    * **File to Modify:** `reporter/migrate_historical_data.py`
-    * **Instructions:**
-        1.  In `migrate_gc_data`, find the call to `db_mngr.create_group_class_membership`.
-        2.  Remove the `is_active` argument from this function call.
-        3.  Delete the `plan_status` variable and the logic that calculates it.
+* **Files Modified:** `reporter/database.py`, `reporter/database_manager.py`, `reporter/app_api.py`, `reporter/migrate_historical_data.py`
+* **Instructions:** Completed. The `is_active` column was removed from the schema and all related create/update logic. The `get_all_group_class_memberships_for_view` function now calculates `status` at runtime.
 
 ---
 
-#### **Task 3: Refine `join_date` Logic for New Members - DONE**
+### **Task 3: Refine `join_date` Logic for New Members - DONE**
 
 * **Objective:** Set a member's `join_date` to their first-ever membership start date during migration.
-
-* **Phase 3.1: Update Member Creation Logic**
-    * **File to Modify:** `reporter/database_manager.py`
-    * **Instructions:**
-        1.  Locate the `add_member` function.
-        2.  Change its signature to accept an optional `join_date`. If it's not provided, it should default to `date.today()`.
-            ```python
-            # From:
-            def add_member(self, name, phone_number, email, is_active=True):
-            # To:
-            def add_member(self, name, phone_number, email, is_active=True, join_date=None):
-            ```
-        3.  Add logic to use the provided `join_date` or fall back to the default.
-            ```python
-            join_date_to_use = join_date if join_date else date.today().isoformat()
-            # ...
-            cursor.execute(
-                "... VALUES (?, ?, ?, ?, ?)",
-                (name, phone_number, email, join_date_to_use, is_active)
-            )
-            ```
-
-* **Phase 3.2: Update Migration Script**
-    * **File to Modify:** `reporter/migrate_historical_data.py`
-    * **Instructions:**
-        1.  At the beginning of the `migrate_data` function, read both `GC.csv` and `PT.csv` into separate pandas DataFrames.
-        2.  Create a unified list of all members and their earliest start dates. You will need to iterate through both dataframes, extract phone numbers and start dates (`Plan Start Date` for GC, `Payment Date` for PT), and store the earliest date for each unique phone number in a dictionary.
-        3.  Modify the loops in `migrate_gc_data` and `migrate_pt_data`. When you encounter a member for the first time, look up their earliest start date from the dictionary you created and pass it as the `join_date` when calling `db_mngr.add_member`.
+* **Files Modified:** `reporter/database_manager.py`, `reporter/migrate_historical_data.py`
+* **Instructions:** Completed. The `add_member` function was updated to accept an optional `join_date`.
 
 ---
 
-#### **Task 4: Simplify `pt_memberships` Table - DONE**
+### **Task 4: Simplify `pt_memberships` Table - DONE**
 
 * **Objective:** Remove unused columns from the `pt_memberships` table and associated logic.
+* **Files Modified:** `reporter/database.py`, `reporter/database_manager.py`, `reporter/app_api.py`, `reporter/streamlit_ui/app.py`, `reporter/migrate_historical_data.py`
+* **Instructions:** Completed. The `sessions_remaining` and `notes` columns were removed from the `pt_memberships` table and all related backend/UI code.
 
-* **Phase 4.1: Update Database Schema**
-    * **File to Modify:** `reporter/database.py`
+---
+
+### **Task 5: Refactor Group Class Membership Editing - PENDING**
+
+* **Objective:** Implement a full CRUD interface for Group Class Memberships, replacing the current separate Create and Delete forms with a unified system.
+
+* **Phase 5.1: Refactor Backend Update Logic**
+    * **File to Modify:** `reporter/database_manager.py`
     * **Instructions:**
-        1.  In the `create_tables` function, find the `CREATE TABLE pt_memberships` statement.
-        2.  Delete the lines `sessions_remaining INTEGER,` and `notes TEXT,`.
+        1.  Locate the `update_group_class_membership_record` function.
+        2.  Modify its signature. Remove the `plan_duration_days` and `is_active` parameters. The function should only accept `membership_id` and the fields that can be changed: `member_id`, `plan_id`, `start_date`, `amount_paid`.
+        3.  Inside the function, fetch the `duration_days` from the `group_plans` table using the provided `plan_id` to calculate the `end_date`.
+        4.  Remove all logic related to the old `is_active` parameter.
+    * **File to Modify:** `reporter/app_api.py`
+    * **Instructions:**
+        1.  Find the `update_group_class_membership_record` function.
+        2.  Update its signature to match the changes made in the `DatabaseManager`. Remove the `plan_duration_days` parameter.
 
-* **Phase 4.2: Update Database & API Logic**
-    * **File:** `reporter/database_manager.py`
-        1.  In `add_pt_membership`, remove `sessions_remaining` and `notes` from the function parameters and the `INSERT` statement.
-        2.  In `get_all_pt_memberships`, remove these two columns from the `SELECT` statement.
-    * **File:** `reporter/app_api.py`
-        1.  In `add_pt_membership`, remove `sessions_remaining` and `notes` from the parameters passed to the database manager.
-
-* **Phase 4.3: Update UI**
+* **Phase 5.2: Implement UI for Editing**
     * **File to Modify:** `reporter/streamlit_ui/app.py`
     * **Instructions:**
-        1.  In the `render_pt_memberships_tab` function, locate the form for creating a new PT membership.
-        2.  Delete the `st.number_input` for "Sessions Remaining".
-        3.  Delete the `st.text_area` for "Notes".
-        4.  Find the `st.dataframe` or `st.data_editor` that displays the PT memberships table and remove "sessions_remaining" and "notes" from the list of displayed columns.
+        1.  In `render_memberships_tab`, under the `if membership_mode == 'Group Class Memberships':` block, remove the existing UI for displaying and deleting memberships (the `st.dataframe` and the `st.selectbox` for deletion).
+        2.  Implement the standard two-column CRUD layout (similar to the Members tab).
+        3.  **Left Column:** Use `st.selectbox` to list all existing group class memberships for selection, including an "Add New" option.
+        4.  **Right Column:** Use a single form (`st.form`) for both adding and editing.
+        5.  When a membership is selected from the left, populate the form on the right with its data. When "Add New" is selected, the form should be blank.
+        6.  The form's "Save" button should call `api.create_group_class_membership` for new records or the updated `api.update_group_class_membership_record` for existing ones.
 
-* **Phase 4.4: Update Migration Script**
-    * **File to Modify:** `reporter/migrate_historical_data.py`
+---
+
+### **Task 6: Implement Full CRUD for Personal Training Memberships - PENDING**
+
+* **Objective:** Add `Update` functionality to Personal Training (PT) memberships and refactor the UI to be consistent with other tabs.
+
+* **Phase 6.1: Add Backend Update Logic**
+    * **File to Modify:** `reporter/database_manager.py`
     * **Instructions:**
-        1.  In `migrate_pt_data`, find the call to `db_mngr.add_pt_membership`.
-        2.  Remove the `sessions_remaining` and `notes` arguments from the function call.
-        3.  Delete any variables that were reading these values from the CSV.
+        1.  Create a new function: `update_pt_membership`.
+        2.  It should accept `membership_id` and optional parameters for fields that can be changed: `purchase_date`, `amount_paid`, `sessions_purchased`.
+        3.  Implement the `UPDATE` SQL query to save the changes.
+    * **File to Modify:** `reporter/app_api.py`
+    * **Instructions:**
+        1.  Create a new function: `update_pt_membership` that calls the corresponding new function in the `DatabaseManager`.
+
+* **Phase 6.2: Implement UI for Editing**
+    * **File to Modify:** `reporter/streamlit_ui/app.py`
+    * **Instructions:**
+        1.  In `render_memberships_tab`, find the `elif membership_mode == 'Personal Training Memberships':` block.
+        2.  Remove the current UI for displaying the dataframe and the separate delete selectbox.
+        3.  Replicate the standard two-column CRUD layout here.
+        4.  The form's "Save" button should call `api.create_pt_membership` for new records and the new `api.update_pt_membership` for existing records.
