@@ -3,11 +3,8 @@ import pandas as pd
 from datetime import date, datetime  # Added datetime
 import sqlite3
 import io  # For Excel download
-
-from reporter.app_api import AppAPI
-from reporter.database import DB_FILE
-
-
+from app_api import AppAPI
+from database import DB_FILE
 # --- Database Connection & API Initialization ---
 from reporter.database_manager import DatabaseManager
 import sqlite3 # Added for connection for DB Manager
