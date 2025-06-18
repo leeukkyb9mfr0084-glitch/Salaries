@@ -18,17 +18,17 @@
     * **Context:** The `group_plans` table defines the templates for all group memberships, and its structure must be exact for consistency.
     * **Instruction:** Ensure the `group_plans` table schema in `database.py` exactly matches the following structure: `id` (INTEGER, PK), `name` (TEXT), `duration_days` (INTEGER), `default_amount` (REAL), `display_name` (TEXT, UNIQUE), `is_active` (BOOLEAN).
 
-* **Task 1.4: Update `PTMembershipView` DTO**
+* **Task 1.4: Update `PTMembershipView` DTO - DONE**
     * **File:** `reporter/models.py`
     * **Context:** To fix a critical data bug where the "amount paid" was being lost during UI edits, and to match our simplified database, we need to update the `PTMembershipView` DTO.
     * **Instruction:** In the `@dataclass class PTMembershipView`, delete the `notes: str` attribute. Then, add a new attribute: `amount_paid: float`.
 
-* **Task 1.5: Standardize `is_active` Flag in DTOs**
+* **Task 1.5: Standardize `is_active` Flag in DTOs - DONE**
     * **File:** `reporter/models.py`
     * **Context:** We are implementing a project-wide standard for consistency. This ensures we handle active/inactive records the same way everywhere.
     * **Instruction:** For all "View" DTOs in this file (`MemberView`, `GroupPlanView`, `GroupClassMembershipView`), you must replace any `status: str` attribute with `is_active: bool`.
 
-* **Task 1.6: Final Schema-DTO Verification**
+* **Task 1.6: Final Schema-DTO Verification - DONE**
     * **Files:** `reporter/database.py`, `reporter/models.py`
     * **Context:** This step is a crucial quality check to ensure data flows predictably between the database and the application.
     * **Instruction:** Perform a final visual check. For every column in each table in `database.py`, confirm that a matching attribute with the correct Python type exists in the corresponding DTO in `models.py`.
@@ -36,19 +36,19 @@
 ### **Phase 2: Refactor the Data Access Layer**
 *This phase ensures our code communicates correctly with the updated database.*
 
-* **Task 2.1: Correct All `get` Queries**
+* **Task 2.1: Correct All `get` Queries - DONE**
     * **File:** `reporter/database_manager.py`
     * **Context:** The queries are currently broken because they refer to old column names. They must be updated to correctly populate our new DTOs from Phase 1.
     * **Instruction:** Review every function that fetches data for a "View" (e.g., `get_all_pt_memberships_for_view`). Modify its SQL `SELECT` statement to use the corrected column names (`is_active` instead of `status`) and to fetch all fields required by the updated DTOs (like `amount_paid` for `PTMembershipView`).
 
-* **Task 2.2: Fix `add_pt_membership` Logic**
+* **Task 2.2: Fix `add_pt_membership` Logic - DONE**
     * **File:** `reporter/database_manager.py`
     * **Context:** We are moving the business logic for new PT packages into the data layer to make it more robust and reliable.
     * **Instruction:** Modify the `add_pt_membership` function so it automatically sets the remaining sessions.
         1.  Remove the `notes` and `sessions_remaining` parameters from the function signature.
         2.  In the `INSERT` statement, use the `sessions_purchased` value passed into the function for *both* the `sessions_total` and `sessions_remaining` columns.
 
-* **Task 2.3: Remove Redundant Function**
+* **Task 2.3: Remove Redundant Function - DONE**
     * **File:** `reporter/database_manager.py`
     * **Context:** To simplify our backend and reduce redundant code, we are removing this function. The new, cleaner pattern is to filter data in the UI layer.
     * **Instruction:** Delete the entire `get_active_members_for_view` function.
@@ -56,12 +56,12 @@
 ### **Phase 3: Synchronize the API Layer**
 *This phase ensures the API provides a clean, correct interface to the UI.*
 
-* **Task 3.1: Fix `create_pt_membership` Signature**
+* **Task 3.1: Fix `create_pt_membership` Signature - DONE**
     * **File:** `reporter/app_api.py`
     * **Context:** The API layer must always stay in sync with the Data Access Layer it calls.
     * **Instruction:** Find the `create_pt_membership` function. Update its signature to match the changes from Phase 2. Remove the `notes` and `sessions_remaining` parameters from the function signature and from the call to the database manager.
 
-* **Task 3.2: Verify All API Signatures**
+* **Task 3.2: Verify All API Signatures - DONE**
     * **File:** `reporter/app_api.py`
     * **Context:** This is a quality check to ensure data consistency across the application layers.
     * **Instruction:** Briefly review all other functions in this file. Ensure the arguments they accept and the DTOs they return are consistent with the updated functions in `database_manager.py` and the DTOs in `models.py`.
@@ -69,7 +69,7 @@
 ### **Phase 4: Realign the User Interface**
 *This phase implements the required user experience.*
 
-* **Task 4.1: Restructure the `Memberships` Tab Layout**
+* **Task 4.1: Restructure the `Memberships` Tab Layout - DONE**
     * **File:** `reporter/streamlit_ui/app.py`
     * **Context:** We are redesigning the Memberships tab for a more intuitive workflow, with creation/editing on the left and viewing/selection on the right.
     * **Instruction:** In the `render_memberships_tab` function:

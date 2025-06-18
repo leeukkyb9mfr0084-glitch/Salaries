@@ -14,6 +14,7 @@ class MemberView:
 class GroupPlanView:
     id: int
     name: str
+    display_name: str
     price: Optional[float] = None
     duration_days: Optional[int] = None
     description: Optional[str] = None

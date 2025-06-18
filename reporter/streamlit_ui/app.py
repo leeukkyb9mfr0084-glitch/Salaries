@@ -263,88 +263,64 @@ def render_memberships_tab():
 
     if membership_mode == 'Group Class Memberships':
         # --- UI for Group Class Memberships ---
-        left_col, right_col = st.columns([1, 2])
+        left_col, right_col = st.columns([2, 1]) # Swapped column ratios for form on left
 
-        with left_col:
+        with right_col: # This is the new right_col (formerly left_col content for selection)
             st.subheader("Select Membership or Add New")
             try:
-                all_gc_memberships = api.get_all_group_class_memberships_for_view() # Already using updated name
-                if not all_gc_memberships: # Returns List[GroupClassMembershipView]
+                all_gc_memberships = api.get_all_group_class_memberships_for_view()
+                if not all_gc_memberships:
                     all_gc_memberships = []
             except Exception as e:
                 st.error(f"Error fetching group class memberships: {e}")
                 all_gc_memberships = []
 
-            gc_membership_options = {"add_new": "➕ Add New Group Class Membership"}
-            for m in all_gc_memberships: # m is GroupClassMembershipView
-                # DTO fields: id, member_id, member_name, plan_id, plan_name, start_date, end_date, status, auto_renewal_enabled
+            if st.button("➕ Add New Group Class Membership", key="gc_add_new_button"):
+                st.session_state.selected_gc_membership_id = "add_new"
+                st.session_state.confirm_delete_gc_membership_id = None
+                st.session_state.gc_membership_form_key = f"gc_form_{datetime.now().timestamp()}"
+                # Clear form fields for new entry
+                st.session_state.gc_member_id_form = None
+                st.session_state.gc_member_name_display = ""
+                st.session_state.gc_plan_id_form = None
+                st.session_state.gc_start_date_form = date.today()
+                st.session_state.gc_amount_paid_form = 0.0
+                st.rerun()
+
+            st.markdown("---")
+            st.write("**Existing Group Class Memberships:**")
+
+            if not all_gc_memberships:
+                st.info("No group class memberships found.")
+
+            for m in all_gc_memberships:
                 display_text = f"{m.member_name} - {m.plan_name} (Start: {m.start_date}) - ID: {m.id}"
-                gc_membership_options[m.id] = display_text
-
-            # Ensure current selection is valid, otherwise default to "add_new"
-            current_selection = st.session_state.selected_gc_membership_id
-            if current_selection not in gc_membership_options:
-                current_selection = "add_new" # Default to add_new if current ID is no longer valid (e.g., after deletion)
-                # st.session_state.selected_gc_membership_id = "add_new" #This line seems redundant due to the one above. Removed.
-
-
-            selected_gc_membership_key = st.selectbox(
-                "Select Group Class Membership",
-                options=list(gc_membership_options.keys()),
-                format_func=lambda key: gc_membership_options[key],
-                key="gc_membership_select_widget",
-                index = list(gc_membership_options.keys()).index(current_selection) # Ensure current selection is reflected
-            )
-
-            if selected_gc_membership_key != st.session_state.selected_gc_membership_id:
-                st.session_state.selected_gc_membership_id = selected_gc_membership_key
-                st.session_state.confirm_delete_gc_membership_id = None # Reset delete confirmation
-                st.session_state.gc_membership_form_key = f"gc_form_{datetime.now().timestamp()}" # Reset form
-
-                if st.session_state.selected_gc_membership_id == "add_new":
-                    # Clear form fields for new entry
-                    st.session_state.gc_member_id_form = None
-                    st.session_state.gc_member_name_display = ""
-                    st.session_state.gc_plan_id_form = None
-                    st.session_state.gc_start_date_form = date.today()
-                    st.session_state.gc_amount_paid_form = 0.0
-                else:
+                st.markdown(display_text) # Display membership info
+                if st.button(f"Select##GC{m.id}", key=f"select_gc_{m.id}"):
+                    st.session_state.selected_gc_membership_id = m.id
+                    st.session_state.confirm_delete_gc_membership_id = None
+                    st.session_state.gc_membership_form_key = f"gc_form_{datetime.now().timestamp()}"
                     # Fetch and populate for editing
-                    selected_data = next((m for m in all_gc_memberships if m.id == st.session_state.selected_gc_membership_id), None)
-                    if selected_data: # selected_data is GroupClassMembershipView
+                    selected_data = next((mem for mem in all_gc_memberships if mem.id == m.id), None)
+                    if selected_data:
                         st.session_state.gc_member_id_form = selected_data.member_id
                         st.session_state.gc_member_name_display = selected_data.member_name or ""
                         st.session_state.gc_plan_id_form = selected_data.plan_id
                         start_date_val = selected_data.start_date
                         if isinstance(start_date_val, str):
                             st.session_state.gc_start_date_form = datetime.strptime(start_date_val, "%Y-%m-%d").date()
-                        elif isinstance(start_date_val, date): # Should already be date object if from DTO properly
+                        elif isinstance(start_date_val, date):
                             st.session_state.gc_start_date_form = start_date_val
-                        else: # Fallback, though DTO should ensure type
+                        else:
                             st.session_state.gc_start_date_form = date.today()
-                        # amount_paid is not in GroupClassMembershipView DTO.
-                        # This field was in the old dict-based selected_data.get("amount_paid", 0.0)
-                        # The DTO is id, member_id, member_name, plan_id, plan_name, start_date, end_date, status, auto_renewal_enabled
-                        # This form part needs re-evaluation if amount_paid is essential for edit.
-                        # For now, I'll set it to a default or remove if not in DTO.
-                        # Prompt for database_manager.py for get_all_group_class_memberships_for_view used:
-                        # SELECT gcm.id, m.id as member_id, m.name as member_name, gp.id as plan_id, gp.name as plan_name,
-                        # gcm.start_date, gcm.end_date, gcm.status, gcm.auto_renewal_enabled
-                        # This query does NOT include amount_paid. So, selected_data.amount_paid would be an AttributeError.
-                        # The form has st.session_state.gc_amount_paid_form. This value is used later in api.update_group_class_membership_record
-                        # The update function signature is (self, membership_id, member_id, plan_id, start_date, amount_paid)
-                        # This implies amount_paid is part of the update logic.
-                        # This is a discrepancy. The DTO should probably include amount_paid if it's editable here.
-                        # For now, I will assume amount_paid is NOT available from selected_data and the form will use its existing session state value,
-                        # which might be stale or 0.0. This is a potential bug noted.
-                        # To avoid AttributeError, I will not try to get it from selected_data.
                         st.session_state.gc_amount_paid_form = selected_data.amount_paid or 0.0
-                    else: # Should not happen if selected_gc_membership_id is from the list
+                    else:
                         st.error("Selected membership data not found. Please try again.")
-                        st.session_state.selected_gc_membership_id = "add_new" # Reset to add_new
-                st.rerun()
+                        st.session_state.selected_gc_membership_id = "add_new"
+                    st.rerun()
+                st.markdown("---") # Separator for each membership item
 
-        with right_col:
+        with left_col: # This is the new left_col (formerly right_col content for the form)
             if st.session_state.selected_gc_membership_id == "add_new":
                 st.subheader("Add New Group Class Membership")
             else:
@@ -534,58 +510,54 @@ def render_memberships_tab():
 
     elif membership_mode == 'Personal Training Memberships':
         # --- UI for Personal Training Memberships ---
-        pt_left_col, pt_right_col = st.columns([1, 2])
+        pt_left_col, pt_right_col = st.columns([2, 1]) # Swapped column ratios
 
-        with pt_left_col:
+        with pt_right_col: # This is the new pt_right_col (formerly pt_left_col content for selection)
             st.subheader("Select PT Membership or Add New")
             try:
-                all_pt_memberships = api.get_all_pt_memberships_for_view() # Returns List[PTMembershipView]
+                all_pt_memberships = api.get_all_pt_memberships_for_view()
                 if not all_pt_memberships:
                     all_pt_memberships = []
             except Exception as e:
                 st.error(f"Error fetching PT memberships: {e}")
                 all_pt_memberships = []
 
-            pt_membership_options = {"add_new": "➕ Add New PT Membership"}
-            for pt_m in all_pt_memberships: # pt_m is PTMembershipView
-                # PTMembershipView DTO fields: membership_id, member_name, purchase_date, sessions_total, sessions_remaining, notes
+            if st.button("➕ Add New PT Membership", key="pt_add_new_button"):
+                st.session_state.selected_pt_membership_id = "add_new"
+                st.session_state.confirm_delete_pt_membership_id = None
+                st.session_state.pt_membership_form_key = f"pt_form_{datetime.now().timestamp()}"
+                # Clear form fields for new entry
+                st.session_state.pt_member_id_form = None
+                st.session_state.pt_member_name_display = ""
+                st.session_state.pt_purchase_date_form = date.today()
+                st.session_state.pt_amount_paid_form = 0.0
+                st.session_state.pt_sessions_purchased_form = 1
+                # Reset notes field if it exists in session state for PT form (Task 4.4 might add this)
+                if 'pt_notes_form' in st.session_state:
+                    st.session_state.pt_notes_form = ""
+                st.rerun()
+
+            st.markdown("---")
+            st.write("**Existing Personal Training Memberships:**")
+
+            if not all_pt_memberships:
+                st.info("No Personal Training memberships found.")
+
+            for pt_m in all_pt_memberships:
                 display_text = (
                     f"{pt_m.member_name} - Total: {pt_m.sessions_total}, Rem: {pt_m.sessions_remaining} "
                     f"(Purchased: {pt_m.purchase_date}) - ID: {pt_m.membership_id}"
                 )
-                pt_membership_options[pt_m.membership_id] = display_text
-
-            current_pt_selection = st.session_state.selected_pt_membership_id
-            if current_pt_selection not in pt_membership_options:
-                current_pt_selection = "add_new"
-                st.session_state.selected_pt_membership_id = "add_new"
-
-            selected_pt_membership_key = st.selectbox(
-                "Select PT Membership",
-                options=list(pt_membership_options.keys()),
-                format_func=lambda key: pt_membership_options[key],
-                key="pt_membership_select_widget",
-                index=list(pt_membership_options.keys()).index(current_pt_selection)
-            )
-
-            if selected_pt_membership_key != st.session_state.selected_pt_membership_id:
-                st.session_state.selected_pt_membership_id = selected_pt_membership_key
-                st.session_state.confirm_delete_pt_membership_id = None
-                st.session_state.pt_membership_form_key = f"pt_form_{datetime.now().timestamp()}"
-
-                if st.session_state.selected_pt_membership_id == "add_new":
-                    st.session_state.pt_member_id_form = None # Handled by selectbox for active members
-                    st.session_state.pt_member_name_display = ""
-                    st.session_state.pt_purchase_date_form = date.today()
-                    st.session_state.pt_amount_paid_form = 0.0
-                    st.session_state.pt_sessions_purchased_form = 1
-                else:
-                    selected_pt_data = next((m for m in all_pt_memberships if m.membership_id == st.session_state.selected_pt_membership_id), None)
-                    if selected_pt_data: # selected_pt_data is PTMembershipView
-                        st.session_state.pt_member_id_form = selected_pt_data.member_id # Keep for internal reference if needed
+                st.markdown(display_text)
+                if st.button(f"Select##PT{pt_m.membership_id}", key=f"select_pt_{pt_m.membership_id}"):
+                    st.session_state.selected_pt_membership_id = pt_m.membership_id
+                    st.session_state.confirm_delete_pt_membership_id = None
+                    st.session_state.pt_membership_form_key = f"pt_form_{datetime.now().timestamp()}"
+                    selected_pt_data = next((m for m in all_pt_memberships if m.membership_id == pt_m.membership_id), None)
+                    if selected_pt_data:
+                        st.session_state.pt_member_id_form = selected_pt_data.member_id
                         st.session_state.pt_member_name_display = selected_pt_data.member_name or ""
-
-                        purchase_date_val = selected_pt_data.purchase_date # Corrected to use purchase_date
+                        purchase_date_val = selected_pt_data.purchase_date
                         if isinstance(purchase_date_val, str):
                             st.session_state.pt_purchase_date_form = datetime.strptime(purchase_date_val, "%Y-%m-%d").date()
                         elif isinstance(purchase_date_val, date):
@@ -593,19 +565,20 @@ def render_memberships_tab():
                         else:
                             st.session_state.pt_purchase_date_form = date.today()
 
-                        # PTMembershipView does not have amount_paid. This line will cause an AttributeError if uncommented.
-                        # Task 4.1 is about using existing DTO fields. If amount_paid needs to be edited, DTO and DB query must be updated first.
-                        # st.session_state.pt_amount_paid_form = selected_pt_data.amount_paid or 0.0
-                        # For now, amount_paid will rely on its value from "add_new" or previous edits, not directly from selected_pt_data here.
-
-                        st.session_state.pt_sessions_purchased_form = selected_pt_data.sessions_total or 1 # This maps to "Sessions Purchased" form field
-                        # notes field (selected_pt_data.notes) is available but not used in form fields for Task 4.1. Task 4.4 handles adding notes to form.
+                        # PTMembershipView DTO has amount_paid.
+                        st.session_state.pt_amount_paid_form = selected_pt_data.amount_paid or 0.0
+                        st.session_state.pt_sessions_purchased_form = selected_pt_data.sessions_total or 1
+                        # If notes are part of selected_pt_data and a session state variable for notes exists (e.g. pt_notes_form for Task 4.4)
+                        if hasattr(selected_pt_data, 'notes') and 'pt_notes_form' in st.session_state:
+                             st.session_state.pt_notes_form = selected_pt_data.notes or ""
                     else:
                         st.error("Selected PT membership data not found.")
                         st.session_state.selected_pt_membership_id = "add_new"
-                st.rerun()
+                    st.rerun()
+                st.markdown("---")
 
-        with pt_right_col:
+
+        with pt_left_col: # This is the new pt_left_col (formerly pt_right_col content for the form)
             if st.session_state.selected_pt_membership_id == "add_new":
                 st.subheader("Add New PT Membership")
             else:
