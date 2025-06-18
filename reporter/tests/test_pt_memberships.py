@@ -51,47 +51,65 @@ def test_add_pt_membership_success(db_manager_pt: DatabaseManager):
     amount_p = 150.0
     sessions_p = 10
     notes_val = "Initial PT package"
+    # sessions_remaining typically defaults to sessions_purchased on creation
+    sessions_r_val = sessions_p
 
-    pt_membership_id = db_manager_pt.add_pt_membership(member_id, purchase_d, amount_p, sessions_p, notes_val)
+    pt_membership_id = db_manager_pt.add_pt_membership(member_id, purchase_d, amount_p, sessions_p, notes_val, sessions_r_val)
     assert pt_membership_id is not None
     assert isinstance(pt_membership_id, int)
 
     # Verify in DB
     new_cursor = db_manager_pt.conn.cursor()
-    new_cursor.execute("SELECT member_id, purchase_date, amount_paid, sessions_purchased, sessions_remaining, notes FROM pt_memberships WHERE id = ?", (pt_membership_id,))
+    # Select sessions_total as per new schema
+    new_cursor.execute("SELECT member_id, purchase_date, amount_paid, sessions_total, sessions_remaining, notes FROM pt_memberships WHERE id = ?", (pt_membership_id,))
     record = new_cursor.fetchone()
     assert record is not None
     assert record[0] == member_id
     assert record[1] == purchase_d
     assert record[2] == amount_p
-    assert record[3] == sessions_p
-    assert record[4] == sessions_p # sessions_remaining should equal sessions_purchased
+    assert record[3] == sessions_p # sessions_total
+    assert record[4] == sessions_r_val # sessions_remaining
     assert record[5] == notes_val
 
-def test_get_all_pt_memberships_empty(db_manager_pt: DatabaseManager):
-    """Tests retrieving all PT memberships when none exist."""
-    all_pt_memberships = db_manager_pt.get_all_pt_memberships()
+def test_get_all_pt_memberships_for_view_empty(db_manager_pt: DatabaseManager): # Renamed for clarity
+    """Tests retrieving all PT memberships for view when none exist."""
+    all_pt_memberships = db_manager_pt.get_all_pt_memberships_for_view() # Using _for_view method
     assert isinstance(all_pt_memberships, list)
     assert len(all_pt_memberships) == 0
 
-def test_get_all_pt_memberships_with_data(db_manager_pt: DatabaseManager):
-    """Tests retrieving all PT memberships with some data."""
+def test_get_all_pt_memberships_for_view_with_data(db_manager_pt: DatabaseManager): # Renamed for clarity
+    """Tests retrieving all PT memberships for view with some data."""
     cursor = db_manager_pt.conn.cursor()
     cursor.execute("SELECT id FROM members WHERE phone = '7890123456'")
     member_row = cursor.fetchone()
     assert member_row is not None, "Test member not found"
     member_id = member_row[0]
 
-    db_manager_pt.add_pt_membership(member_id, date.today().strftime("%Y-%m-%d"), 150.0, 10, "Package 1")
-    db_manager_pt.add_pt_membership(member_id, date.today().strftime("%Y-%m-%d"), 280.0, 20, "Package 2")
+    # Add sessions_remaining to calls
+    db_manager_pt.add_pt_membership(member_id, date.today().strftime("%Y-%m-%d"), 150.0, 10, "Package 1", 10)
+    db_manager_pt.add_pt_membership(member_id, date.today().strftime("%Y-%m-%d"), 280.0, 20, "Package 2", 15) # Example with different sessions_remaining
 
-    all_pt_memberships = db_manager_pt.get_all_pt_memberships()
-    assert len(all_pt_memberships) == 2
-    # Results are ordered by purchase_date DESC, then by id DESC (implicitly by add order if same date)
-    assert all_pt_memberships[0]["sessions_purchased"] == 20
-    assert all_pt_memberships[1]["sessions_purchased"] == 10
-    assert all_pt_memberships[0]["member_name"] == "PT Test Member"
+    all_pt_memberships_view = db_manager_pt.get_all_pt_memberships_for_view() # Using _for_view method
+    assert len(all_pt_memberships_view) == 2
 
+    # Results are ordered by purchase_date DESC, then by id DESC
+    # The one with 280.0 amount (Package 2) should be first as it was added later with same date
+    # PTMembershipView attributes: membership_id, member_id, member_name, purchase_date, sessions_total, sessions_remaining, notes
+
+    membership1 = all_pt_memberships_view[0] # Package 2
+    membership2 = all_pt_memberships_view[1] # Package 1
+
+    assert membership1.sessions_total == 20
+    assert membership1.sessions_remaining == 15
+    assert membership1.notes == "Package 2"
+    assert membership1.member_name == "PT Test Member"
+    assert membership1.member_id == member_id
+    assert membership1.purchase_date == date.today().strftime("%Y-%m-%d")
+
+    assert membership2.sessions_total == 10
+    assert membership2.sessions_remaining == 10
+    assert membership2.notes == "Package 1"
+    assert membership2.member_name == "PT Test Member"
 
 def test_delete_pt_membership_success(db_manager_pt: DatabaseManager):
     """Tests deleting a PT membership successfully."""
@@ -101,7 +119,8 @@ def test_delete_pt_membership_success(db_manager_pt: DatabaseManager):
     assert member_row is not None, "Test member not found"
     member_id = member_row[0]
 
-    pt_membership_id = db_manager_pt.add_pt_membership(member_id, date.today().strftime("%Y-%m-%d"), 100.0, 5, "To delete")
+    # Add sessions_remaining to call
+    pt_membership_id = db_manager_pt.add_pt_membership(member_id, date.today().strftime("%Y-%m-%d"), 100.0, 5, "To delete", 5)
     assert pt_membership_id is not None
 
     deleted = db_manager_pt.delete_pt_membership(pt_membership_id)

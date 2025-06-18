@@ -637,6 +637,7 @@ def render_memberships_tab():
                 form_pt_purchase_date = st.date_input("Purchase Date", value=st.session_state.pt_purchase_date_form, key="pt_form_purchase_date")
                 form_pt_amount_paid = st.number_input("Amount Paid (₹)", value=st.session_state.pt_amount_paid_form, min_value=0.0, format="%.2f", key="pt_form_amount_paid")
                 form_pt_sessions_purchased = st.number_input("Sessions Purchased", value=st.session_state.pt_sessions_purchased_form, min_value=1, step=1, key="pt_form_sessions_purchased")
+                pt_notes_input = st.text_area("Notes", key="pt_notes_create") # Added notes field for creation
 
                 pt_form_cols = st.columns(3 if st.session_state.selected_pt_membership_id != "add_new" else 2)
                 with pt_form_cols[0]:
@@ -664,7 +665,8 @@ def render_memberships_tab():
                                 member_id=form_pt_member_id_select,
                                 purchase_date=form_pt_purchase_date.strftime("%Y-%m-%d"),
                                 amount_paid=form_pt_amount_paid,
-                                sessions_purchased=form_pt_sessions_purchased
+                                sessions_purchased=form_pt_sessions_purchased,
+                                notes=pt_notes_input # Passed notes to API
                             )
                             if record_id:
                                 st.success(f"PT Membership created with ID: {record_id}")
