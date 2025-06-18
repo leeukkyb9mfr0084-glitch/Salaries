@@ -330,9 +330,9 @@ class DatabaseManager:
         try:
             self.conn.row_factory = sqlite3.Row
             cursor = self.conn.cursor()
-            # GroupPlanView: id, name, price, duration_days, description, is_active (changed from status)
-            # Query maps default_amount to price, display_name to description, and selects is_active.
-            cursor.execute("SELECT id, name, default_amount as price, duration_days, display_name as description, is_active FROM group_plans ORDER BY name ASC")
+            # GroupPlanView: id, name, price, duration_days, display_name, is_active (changed from status)
+            # Query maps default_amount to price, and selects is_active.
+            cursor.execute("SELECT id, name, default_amount as price, duration_days, display_name, is_active FROM group_plans ORDER BY name ASC")
             rows = cursor.fetchall()
             # Ensure GroupPlanView DTO constructor aligns with these fields, especially 'is_active'
             return [GroupPlanView(**row) for row in rows]
@@ -516,7 +516,7 @@ class DatabaseManager:
                 gcm.start_date,
                 gcm.end_date,
                 gcm.is_active,
-                gcm.auto_renewal_enabled,
+                # gcm.auto_renewal_enabled, -- THIS LINE IS REMOVED
                 gcm.amount_paid,
                 gcm.purchase_date,
                 gcm.membership_type
