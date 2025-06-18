@@ -1,5 +1,5 @@
 ### Kranos Reporter: Application Specifications
-*Version 6.0 - Last Updated: June 16, 2025*
+*Version 7.0 - Last Updated: June 18, 2025*
 
 #### 1. Overview
 This document outlines the complete functional and technical specifications for the Kranos Reporter application. The application is an internal tool designed to manage members, group class plans, personal training memberships, and all associated financial reporting.
@@ -7,7 +7,7 @@ This document outlines the complete functional and technical specifications for 
 #### 2. Database Schema
 The application will use an SQLite database with the following four core tables. This schema separates duration-based group classes from session-based personal training for data integrity.
 
-**`members` table:** (No changes)
+**`members` table:**
 * `id` (INTEGER, Primary Key)
 * `name` (TEXT, Mandatory)
 * `phone` (TEXT, Mandatory, Unique)
@@ -37,14 +37,13 @@ The application will use an SQLite database with the following four core tables.
 * `is_active` (BOOLEAN)
 
 **`pt_memberships` table:**
-*This new table tracks the purchase of session-based personal training packages.*
+*This table tracks the purchase of session-based personal training packages.*
 * `id` (INTEGER, Primary Key)
 * `member_id` (INTEGER, Foreign Key to `members.id`)
 * `purchase_date` (TEXT)
 * `amount_paid` (REAL)
 * `sessions_purchased` (INTEGER)
 * `sessions_remaining` (INTEGER)
-* `notes` (TEXT)
 
 #### 3. Functional Specifications by Tab
 
@@ -58,17 +57,13 @@ The application will feature a four-tab navigation structure.
 
 **`Memberships` Tab**
 * **Functionality:** This tab consolidates the management of both Group Class and Personal Training memberships.
-* **Mode Selector:** A radio button or dropdown will be placed at the top of this tab with two options: "Group Class Memberships" (default) and "Personal Training Memberships". The selection will determine the content displayed below.
+* **Mode Selector:** A radio button will be placed at the top of this tab with two options: "Group Class Memberships" (default) and "Personal Training Memberships". The selection will determine the content displayed below.
 * **"Group Class Memberships" Mode:**
-    * **UI:** A two-panel layout for creating and viewing records from the `group_class_memberships` table.
-    * **Creation Form (Left Panel):** Will allow creating a new time-based membership. It will include a dropdown to select a member and another to select from the `group_plans` list.
-    * **View (Right Panel):** A filterable list of all records from the `group_class_memberships` table.
+    * **UI:** A two-panel layout. The **left panel** will feature the form for creating a new time-based membership. It will include a dropdown to select a member and another to select from the `group_plans` list. The **right panel** will display a filterable, selectable list of all existing records from the `group_class_memberships` table. Selecting a record will populate the form on the left for editing.
 * **"Personal Training Memberships" Mode:**
-    * **UI:** A two-panel layout for creating and viewing records from the `pt_memberships` table.
-    * **Creation Form (Left Panel):** Will allow creating a new PT package. It will include a dropdown to select a member and fields for `Purchase Date`, `Amount Paid`, and `Sessions Purchased`.
+    * **UI:** A two-panel layout consistent with the Group Class mode. The **left panel** will feature the form for creating a new PT package, including fields for selecting a member, `Purchase Date`, `Amount Paid`, and `Sessions Purchased`. The **right panel** will display a filterable, selectable list of all existing records from the `pt_memberships` table. Selecting a record will populate the form on the left for editing.
     * **Note:** The `sessions_remaining` field will be saved to the database but no UI functionality will be built to manage it (e.g., no "Use Session" button).
-    * **View (Right Panel):** A filterable list of all records from the `pt_memberships` table.
-
+    
 **`Reporting` Tab**
 * **Functionality:** This tab provides financial and renewal reporting.
 * **Financial Report:**
