@@ -263,10 +263,12 @@ def render_memberships_tab():
 
     if membership_mode == 'Group Class Memberships':
         # --- UI for Group Class Memberships ---
-        left_col, right_col = st.columns([2, 1]) # Swapped column ratios for form on left
+        # Define a two-column layout: left_col for form, right_col for list
+        left_col, right_col = st.columns([1, 2])
 
-        with right_col: # This is the new right_col (formerly left_col content for selection)
-            st.subheader("Select Membership or Add New")
+        # Content for the right column (listing memberships)
+        with right_col:
+            st.subheader("Existing Group Class Memberships")
             try:
                 all_gc_memberships = api.get_all_group_class_memberships_for_view()
                 if not all_gc_memberships:
@@ -320,18 +322,20 @@ def render_memberships_tab():
                     st.rerun()
                 st.markdown("---") # Separator for each membership item
 
-        with left_col: # This is the new left_col (formerly right_col content for the form)
+        # Content for the left column (form for creating/editing)
+        with left_col:
             if st.session_state.selected_gc_membership_id == "add_new":
                 st.subheader("Add New Group Class Membership")
             else:
                 st.subheader(f"Edit Group Class Membership (ID: {st.session_state.selected_gc_membership_id})")
 
-            # Fetch active members for member selection (only for "Add New")
+            # Fetch all members then filter for active ones for member selection (only for "Add New")
             try:
-                active_members = api.get_active_members_for_view()
+                all_members = api.get_all_members_for_view()
+                active_members = [member for member in all_members if member.is_active == 1] # UI-side filtering
                 member_options_for_select = {member.id: f"{member.name} (ID: {member.id})" for member in active_members}
             except Exception as e:
-                st.error(f"Error fetching active members: {e}")
+                st.error(f"Error fetching members: {e}") # Updated error message
                 member_options_for_select = {}
 
             # Fetch all group plans for plan selection
@@ -510,10 +514,12 @@ def render_memberships_tab():
 
     elif membership_mode == 'Personal Training Memberships':
         # --- UI for Personal Training Memberships ---
-        pt_left_col, pt_right_col = st.columns([2, 1]) # Swapped column ratios
+        # Define a two-column layout: pt_left_col for form, pt_right_col for list
+        pt_left_col, pt_right_col = st.columns([1, 2])
 
-        with pt_right_col: # This is the new pt_right_col (formerly pt_left_col content for selection)
-            st.subheader("Select PT Membership or Add New")
+        # Content for the right column (listing PT memberships)
+        with pt_right_col:
+            st.subheader("Existing Personal Training Memberships")
             try:
                 all_pt_memberships = api.get_all_pt_memberships_for_view()
                 if not all_pt_memberships:
@@ -577,18 +583,19 @@ def render_memberships_tab():
                     st.rerun()
                 st.markdown("---")
 
-
-        with pt_left_col: # This is the new pt_left_col (formerly pt_right_col content for the form)
+        # Content for the left column (form for creating/editing PT memberships)
+        with pt_left_col:
             if st.session_state.selected_pt_membership_id == "add_new":
                 st.subheader("Add New PT Membership")
             else:
                 st.subheader(f"Edit PT Membership (ID: {st.session_state.selected_pt_membership_id})")
 
             try:
-                active_members = api.get_active_members_for_view()
+                all_members = api.get_all_members_for_view()
+                active_members = [member for member in all_members if member.is_active == 1] # UI-side filtering
                 member_options_for_pt_select = {member.id: f"{member.name} (ID: {member.id})" for member in active_members}
             except Exception as e:
-                st.error(f"Error fetching active members: {e}")
+                st.error(f"Error fetching members: {e}") # Updated error message
                 member_options_for_pt_select = {}
 
             with st.form(key=st.session_state.pt_membership_form_key, clear_on_submit=False):
@@ -610,7 +617,6 @@ def render_memberships_tab():
                 form_pt_purchase_date = st.date_input("Purchase Date", value=st.session_state.pt_purchase_date_form, key="pt_form_purchase_date")
                 form_pt_amount_paid = st.number_input("Amount Paid (₹)", value=st.session_state.pt_amount_paid_form, min_value=0.0, format="%.2f", key="pt_form_amount_paid")
                 form_pt_sessions_purchased = st.number_input("Sessions Purchased", value=st.session_state.pt_sessions_purchased_form, min_value=1, step=1, key="pt_form_sessions_purchased")
-                pt_notes_input = st.text_area("Notes", key="pt_notes_create") # Added notes field for creation
 
                 pt_form_cols = st.columns(3 if st.session_state.selected_pt_membership_id != "add_new" else 2)
                 with pt_form_cols[0]:
@@ -638,8 +644,7 @@ def render_memberships_tab():
                                 member_id=form_pt_member_id_select,
                                 purchase_date=form_pt_purchase_date.strftime("%Y-%m-%d"),
                                 amount_paid=form_pt_amount_paid,
-                                sessions_purchased=form_pt_sessions_purchased,
-                                notes=pt_notes_input # Passed notes to API
+                                sessions_purchased=form_pt_sessions_purchased
                             )
                             if record_id:
                                 st.success(f"PT Membership created with ID: {record_id}")
