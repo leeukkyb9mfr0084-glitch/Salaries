@@ -38,7 +38,6 @@ def create_database(db_name: str):
             amount_paid REAL,
             sessions_total INTEGER,
             sessions_remaining INTEGER,
-            notes TEXT,
             FOREIGN KEY (member_id) REFERENCES members(id)
         );
         """
@@ -55,10 +54,8 @@ def create_database(db_name: str):
             end_date TEXT,
             amount_paid REAL,
             purchase_date TEXT,
-            membership_type TEXT, -- 'New' or 'Renewal'
-            FOREIGN KEY (member_id) REFERENCES members(id),
-            FOREIGN KEY (plan_id) REFERENCES group_plans(id),
-            UNIQUE(member_id, plan_id, start_date)
+            membership_type TEXT,
+            is_active BOOLEAN
         );
         """
         )

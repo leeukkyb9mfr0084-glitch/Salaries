@@ -3,17 +3,17 @@
 ### **Phase 1: Align Database Schema & Data Models**
 *This phase is the foundation. We are making our database and data models match the required application structure.*
 
-* **Task 1.1: Update `pt_memberships` Table**
+* **Task 1.1: Update `pt_memberships` Table** - DONE
     * **File:** `reporter/database.py`
     * **Context:** We are simplifying the personal training data model by removing unused fields.
     * **Instruction:** Find the `CREATE TABLE pt_memberships` SQL statement and delete the entire line containing the `notes TEXT,` definition.
 
-* **Task 1.2: Align `group_class_memberships` Table**
+* **Task 1.2: Align `group_class_memberships` Table** - DONE
     * **File:** `reporter/database.py`
     * **Context:** To ensure complete and accurate tracking of time-based memberships, we need a precise table structure.
     * **Instruction:** Modify the `CREATE TABLE group_class_memberships` statement to ensure it contains exactly these columns in this order: `id`, `member_id`, `plan_id`, `start_date`, `end_date`, `amount_paid`, `purchase_date`, `membership_type`, and `is_active`.
 
-* **Task 1.3: Verify `group_plans` Table**
+* **Task 1.3: Verify `group_plans` Table** - DONE
     * **File:** `reporter/database.py`
     * **Context:** The `group_plans` table defines the templates for all group memberships, and its structure must be exact for consistency.
     * **Instruction:** Ensure the `group_plans` table schema in `database.py` exactly matches the following structure: `id` (INTEGER, PK), `name` (TEXT), `duration_days` (INTEGER), `default_amount` (REAL), `display_name` (TEXT, UNIQUE), `is_active` (BOOLEAN).
