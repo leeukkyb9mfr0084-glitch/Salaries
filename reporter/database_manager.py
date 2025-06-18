@@ -666,22 +666,22 @@ class DatabaseManager:
             return False, f"Database error: {e}"
 
     # Personal Training (PT) Membership CRUD operations
-    def add_pt_membership(self, member_id: int, purchase_date: str, amount_paid: float, sessions_purchased: int, notes: str) -> Optional[int]:
+    def add_pt_membership(self, member_id: int, purchase_date: str, amount_paid: float, sessions_purchased: int, notes: str, sessions_remaining: int) -> Optional[int]:
         """Adds a new PT membership record.
-        sessions_remaining and notes have been removed from this table. # This docstring seems outdated based on Task 1.1 and 2.4
+        Handles sessions_total (from sessions_purchased param), notes, and sessions_remaining.
         Returns the id of the newly created PT membership, or None if an error occurs.
         """
         cursor = self.conn.cursor()
         try:
-            # sessions_purchased column should be sessions_total as per Task 1.1.
-            # notes column added as per Task 1.1 and this task (2.4).
+            # sessions_purchased parameter maps to sessions_total column.
+            # notes and sessions_remaining are now included.
             sql_insert = """
-            INSERT INTO pt_memberships (member_id, purchase_date, amount_paid, sessions_total, notes)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO pt_memberships (member_id, purchase_date, amount_paid, sessions_total, notes, sessions_remaining)
+            VALUES (?, ?, ?, ?, ?, ?)
             """
             cursor.execute(
                 sql_insert,
-                (member_id, purchase_date, amount_paid, sessions_purchased, notes), # sessions_purchased param maps to sessions_total column
+                (member_id, purchase_date, amount_paid, sessions_purchased, notes, sessions_remaining),
             )
             self.conn.commit()
             pt_membership_id = cursor.lastrowid

@@ -48,7 +48,7 @@ Understood. Here is a phase-wise task list to resolve the identified codebase is
 | **4.1** | `reporter/streamlit_ui/app.py` | **Fix PT Memberships Display.** The PT tab will be broken. Update the code that displays the PT memberships DataFrame to use the correct attribute names from the new `PTMembershipView` DTO (`membership_id`, `member_name`, `sessions_total`, `sessions_remaining`). \<br\> **Action:** Modify the `render_memberships_tab` function where it iterates through `pt_memberships`. | Done |
 | **4.2** | `reporter/streamlit_ui/app.py` | **Fix Members Tab Display.** This tab will be broken. Update the DataFrame display to use the attributes from the simplified `MemberView` DTO. \<br\> **Action:** Modify the `render_members_tab` function. | Done |
 | **4.3** | `reporter/streamlit_ui/app.py` | **Fix Membership Edit Form.** The form fails when trying to access `amount_paid`. Since you added this field back into the DTO in Task 2.3, this should now work. \<br\> **Action:** Verify that `selected_data.amount_paid` is now a valid attribute and the edit form loads correctly. | Done (Verified: `selected_data.amount_paid` is a valid attribute of `GroupClassMembershipView` and is correctly used to populate the edit form field `st.session_state.gc_amount_paid_form`. No code changes needed.) |
-| **4.4** | `reporter/streamlit_ui/app.py` | **Update PT Membership Creation.** The form for creating a new PT membership needs a field for `notes`. \<br\> **Action:** In `render_memberships_tab`, add an `st.text_area("Notes")` to the PT creation form and pass its value to the `api.create_pt_membership` function call. |
+| **4.4** | `reporter/streamlit_ui/app.py` | **Update PT Membership Creation.** The form for creating a new PT membership needs a field for `notes`. \<br\> **Action:** In `render_memberships_tab`, add an `st.text_area("Notes")` to the PT creation form and pass its value to the `api.create_pt_membership` function call. | Done |
 
 -----
 
@@ -56,8 +56,8 @@ Understood. Here is a phase-wise task list to resolve the identified codebase is
 
 **Objective:** Bring the migration script and test suite in line with the fixed application code.
 
-| Task ID | File | Instructions |
-| :--- | :--- | :--- |
-| **5.1** | `reporter/migrate_historical_data.py` | **Update PT Data Migration.** The script needs to handle the new `pt_memberships` schema. \<br\> **Action:** In the `migrate_pt_data` function, modify the `INSERT` statement to use the `sessions_total` column (renamed from `sessions_purchased`). Set default values for `sessions_remaining` (e.g., same as `sessions_total`) and `notes` (e.g., an empty string `''`). |
-| **5.2** | `reporter/tests/test_database_manager.py` | **Fix Failing Tests.** Many tests will be failing due to schema and DTO changes. \<br\> **Action:** Go through the test file. Update `INSERT` statements in test setups to match the new schema. Update assertions to check for the correct data structures and DTOs. Remove tests for obsolete logic or columns. |
-| **5.3** | `reporter/tests/test_pt_memberships.py` | **Fix Failing PT Tests.** This test file is heavily affected. \<br\> **Action:** Rewrite the tests to align with the new `pt_memberships` schema and the `PTMembershipView` DTO. Ensure you are testing the `notes` and `sessions_remaining` functionality. |
+| Task ID | File | Instructions | Status |
+| :--- | :--- | :--- | :--- |
+| **5.1** | `reporter/migrate_historical_data.py` | **Update PT Data Migration.** The script needs to handle the new `pt_memberships` schema. \<br\> **Action:** In the `migrate_pt_data` function, modify the `INSERT` statement to use the `sessions_total` column (renamed from `sessions_purchased`). Set default values for `sessions_remaining` (e.g., same as `sessions_total`) and `notes` (e.g., an empty string `''`). | Done |
+| **5.2** | `reporter/tests/test_database_manager.py` | **Fix Failing Tests.** Many tests will be failing due to schema and DTO changes. \<br\> **Action:** Go through the test file. Update `INSERT` statements in test setups to match the new schema. Update assertions to check for the correct data structures and DTOs. Remove tests for obsolete logic or columns. | Done |
+| **5.3** | `reporter/tests/test_pt_memberships.py` | **Fix Failing PT Tests.** This test file is heavily affected. \<br\> **Action:** Rewrite the tests to align with the new `pt_memberships` schema and the `PTMembershipView` DTO. Ensure you are testing the `notes` and `sessions_remaining` functionality. | Done |

@@ -256,16 +256,26 @@ def migrate_pt_data(db_mngr: DatabaseManager, processed_members: dict, earliest_
                     continue
 
                 cursor_check = db_mngr.conn.cursor()
+                # Check if a similar record already exists, now including new fields
+                # Defaulting notes to '' and sessions_remaining to sessions_purchased for the check
                 cursor_check.execute("""
                     SELECT id FROM pt_memberships
-                    WHERE member_id = ? AND purchase_date = ? AND amount_paid = ? AND sessions_purchased = ?
-                """, (member_id, purchase_date, amount_paid, sessions_purchased))
+                    WHERE member_id = ? AND purchase_date = ? AND amount_paid = ? AND sessions_total = ? AND notes = ? AND sessions_remaining = ?
+                """, (member_id, purchase_date, amount_paid, sessions_purchased, '', sessions_purchased))
                 if cursor_check.fetchone():
+                    logging.info(f"Skipping existing PT record for member_id {member_id} on {purchase_date}")
                     continue
 
-                pt_id = db_mngr.add_pt_membership(
-                    member_id=member_id, purchase_date=purchase_date, amount_paid=amount_paid,
-                    sessions_purchased=sessions_purchased
+                # Call the updated method, assuming add_pt_membership is an alias or calls create_pt_membership
+                # which was updated in Task 2.4 and 3.1 to accept notes.
+                # We also pass sessions_remaining, defaulting to sessions_purchased (now sessions_total).
+                pt_id = db_mngr.create_pt_membership( # Changed to create_pt_membership based on previous task updates
+                    member_id=member_id,
+                    purchase_date=purchase_date,
+                    amount_paid=amount_paid,
+                    sessions_purchased=sessions_purchased, # This will be sessions_total in the db_manager method
+                    notes='',  # Default notes to empty string
+                    sessions_remaining=sessions_purchased # Default sessions_remaining to sessions_purchased
                 )
                 if pt_id:
                     success_count +=1
