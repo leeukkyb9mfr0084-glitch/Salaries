@@ -6,12 +6,12 @@ Understood. Here is a phase-wise task list to resolve the identified codebase is
 
 **Objective:** Align the database schema and the Data Transfer Objects (DTOs). This is the most critical phase.
 
-| Task ID | File | Instructions |
-| :--- | :--- | :--- |
-| **1.1** | `reporter/database.py` | **Update the `pt_memberships` table.** Add the `notes` and `sessions_remaining` columns. The `sessions_purchased` column should be renamed to `sessions_total` for clarity. \<br\> **Action:** Modify the `CREATE TABLE pt_memberships` SQL statement. |
-| **1.2** | `reporter/models.py` | **Synchronize `PTMembershipView` DTO.** Update the fields to match the `pt_memberships` and `members` tables. It should contain fields populated by a JOIN query. \<br\> **Action:** Replace the existing `PTMembershipView` with: `python @dataclass class PTMembershipView: membership_id: int member_id: int member_name: str purchase_date: str sessions_total: int sessions_remaining: int notes: str` |
-| **1.3** | `reporter/models.py` | **Fix `MemberView` DTO.** The `status`, `membership_type`, and `payment_status` fields do not exist in the database and are too complex to calculate in a simple view. Remove them for now. \<br\> **Action:** Simplify the `MemberView` DTO to only include fields that are directly in the `members` table. |
-| **1.4** | `reporter/models.py` | **Clean up `GroupClassMembershipView` DTO.** The `member_display_name` and `plan_display_name` fields are redundant. \<br\> **Action:** Remove these two fields. Use the existing `member_name` and `plan_name` fields in the UI. |
+| Task ID | File | Instructions | Status |
+| :--- | :--- | :--- | :--- |
+| **1.1** | `reporter/database.py` | **Update the `pt_memberships` table.** Add the `notes` and `sessions_remaining` columns. The `sessions_purchased` column should be renamed to `sessions_total` for clarity. \<br\> **Action:** Modify the `CREATE TABLE pt_memberships` SQL statement. | Done |
+| **1.2** | `reporter/models.py` | **Synchronize `PTMembershipView` DTO.** Update the fields to match the `pt_memberships` and `members` tables. It should contain fields populated by a JOIN query. \<br\> **Action:** Replace the existing `PTMembershipView` with: `python @dataclass class PTMembershipView: membership_id: int member_id: int member_name: str purchase_date: str sessions_total: int sessions_remaining: int notes: str` | Done |
+| **1.3** | `reporter/models.py` | **Fix `MemberView` DTO.** The `status`, `membership_type`, and `payment_status` fields do not exist in the database and are too complex to calculate in a simple view. Remove them for now. \<br\> **Action:** Simplify the `MemberView` DTO to only include fields that are directly in the `members` table. | Done |
+| **1.4** | `reporter/models.py` | **Clean up `GroupClassMembershipView` DTO.** The `member_display_name` and `plan_display_name` fields are redundant. \<br\> **Action:** Remove these two fields. Use the existing `member_name` and `plan_name` fields in the UI. | Done |
 
 -----
 
@@ -19,9 +19,9 @@ Understood. Here is a phase-wise task list to resolve the identified codebase is
 
 **Objective:** Update the `DatabaseManager` to work with the corrected schema and DTOs.
 
-| Task ID | File | Instructions |
-| :--- | :--- | :--- |
-| **2.1** | `reporter/database_manager.py` | **Fix `get_all_pt_memberships_for_view`.** The SQL query is broken. It must be rewritten to `JOIN` the `members` and `pt_memberships` tables to get the data required for the updated `PTMembershipView` DTO. \<br\> **Action:** Rewrite the SQL query inside the function. Ensure you select `pt.id as membership_id`, `m.name as member_name`, etc., and correctly instantiate and return a `List[PTMembershipView]`. |
+| Task ID | File | Instructions | Status |
+| :--- | :--- | :--- | :--- |
+| **2.1** | `reporter/database_manager.py` | **Fix `get_all_pt_memberships_for_view`.** The SQL query is broken. It must be rewritten to `JOIN` the `members` and `pt_memberships` tables to get the data required for the updated `PTMembershipView` DTO. \<br\> **Action:** Rewrite the SQL query inside the function. Ensure you select `pt.id as membership_id`, `m.name as member_name`, etc., and correctly instantiate and return a `List[PTMembershipView]`. | Done |
 | **2.2** | `reporter/database_manager.py` | **Fix `get_all_members_for_view`.** The SQL query tries to select columns that do not exist. \<br\> **Action:** Simplify the `SELECT` statement to only pull columns that are present in the `members` table, matching the simplified `MemberView` DTO from Task 1.3. |
 | **2.3** | `reporter/database_manager.py` | **Fix `get_all_group_class_memberships_for_view`.** The query is missing the `amount_paid` column, which the UI needs for editing. \<br\> **Action:** Add `gcm.amount_paid` to the `SELECT` statement and add the corresponding `amount_paid: float` field to the `GroupClassMembershipView` DTO in `models.py`. |
 | **2.4** | `reporter/database_manager.py` | **Update `create_pt_membership`.** The function needs to handle the new `notes` field. \<br\> **Action:** Add a `notes: str` parameter to the function signature and include it in the `INSERT` statement. |
