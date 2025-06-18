@@ -261,7 +261,7 @@ def migrate_pt_data(db_mngr: DatabaseManager, processed_members: dict, earliest_
                 cursor_check.execute("""
                     SELECT id FROM pt_memberships
                     WHERE member_id = ? AND purchase_date = ? AND amount_paid = ? AND sessions_total = ? AND notes = ? AND sessions_remaining = ?
-                """, (member_id, purchase_date, amount_paid, sessions_purchased, '', sessions_purchased))
+                """, (member_id, purchase_date, amount_paid, sessions_purchased, sessions_purchased))
                 if cursor_check.fetchone():
                     logging.info(f"Skipping existing PT record for member_id {member_id} on {purchase_date}")
                     continue
