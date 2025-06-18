@@ -8,7 +8,7 @@ class MemberView:
     phone: str  # Assuming phone is stored as str, adjust if it's int
     email: str
     join_date: str
-    is_active: int # Assuming is_active is stored as int (0 or 1)
+    is_active: bool
 
 @dataclass
 class GroupPlanView:
@@ -17,7 +17,7 @@ class GroupPlanView:
     price: Optional[float] = None
     duration_days: Optional[int] = None
     description: Optional[str] = None
-    status: Optional[str] = None # e.g., Active, Discontinued
+    is_active: bool
 
 @dataclass
 class GroupClassMembershipView:
@@ -28,7 +28,9 @@ class GroupClassMembershipView:
     plan_name: str # Denormalized for easy display
     start_date: str # Assuming YYYY-MM-DD
     end_date: str # Assuming YYYY-MM-DD
-    status: str # e.g., Active, Expired, Cancelled
+    is_active: bool
+    purchase_date: str
+    membership_type: str
     auto_renewal_enabled: Optional[bool] = None
     amount_paid: Optional[float] = None
 
@@ -41,4 +43,4 @@ class PTMembershipView:
     purchase_date: str
     sessions_total: int
     sessions_remaining: int
-    notes: str
+    amount_paid: float
