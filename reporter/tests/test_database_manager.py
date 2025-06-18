@@ -334,14 +334,14 @@ def test_get_all_members_for_view(db_manager: DatabaseManager):
     assert alpha.phone == "000000001"
     assert alpha.email == "alpha@example.com"
     assert alpha.join_date == past_date_str(10)
-    assert alpha.is_active == 1 # is_active is int (0 or 1) in DB
+    assert alpha.is_active is True # is_active is int (0 or 1) in DB
 
     assert beta.id == m2_id
     assert beta.name == "Member Beta"
     assert beta.phone == "000000002"
     assert beta.email == "beta@example.com"
     assert beta.join_date == past_date_str(5)
-    assert beta.is_active == 0
+    assert beta.is_active is False
 
 # Test for GroupClassMembershipView (including amount_paid, no display_names)
 def test_get_all_group_class_memberships_for_view(db_manager: DatabaseManager):
@@ -373,7 +373,7 @@ def test_get_all_group_class_memberships_for_view(db_manager: DatabaseManager):
     assert view_item.amount_paid == amount_paid_val # Should be from the membership record
     assert date.fromisoformat(view_item.purchase_date.split(" ")[0]) == date.today()
     assert view_item.membership_type == "New"
-    assert view_item.is_active == 1 # Directly from gcm.is_active
+    assert view_item.is_active is True # Directly from gcm.is_active
 
 
 def test_delete_pt_membership_stub(db_manager: DatabaseManager): # Kept stub name, but updated call
