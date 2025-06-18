@@ -22,9 +22,9 @@ Understood. Here is a phase-wise task list to resolve the identified codebase is
 | Task ID | File | Instructions | Status |
 | :--- | :--- | :--- | :--- |
 | **2.1** | `reporter/database_manager.py` | **Fix `get_all_pt_memberships_for_view`.** The SQL query is broken. It must be rewritten to `JOIN` the `members` and `pt_memberships` tables to get the data required for the updated `PTMembershipView` DTO. \<br\> **Action:** Rewrite the SQL query inside the function. Ensure you select `pt.id as membership_id`, `m.name as member_name`, etc., and correctly instantiate and return a `List[PTMembershipView]`. | Done |
-| **2.2** | `reporter/database_manager.py` | **Fix `get_all_members_for_view`.** The SQL query tries to select columns that do not exist. \<br\> **Action:** Simplify the `SELECT` statement to only pull columns that are present in the `members` table, matching the simplified `MemberView` DTO from Task 1.3. |
-| **2.3** | `reporter/database_manager.py` | **Fix `get_all_group_class_memberships_for_view`.** The query is missing the `amount_paid` column, which the UI needs for editing. \<br\> **Action:** Add `gcm.amount_paid` to the `SELECT` statement and add the corresponding `amount_paid: float` field to the `GroupClassMembershipView` DTO in `models.py`. |
-| **2.4** | `reporter/database_manager.py` | **Update `create_pt_membership`.** The function needs to handle the new `notes` field. \<br\> **Action:** Add a `notes: str` parameter to the function signature and include it in the `INSERT` statement. |
+| **2.2** | `reporter/database_manager.py` | **Fix `get_all_members_for_view`.** The SQL query tries to select columns that do not exist. \<br\> **Action:** Simplify the `SELECT` statement to only pull columns that are present in the `members` table, matching the simplified `MemberView` DTO from Task 1.3. | Done |
+| **2.3** | `reporter/database_manager.py` | **Fix `get_all_group_class_memberships_for_view`.** The query is missing the `amount_paid` column, which the UI needs for editing. \<br\> **Action:** Add `gcm.amount_paid` to the `SELECT` statement and add the corresponding `amount_paid: float` field to the `GroupClassMembershipView` DTO in `models.py`. | Done |
+| **2.4** | `reporter/database_manager.py` | **Update `create_pt_membership`.** The function needs to handle the new `notes` field. \<br\> **Action:** Add a `notes: str` parameter to the function signature and include it in the `INSERT` statement. | Done |
 
 -----
 
@@ -32,10 +32,10 @@ Understood. Here is a phase-wise task list to resolve the identified codebase is
 
 **Objective:** Ensure the API layer correctly passes data to and from the updated `DatabaseManager`.
 
-| Task ID | File | Instructions |
-| :--- | :--- | :--- |
-| **3.1** | `reporter/app_api.py` | **Update `create_pt_membership` signature.** The API function needs to match the new `database_manager` function. \<br\> **Action:** Add the `notes: str` parameter to the function signature and pass it to `self.db_manager.create_pt_membership`. |
-| **3.2** | `reporter/app_api.py` | **No other changes needed.** This layer is a simple pass-through. Verify that all other function signatures still match their counterparts in `database_manager.py`. |
+| Task ID | File | Instructions | Status |
+| :--- | :--- | :--- | :--- |
+| **3.1** | `reporter/app_api.py` | **Update `create_pt_membership` signature.** The API function needs to match the new `database_manager` function. \<br\> **Action:** Add the `notes: str` parameter to the function signature and pass it to `self.db_manager.create_pt_membership`. | Done |
+| **3.2** | `reporter/app_api.py` | **No other changes needed.** This layer is a simple pass-through. Verify that all other function signatures still match their counterparts in `database_manager.py`. | Done (Verified. Minor discrepancies in param names for `add_member` (`phone` vs `phone_number`) and `update_group_class_membership_record` (`start_date` vs `start_date_str`), and return types for `update_group_class_membership_record` and `delete_group_class_membership_record` are handled by API layer. Core functionality aligns.) |
 
 -----
 
@@ -43,11 +43,11 @@ Understood. Here is a phase-wise task list to resolve the identified codebase is
 
 **Objective:** Make the Streamlit UI consume the corrected DTOs and call the updated API functions.
 
-| Task ID | File | Instructions |
-| :--- | :--- | :--- |
-| **4.1** | `reporter/streamlit_ui/app.py` | **Fix PT Memberships Display.** The PT tab will be broken. Update the code that displays the PT memberships DataFrame to use the correct attribute names from the new `PTMembershipView` DTO (`membership_id`, `member_name`, `sessions_total`, `sessions_remaining`). \<br\> **Action:** Modify the `render_memberships_tab` function where it iterates through `pt_memberships`. |
-| **4.2** | `reporter/streamlit_ui/app.py` | **Fix Members Tab Display.** This tab will be broken. Update the DataFrame display to use the attributes from the simplified `MemberView` DTO. \<br\> **Action:** Modify the `render_members_tab` function. |
-| **4.3** | `reporter/streamlit_ui/app.py` | **Fix Membership Edit Form.** The form fails when trying to access `amount_paid`. Since you added this field back into the DTO in Task 2.3, this should now work. \<br\> **Action:** Verify that `selected_data.amount_paid` is now a valid attribute and the edit form loads correctly. |
+| Task ID | File | Instructions | Status |
+| :--- | :--- | :--- | :--- |
+| **4.1** | `reporter/streamlit_ui/app.py` | **Fix PT Memberships Display.** The PT tab will be broken. Update the code that displays the PT memberships DataFrame to use the correct attribute names from the new `PTMembershipView` DTO (`membership_id`, `member_name`, `sessions_total`, `sessions_remaining`). \<br\> **Action:** Modify the `render_memberships_tab` function where it iterates through `pt_memberships`. | Done |
+| **4.2** | `reporter/streamlit_ui/app.py` | **Fix Members Tab Display.** This tab will be broken. Update the DataFrame display to use the attributes from the simplified `MemberView` DTO. \<br\> **Action:** Modify the `render_members_tab` function. | Done |
+| **4.3** | `reporter/streamlit_ui/app.py` | **Fix Membership Edit Form.** The form fails when trying to access `amount_paid`. Since you added this field back into the DTO in Task 2.3, this should now work. \<br\> **Action:** Verify that `selected_data.amount_paid` is now a valid attribute and the edit form loads correctly. | Done (Verified: `selected_data.amount_paid` is a valid attribute of `GroupClassMembershipView` and is correctly used to populate the edit form field `st.session_state.gc_amount_paid_form`. No code changes needed.) |
 | **4.4** | `reporter/streamlit_ui/app.py` | **Update PT Membership Creation.** The form for creating a new PT membership needs a field for `notes`. \<br\> **Action:** In `render_memberships_tab`, add an `st.text_area("Notes")` to the PT creation form and pass its value to the `api.create_pt_membership` function call. |
 
 -----

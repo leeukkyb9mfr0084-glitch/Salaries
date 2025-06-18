@@ -70,8 +70,9 @@ class AppAPI:
         return success # Or handle message if needed
 
     # Personal Training (PT) Membership operations
-    def create_pt_membership(self, member_id: int, purchase_date: str, amount_paid: float, sessions_purchased: int) -> Optional[int]:
-        return self.db_manager.add_pt_membership(member_id, purchase_date, amount_paid, sessions_purchased)
+    # Parameter `sessions_purchased` here maps to `sessions_total` in the database (as per Task 1.1 and db_manager.add_pt_membership update in Task 2.4)
+    def create_pt_membership(self, member_id: int, purchase_date: str, amount_paid: float, sessions_purchased: int, notes: str) -> Optional[int]:
+        return self.db_manager.add_pt_membership(member_id, purchase_date, amount_paid, sessions_purchased, notes)
 
     def get_all_pt_memberships_for_view(self) -> List[PTMembershipView]:
         records = self.db_manager.get_all_pt_memberships_for_view()

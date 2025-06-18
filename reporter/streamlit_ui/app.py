@@ -141,8 +141,8 @@ def render_new_group_class_membership_form():
         # The MemberView DTO has 'status'. We'll need to adjust logic if 'status' != 'Active' means inactive.
         # For this refactor, I'll assume direct attribute access and that the DTO structure supports this.
         # If 'is_active' was a boolean field in the DTO, it would be simpler.
-        # Given MemberView: status: Optional[str] = None # e.g., Active, Inactive, Frozen
-        member_options = {member.id: f"{member.name} (ID: {member.id})" for member in all_members if member.status == 'Active'}
+        # Given MemberView DTO now has is_active: int (0 or 1)
+        member_options = {member.id: f"{member.name} (ID: {member.id})" for member in all_members if member.is_active == 1}
         if not member_options:
             st.warning("No active members available to create a membership for.")
             return
@@ -205,8 +205,12 @@ def render_new_pt_membership_form():
     st.subheader("Create New Personal Training Membership")
 
     try:
-        all_members = api.get_all_members_for_view() # Updated API call
-        member_options = {member.id: f"{member.name} (ID: {member.id})" for member in all_members if member.status == 'Active'}
+        all_members_for_pt_form = api.get_all_members_for_view() # Renamed variable to avoid potential scope issues
+        # Filter for active members based on MemberView.is_active (int)
+        member_options = {
+            member.id: f"{member.name} (ID: {member.id})"
+            for member in all_members_for_pt_form if member.is_active == 1
+        }
         if not member_options:
             st.warning("No active members available to create a PT membership for.")
             return
@@ -544,17 +548,12 @@ def render_memberships_tab():
 
             pt_membership_options = {"add_new": "➕ Add New PT Membership"}
             for pt_m in all_pt_memberships: # pt_m is PTMembershipView
-                # DTO: id, member_id, member_name, plan_id, plan_name, start_date, end_date, sessions_total, sessions_remaining, status
-                # The existing UI uses 'sessions_purchased' and 'purchase_date'.
-                # The DTO from previous step: PTMembershipView has sessions_total, not sessions_purchased.
-                # And start_date, not purchase_date. This is a mismatch.
-                # I will use DTO fields. If 'sessions_total' means 'sessions_purchased' and 'start_date' means 'purchase_date', it will work.
-                # The query for get_all_pt_memberships_for_view was:
-                # SELECT ptm.id, m.id as member_id, m.name as member_name, ptm.plan_id, ptm.plan_name,
-                # ptm.start_date, ptm.end_date, ptm.sessions_total, ptm.sessions_remaining, ptm.status
-                # This means pt_m.sessions_total and pt_m.start_date are available.
-                display_text = f"{pt_m.member_name} - {pt_m.sessions_total or 0} sessions (Purchased: {pt_m.start_date or 'N/A'}) - ID: {pt_m.id}"
-                pt_membership_options[pt_m.id] = display_text
+                # PTMembershipView DTO fields: membership_id, member_name, purchase_date, sessions_total, sessions_remaining, notes
+                display_text = (
+                    f"{pt_m.member_name} - Total: {pt_m.sessions_total}, Rem: {pt_m.sessions_remaining} "
+                    f"(Purchased: {pt_m.purchase_date}) - ID: {pt_m.membership_id}"
+                )
+                pt_membership_options[pt_m.membership_id] = display_text
 
             current_pt_selection = st.session_state.selected_pt_membership_id
             if current_pt_selection not in pt_membership_options:
@@ -579,14 +578,14 @@ def render_memberships_tab():
                     st.session_state.pt_member_name_display = ""
                     st.session_state.pt_purchase_date_form = date.today()
                     st.session_state.pt_amount_paid_form = 0.0
-                    st.session_state.pt_sessions_purchased_form = 1 # This should probably be sessions_total from DTO
+                    st.session_state.pt_sessions_purchased_form = 1
                 else:
-                    selected_pt_data = next((m for m in all_pt_memberships if m.id == st.session_state.selected_pt_membership_id), None)
+                    selected_pt_data = next((m for m in all_pt_memberships if m.membership_id == st.session_state.selected_pt_membership_id), None)
                     if selected_pt_data: # selected_pt_data is PTMembershipView
-                        st.session_state.pt_member_id_form = selected_pt_data.member_id
+                        st.session_state.pt_member_id_form = selected_pt_data.member_id # Keep for internal reference if needed
                         st.session_state.pt_member_name_display = selected_pt_data.member_name or ""
 
-                        purchase_date_val = selected_pt_data.start_date # Using start_date from DTO for purchase_date
+                        purchase_date_val = selected_pt_data.purchase_date # Corrected to use purchase_date
                         if isinstance(purchase_date_val, str):
                             st.session_state.pt_purchase_date_form = datetime.strptime(purchase_date_val, "%Y-%m-%d").date()
                         elif isinstance(purchase_date_val, date):
@@ -594,14 +593,13 @@ def render_memberships_tab():
                         else:
                             st.session_state.pt_purchase_date_form = date.today()
 
-                        # amount_paid is not in PTMembershipView as per its query.
-                        # Query: ptm.id, m.id as member_id, m.name as member_name, ptm.plan_id, ptm.plan_name,
-                        # ptm.start_date, ptm.end_date, ptm.sessions_total, ptm.sessions_remaining, ptm.status
-                        # The form has st.session_state.pt_amount_paid_form
-                        # api.update_pt_membership takes amount_paid.
-                        # This is another discrepancy like in GC form. Will leave existing session state value.
-                        st.session_state.pt_amount_paid_form = selected_pt_data.amount_paid or 0.0
-                        st.session_state.pt_sessions_purchased_form = selected_pt_data.sessions_total or 1 # Using sessions_total
+                        # PTMembershipView does not have amount_paid. This line will cause an AttributeError if uncommented.
+                        # Task 4.1 is about using existing DTO fields. If amount_paid needs to be edited, DTO and DB query must be updated first.
+                        # st.session_state.pt_amount_paid_form = selected_pt_data.amount_paid or 0.0
+                        # For now, amount_paid will rely on its value from "add_new" or previous edits, not directly from selected_pt_data here.
+
+                        st.session_state.pt_sessions_purchased_form = selected_pt_data.sessions_total or 1 # This maps to "Sessions Purchased" form field
+                        # notes field (selected_pt_data.notes) is available but not used in form fields for Task 4.1. Task 4.4 handles adding notes to form.
                     else:
                         st.error("Selected PT membership data not found.")
                         st.session_state.selected_pt_membership_id = "add_new"
@@ -797,9 +795,9 @@ def render_members_tab():
                     st.session_state.member_name = selected_member_data.name or ""
                     st.session_state.member_email = selected_member_data.email or ""
                     st.session_state.member_phone = selected_member_data.phone or ""
-                    # MemberView DTO has 'status'. Assuming 'Active' means is_active is True.
-                    # The form uses st.session_state.member_is_active (bool)
-                    st.session_state.member_is_active = (selected_member_data.status == 'Active')
+                    # MemberView DTO has is_active: int (0 or 1).
+                    # The form uses st.session_state.member_is_active (bool).
+                    st.session_state.member_is_active = bool(selected_member_data.is_active)
                     st.session_state.member_form_key = f"member_form_{datetime.now().timestamp()}"
             else:
                 clear_member_form(clear_selection=False)

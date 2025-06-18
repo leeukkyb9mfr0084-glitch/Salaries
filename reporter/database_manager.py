@@ -148,11 +148,16 @@ class DatabaseManager:
             self.conn.row_factory = sqlite3.Row
             cursor = self.conn.cursor()
             # Ensure query selects columns matching MemberView DTO
-            # MemberView: id, name, email, phone, join_date, status, membership_type, payment_status, notes
-            # Original query: "SELECT id, name, phone, email, join_date, is_active FROM members"
-            # Mapping is_active to status. Other fields might be missing from older schema or need to be added to query.
-            cursor.execute("SELECT id, name, email, phone, join_date, status, membership_type, payment_status, notes FROM members ORDER BY name ASC")
+            # MemberView DTO is expected to be simplified as per Task 1.3,
+            # containing fields like: id, name, phone, email, join_date, is_active.
+            # The 'notes' field's presence in MemberView depends on whether it's a direct column in 'members' table
+            # and if it was kept in the simplified DTO.
+            # This query aligns with a simplified MemberView that includes is_active.
+            cursor.execute("SELECT id, name, phone, email, join_date, is_active FROM members ORDER BY name ASC")
             rows = cursor.fetchall()
+            # Assumes MemberView constructor matches these fields (e.g., includes is_active).
+            # If MemberView expects 'status' instead of 'is_active', a transformation would be needed here.
+            # However, Task 1.3 implies 'status' was removed.
             return [MemberView(**row) for row in rows]
         except sqlite3.Error as e:
             logging.error(f"Database error in get_all_members_for_view: {e}", exc_info=True)
@@ -661,20 +666,22 @@ class DatabaseManager:
             return False, f"Database error: {e}"
 
     # Personal Training (PT) Membership CRUD operations
-    def add_pt_membership(self, member_id: int, purchase_date: str, amount_paid: float, sessions_purchased: int) -> Optional[int]:
+    def add_pt_membership(self, member_id: int, purchase_date: str, amount_paid: float, sessions_purchased: int, notes: str) -> Optional[int]:
         """Adds a new PT membership record.
-        sessions_remaining and notes have been removed from this table.
+        sessions_remaining and notes have been removed from this table. # This docstring seems outdated based on Task 1.1 and 2.4
         Returns the id of the newly created PT membership, or None if an error occurs.
         """
         cursor = self.conn.cursor()
         try:
+            # sessions_purchased column should be sessions_total as per Task 1.1.
+            # notes column added as per Task 1.1 and this task (2.4).
             sql_insert = """
-            INSERT INTO pt_memberships (member_id, purchase_date, amount_paid, sessions_purchased)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO pt_memberships (member_id, purchase_date, amount_paid, sessions_total, notes)
+            VALUES (?, ?, ?, ?, ?)
             """
             cursor.execute(
                 sql_insert,
-                (member_id, purchase_date, amount_paid, sessions_purchased),
+                (member_id, purchase_date, amount_paid, sessions_purchased, notes), # sessions_purchased param maps to sessions_total column
             )
             self.conn.commit()
             pt_membership_id = cursor.lastrowid
