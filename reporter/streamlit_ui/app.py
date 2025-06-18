@@ -446,21 +446,33 @@ def render_memberships_tab():
                             else:
                                 st.error("Failed to create Group Class Membership.")
                         else: # Editing existing
-                            success = api.update_group_class_membership_record(
-                                membership_id=st.session_state.selected_gc_membership_id,
-                                member_id=form_member_id, # This is the original member_id, not changeable in this UI
-                                plan_id=form_plan_id,
-                                start_date=form_start_date.strftime("%Y-%m-%d"),
-                                amount_paid=form_amount_paid
-                            )
-                            if success:
-                                st.success(f"Group Class Membership ID {st.session_state.selected_gc_membership_id} updated.")
-                                # Optionally, could reset selection to "add_new" or keep current for further edits
-                                # For now, just rerun to refresh data in selectbox
-                                st.rerun()
-
-                            else:
-                                st.error(f"Failed to update Group Class Membership ID {st.session_state.selected_gc_membership_id}.")
+                            try:
+                                # API call to update the record
+                                success = api.update_group_class_membership_record(
+                                    membership_id=st.session_state.selected_gc_membership_id,
+                                    member_id=form_member_id,
+                                    plan_id=form_plan_id,
+                                    start_date=form_start_date.strftime("%Y-%m-%d"),
+                                    amount_paid=form_amount_paid,
+                                    # The original instruction mentioned payment_status and notes,
+                                    # but these are not in the original code block's call to api.update_group_class_membership_record.
+                                    # I will stick to the arguments present in the existing code for now.
+                                    # If these are new and required, the API function signature would also need to change.
+                                    # payment_status=form_payment_status, # This variable is not defined in the current scope
+                                    # notes=form_notes # This variable is not defined in the current scope
+                                )
+                                # Logic to handle the result is now inside the try block
+                                if success:
+                                    st.success("Membership updated successfully!")
+                                    st.session_state.selected_gc_membership_id = "add_new"
+                                    # clear_all_caches() # clear_all_caches is not defined in the provided code.
+                                    # Add it if it's a real function in your project.
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to update membership.")
+                            # The required 'except' block to catch potential errors
+                            except Exception as e:
+                                st.error(f"An error occurred while updating: {e}")
                     except Exception as e:
                         st.error(f"Error processing membership: {e}")
 
