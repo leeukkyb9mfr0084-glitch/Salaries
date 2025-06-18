@@ -31,10 +31,6 @@ class AppAPI:
     def delete_member(self, member_id: int) -> bool:
         return self.db_manager.delete_member(member_id)
 
-    def get_active_members_for_view(self) -> List[MemberView]:
-        members = self.db_manager.get_active_members_for_view()
-        return members
-
     # Group Plan operations
     def add_group_plan(self, name: str, duration_days: int, default_amount: float) -> Optional[int]:
         return self.db_manager.add_group_plan(name, duration_days, default_amount)
@@ -70,9 +66,10 @@ class AppAPI:
         return success # Or handle message if needed
 
     # Personal Training (PT) Membership operations
-    # Parameter `sessions_purchased` here maps to `sessions_total` in the database (as per Task 1.1 and db_manager.add_pt_membership update in Task 2.4)
-    def create_pt_membership(self, member_id: int, purchase_date: str, amount_paid: float, sessions_purchased: int, notes: str) -> Optional[int]:
-        return self.db_manager.add_pt_membership(member_id, purchase_date, amount_paid, sessions_purchased, notes)
+    # Parameter `sessions_purchased` here maps to `sessions_total` in the database.
+    # `sessions_remaining` is initialized to `sessions_total` in `db_manager.add_pt_membership`.
+    def create_pt_membership(self, member_id: int, purchase_date: str, amount_paid: float, sessions_purchased: int) -> Optional[int]:
+        return self.db_manager.add_pt_membership(member_id, purchase_date, amount_paid, sessions_purchased)
 
     def get_all_pt_memberships_for_view(self) -> List[PTMembershipView]:
         records = self.db_manager.get_all_pt_memberships_for_view()

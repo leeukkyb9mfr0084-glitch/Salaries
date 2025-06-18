@@ -330,11 +330,11 @@ class DatabaseManager:
         try:
             self.conn.row_factory = sqlite3.Row
             cursor = self.conn.cursor()
-            # GroupPlanView: id, name, price, duration_days, description, status
-            # Original query: "SELECT id, name, duration_days, default_amount, display_name, is_active FROM group_plans"
-            # Mapping default_amount to price, is_active to status. display_name is not in DTO. description is not in query.
-            cursor.execute("SELECT id, name, default_amount as price, duration_days, description, status FROM group_plans ORDER BY name ASC")
+            # GroupPlanView: id, name, price, duration_days, description, is_active (changed from status)
+            # Query maps default_amount to price, display_name to description, and selects is_active.
+            cursor.execute("SELECT id, name, default_amount as price, duration_days, display_name as description, is_active FROM group_plans ORDER BY name ASC")
             rows = cursor.fetchall()
+            # Ensure GroupPlanView DTO constructor aligns with these fields, especially 'is_active'
             return [GroupPlanView(**row) for row in rows]
         except sqlite3.Error as e:
             logging.error(f"Database error in get_all_group_plans_for_view: {e}", exc_info=True)
@@ -515,9 +515,11 @@ class DatabaseManager:
                 gp.name as plan_name,
                 gcm.start_date,
                 gcm.end_date,
-                gcm.status,
+                gcm.is_active,
                 gcm.auto_renewal_enabled,
-                gcm.amount_paid
+                gcm.amount_paid,
+                gcm.purchase_date,
+                gcm.membership_type
             FROM group_class_memberships gcm
             JOIN members m ON gcm.member_id = m.id
             JOIN group_plans gp ON gcm.plan_id = gp.id
@@ -532,9 +534,10 @@ class DatabaseManager:
             # If needed, DTO should be updated or a different view model used.
             # For now, removing phone_filter from conditions based on current DTO.
             if status_filter:
-                # Assuming gcm.status column exists and stores 'Active', 'Expired', 'Cancelled' etc.
-                conditions.append("gcm.status = ?")
-                params.append(status_filter)
+                # Convert 'Active'/'Inactive' to boolean/integer for query
+                is_active_val = 1 if status_filter.lower() == 'active' else 0
+                conditions.append("gcm.is_active = ?")
+                params.append(is_active_val)
 
             if conditions:
                 sql_select += " WHERE " + " AND ".join(conditions)
@@ -666,22 +669,23 @@ class DatabaseManager:
             return False, f"Database error: {e}"
 
     # Personal Training (PT) Membership CRUD operations
-    def add_pt_membership(self, member_id: int, purchase_date: str, amount_paid: float, sessions_purchased: int, notes: str, sessions_remaining: int) -> Optional[int]:
+    def add_pt_membership(self, member_id: int, purchase_date: str, amount_paid: float, sessions_purchased: int) -> Optional[int]:
         """Adds a new PT membership record.
-        Handles sessions_total (from sessions_purchased param), notes, and sessions_remaining.
+        Handles sessions_total (from sessions_purchased param). Sessions_remaining is set to sessions_total initially.
         Returns the id of the newly created PT membership, or None if an error occurs.
         """
         cursor = self.conn.cursor()
         try:
             # sessions_purchased parameter maps to sessions_total column.
-            # notes and sessions_remaining are now included.
+            # sessions_remaining is initialized with the value of sessions_purchased.
+            # notes column is no longer managed by this function.
             sql_insert = """
-            INSERT INTO pt_memberships (member_id, purchase_date, amount_paid, sessions_total, notes, sessions_remaining)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO pt_memberships (member_id, purchase_date, amount_paid, sessions_total, sessions_remaining)
+            VALUES (?, ?, ?, ?, ?)
             """
             cursor.execute(
                 sql_insert,
-                (member_id, purchase_date, amount_paid, sessions_purchased, notes, sessions_remaining),
+                (member_id, purchase_date, amount_paid, sessions_purchased, sessions_purchased),
             )
             self.conn.commit()
             pt_membership_id = cursor.lastrowid
@@ -730,7 +734,7 @@ class DatabaseManager:
                 pt.purchase_date AS purchase_date,
                 pt.sessions_total AS sessions_total,
                 pt.sessions_remaining AS sessions_remaining,
-                pt.notes AS notes
+                pt.amount_paid AS amount_paid
             FROM pt_memberships pt
             JOIN members m ON pt.member_id = m.id
             ORDER BY pt.purchase_date DESC, pt.id DESC
@@ -746,7 +750,7 @@ class DatabaseManager:
                     purchase_date=row['purchase_date'],
                     sessions_total=row['sessions_total'],
                     sessions_remaining=row['sessions_remaining'],
-                    notes=row['notes']
+                amount_paid=row['amount_paid'] # Changed from notes
                 ))
             return memberships
         except sqlite3.Error as e:
@@ -951,29 +955,3 @@ class DatabaseManager:
                 exc_info=True,
             )
             return []
-
-    def get_active_members_for_view(self) -> List[MemberView]:
-        """Retrieves all active members from the database for view purposes, returning DTOs."""
-        try:
-            self.conn.row_factory = sqlite3.Row
-            cursor = self.conn.cursor()
-            # MemberView DTO fields: id, name, email, phone, join_date, status, membership_type, payment_status, notes
-            # Assuming 'status' column in 'members' table indicates active status e.g. 'Active'
-            sql_select_active_members = """
-            SELECT
-                id, name, email, phone, join_date, status, membership_type, payment_status, notes
-            FROM members
-            WHERE status = 'Active'  -- Assuming 'Active' string denotes an active member
-            ORDER BY name ASC;
-            """
-            cursor.execute(sql_select_active_members)
-            rows = cursor.fetchall()
-            return [MemberView(**row) for row in rows]
-        except sqlite3.Error as e:
-            logging.error(
-                f"Database error in get_active_members_for_view: {e}",
-                exc_info=True,
-            )
-            return []
-        finally:
-            self.conn.row_factory = None # Reset row_factory
