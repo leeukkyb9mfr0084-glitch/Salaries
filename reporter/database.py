@@ -23,7 +23,7 @@ def create_database(db_name: str):
             phone TEXT UNIQUE,
             email TEXT,
     join_date TEXT,
-    is_active INTEGER NOT NULL DEFAULT 1
+    is_active BOOLEAN NOT NULL DEFAULT 1
         );
         """
         )
@@ -55,7 +55,7 @@ def create_database(db_name: str):
             amount_paid REAL,
             purchase_date TEXT,
             membership_type TEXT,
-            is_active INTEGER NOT NULL DEFAULT 1,
+            is_active BOOLEAN NOT NULL DEFAULT 1,
             FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
             FOREIGN KEY (plan_id) REFERENCES group_plans(id) ON DELETE RESTRICT
         );

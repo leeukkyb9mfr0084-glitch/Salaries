@@ -158,7 +158,7 @@ class DatabaseManager:
             # Assumes MemberView constructor matches these fields (e.g., includes is_active).
             # If MemberView expects 'status' instead of 'is_active', a transformation would be needed here.
             # However, Task 1.3 implies 'status' was removed.
-            return [MemberView(**row) for row in rows]
+            return [MemberView(id=row['id'], name=row['name'], phone=row['phone'], email=row['email'], join_date=row['join_date'], is_active=bool(row['is_active'])) for row in rows]
         except sqlite3.Error as e:
             logging.error(f"Database error in get_all_members_for_view: {e}", exc_info=True)
             return []
@@ -548,7 +548,7 @@ class DatabaseManager:
 
             cursor.execute(sql_select, params)
             rows = cursor.fetchall()
-            return [GroupClassMembershipView(**row) for row in rows]
+            return [GroupClassMembershipView(id=row['id'], member_id=row['member_id'], member_name=row['member_name'], plan_id=row['plan_id'], plan_name=row['plan_name'], start_date=row['start_date'], end_date=row['end_date'], is_active=bool(row['is_active']), amount_paid=row['amount_paid'], purchase_date=row['purchase_date'], membership_type=row['membership_type']) for row in rows]
         except sqlite3.Error as e:
             logging.error(
                 f"Database error while fetching group_class_memberships for view: {e}",
