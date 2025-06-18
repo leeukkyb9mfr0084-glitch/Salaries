@@ -826,34 +826,33 @@ def render_members_tab():
                 clear_button = st.form_submit_button("Clear / New")
 
         if save_button:
-            try:
-                if st.session_state.member_selected_id is None:
-                    if not name or not phone:
-                        st.error("Name and Phone are required.")
-                        return
-                    else:
-                        try:
-                            member_id = api.add_member(name=name, phone=phone, email=email)
-                            if member_id: # Assuming add_member returns member_id on success, None or raises error on fail
-                                st.success(f"Member '{name}' added successfully with ID: {member_id}")
-                                clear_member_form(clear_selection=True) # Rerun handled by clear_member_form or needs st.rerun()
-                                st.rerun()
-                            else:
-                                st.error("Failed to add member. Please check details.")
-                        except ValueError as e:
-                            st.error(f"Error: {e}")
-                else: # This is the update block
-                    if not name: # Validation for name
-                        st.error("Name cannot be empty.")
-                        return
-                    elif not phone: # Validation for phone
-                        st.error("Phone cannot be empty.")
-                        return
-                    else:
-                        try:
-                            success = api.update_member( # Original update logic
-                                member_id=st.session_state.member_selected_id,
-                                name=name,
+            if st.session_state.member_selected_id is None:
+                # Logic to ADD a new member
+                if not name or not phone:
+                    st.error("Name and Phone are required.")
+                else:
+                    try:
+                        member_id = api.add_member(name=name, phone=phone, email=email)
+                        if member_id:
+                            st.success(f"Member '{name}' added successfully with ID: {member_id}")
+                            clear_member_form(clear_selection=True)
+                            st.rerun()
+                        else:
+                            # This case might be unlikely if errors are raised, but good to have
+                            st.error("Failed to add member. Please check details.")
+                    except ValueError as e:
+                        st.error(f"Error: {e}")
+                    except Exception as e:
+                        st.error(f"An unexpected error occurred: {e}")
+            else:
+                # Logic to UPDATE an existing member
+                if not name or not phone:
+                    st.error("Name and Phone cannot be empty.")
+                else:
+                    try:
+                        success = api.update_member(
+                            member_id=st.session_state.member_selected_id,
+                            name=name,
                             phone=phone,
                             email=email,
                             is_active=is_active_form
@@ -863,11 +862,11 @@ def render_members_tab():
                             clear_member_form(clear_selection=True)
                             st.rerun()
                         else:
-                            st.error("Failed to update member. Please check details.")
+                            st.error("Failed to update member. The phone number might already be in use by another member.")
                     except ValueError as e:
                         st.error(f"Error: {e}")
-            except Exception as e:
-                st.error(f"An error occurred: {e}")
+                    except Exception as e:
+                        st.error(f"An unexpected error occurred: {e}")
 
         if st.session_state.member_selected_id is not None and delete_button:
             if st.session_state.confirm_delete_member_id != st.session_state.member_selected_id:
