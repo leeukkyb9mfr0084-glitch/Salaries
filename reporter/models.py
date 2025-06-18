@@ -15,10 +15,10 @@ class GroupPlanView:
     id: int
     name: str
     display_name: str
+    is_active: bool # Moved before fields with defaults
     price: Optional[float] = None
     duration_days: Optional[int] = None
     description: Optional[str] = None
-    is_active: bool
 
 @dataclass
 class GroupClassMembershipView:
@@ -29,11 +29,12 @@ class GroupClassMembershipView:
     plan_name: str # Denormalized for easy display
     start_date: str # Assuming YYYY-MM-DD
     end_date: str # Assuming YYYY-MM-DD
-    is_active: bool
     purchase_date: str
     membership_type: str
-    auto_renewal_enabled: Optional[bool] = None
+    is_active: bool
+    # Fields with defaults come after non-default fields
     amount_paid: Optional[float] = None
+    auto_renewal_enabled: Optional[bool] = None
 
 
 @dataclass

@@ -37,8 +37,8 @@ def test_create_group_class_membership_success(db_manager: DatabaseManager):
     cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES (?, ?, ?, ?, ?)",
                    ("Test Member", "1234567890", "test@example.com", today_str(), 1))
     member_id = cursor.lastrowid
-    cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, display_name, is_active) VALUES (?, ?, ?, ?, ?)",
-                   ("Test Plan", 30, 100.0, "Test Plan - 30 days", 1))
+    cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, is_active) VALUES (?, ?, ?, ?)", # Removed display_name
+                   ("Test Plan", 30, 100.0, 1))
     plan_id = cursor.lastrowid
     db_manager.conn.commit()
     start_date_val = today_str()
@@ -51,25 +51,24 @@ def test_create_group_class_membership_success(db_manager: DatabaseManager):
     )
     assert membership_id is not None
     assert isinstance(membership_id, int)
-    # Updated to select status and auto_renewal_enabled instead of is_active
-    cursor.execute("SELECT member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, status, auto_renewal_enabled FROM group_class_memberships WHERE id = ?", (membership_id,))
+    cursor.execute("SELECT member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active FROM group_class_memberships WHERE id = ?", (membership_id,))
     record = cursor.fetchone()
     assert record is not None
     assert record[0] == member_id
     assert record[1] == plan_id
     assert record[2] == start_date_val
+    # Duration is 30 days. If start is day 1, end is day 30. timedelta(days=30-1) is correct.
     expected_end_date = (datetime.strptime(start_date_val, "%Y-%m-%d").date() + timedelta(days=30-1)).strftime("%Y-%m-%d")
     assert record[3] == expected_end_date
     assert record[4] == amount_paid_val
-    assert date.fromisoformat(record[5].split(" ")[0]) == date.today() # purchase_date is a datetime string
-    assert record[6] == "New" # membership_type
-    assert record[7] == "Active" # status (default value)
-    assert record[8] == 0 # auto_renewal_enabled (default value)
+    assert date.fromisoformat(record[5].split(" ")[0]) == date.today() # purchase_date is datetime, compare date part
+    assert record[6] == "New" # membership_type default
+    assert record[7] == 1 # is_active default
 
 def test_create_group_class_membership_missing_member(db_manager: DatabaseManager):
     cursor = db_manager.conn.cursor()
-    cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, display_name, is_active) VALUES (?, ?, ?, ?, ?)",
-                   ("Test Plan", 30, 100.0, "Test Plan - 30 days", 1))
+    cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, is_active) VALUES (?, ?, ?, ?)", # Removed display_name
+                   ("Test Plan", 30, 100.0, 1))
     plan_id = cursor.lastrowid
     db_manager.conn.commit()
     non_existent_member_id = 99999
@@ -110,8 +109,8 @@ def test_create_group_class_membership_invalid_data(db_manager: DatabaseManager)
     cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES (?, ?, ?, ?, ?)",
                    ("Valid Member", "1112223333", "valid@example.com", today_str(), 1))
     member_id = cursor.lastrowid
-    cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, display_name, is_active) VALUES (?, ?, ?, ?, ?)",
-                   ("Valid Plan", 30, 50.0, "Valid Plan - 30 days", 1))
+    cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, is_active) VALUES (?, ?, ?, ?)", # Removed display_name
+                   ("Valid Plan", 30, 50.0, 1))
     plan_id = cursor.lastrowid
     db_manager.conn.commit()
     with pytest.raises(ValueError) as excinfo:
@@ -136,8 +135,8 @@ def test_generate_financial_report_with_data(db_manager: DatabaseManager):
     cursor = db_manager.conn.cursor()
     m1_id = cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES ('Member One', '100000001', 'one@example.com', ?, 1)", (past_date_str(60),)).lastrowid
     m2_id = cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES ('Member Two', '100000002', 'two@example.com', ?, 1)", (past_date_str(40),)).lastrowid
-    gp1_id = cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, display_name, is_active) VALUES ('Monthly Gold', 30, 100.0, 'Monthly Gold - 30 days', 1)").lastrowid
-    gp2_id = cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, display_name, is_active) VALUES ('Annual Silver', 365, 500.0, 'Annual Silver - 365 days', 1)").lastrowid
+    gp1_id = cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, is_active) VALUES ('Monthly Gold', 30, 100.0, 1)").lastrowid # No display_name
+    gp2_id = cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, is_active) VALUES ('Annual Silver', 365, 500.0, 1)").lastrowid # No display_name
     db_manager.conn.commit()
 
     # Group Class Memberships
@@ -151,12 +150,12 @@ def test_generate_financial_report_with_data(db_manager: DatabaseManager):
     )
     # PT Memberships
     db_manager.conn.execute(
-        "INSERT INTO pt_memberships (member_id, purchase_date, amount_paid, sessions_total, sessions_remaining, notes) VALUES (?, ?, ?, ?, ?, ?)",
-        (m1_id, past_date_str(10), 75.0, 5, 5, "5 PT sessions for Member One")
+        "INSERT INTO pt_memberships (member_id, purchase_date, amount_paid, sessions_total, sessions_remaining) VALUES (?, ?, ?, ?, ?)", # No notes
+        (m1_id, past_date_str(10), 75.0, 5, 5)
     )
     db_manager.conn.execute(
-        "INSERT INTO pt_memberships (member_id, purchase_date, amount_paid, sessions_total, sessions_remaining, notes) VALUES (?, ?, ?, ?, ?, ?)",
-        (m2_id, today_str(), 250.0, 20, 20, "20 PT sessions for Member Two")
+        "INSERT INTO pt_memberships (member_id, purchase_date, amount_paid, sessions_total, sessions_remaining) VALUES (?, ?, ?, ?, ?)", # No notes
+        (m2_id, today_str(), 250.0, 20, 20)
     )
     # Outside period
     db_manager.conn.execute(
@@ -204,8 +203,8 @@ def test_generate_renewal_report_empty(db_manager: DatabaseManager):
     cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES (?, ?, ?, ?, ?)",
                    ("Test Member", "1234567890", "renewal@example.com", past_date_str(100), 1))
     member_id = cursor.lastrowid
-    cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, display_name, is_active) VALUES (?, ?, ?, ?, ?)",
-                   ("Test Plan", 30, 10.0, "Test Plan - 30 days", 1))
+    cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, is_active) VALUES (?, ?, ?, ?)", # No display_name
+                   ("Test Plan", 30, 10.0, 1))
     plan_id = cursor.lastrowid
     db_manager.conn.commit()
     start_date_val = today_str()
@@ -230,8 +229,8 @@ def test_generate_renewal_report_with_upcoming_renewals(db_manager: DatabaseMana
     m5_id = cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES ('Future Member', '200000005', 'up5@example.com', ?, 1)", (past_date_str(50),)).lastrowid
     m6_id = cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES ('Past Member', '200000006', 'up6@example.com', ?, 1)", (past_date_str(50),)).lastrowid
     m7_id = cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES ('Inactive Member', '200000007', 'up7@example.com', ?, 1)", (past_date_str(50),)).lastrowid
-    p1_id = cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, display_name, is_active) VALUES ('Renewal Plan A', 30, 50.0, 'Renewal Plan A - 30 days', 1)").lastrowid
-    p2_id = cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, display_name, is_active) VALUES ('Renewal Plan B', 60, 60.0, 'Renewal Plan B - 60 days', 1)").lastrowid
+    p1_id = cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, is_active) VALUES ('Renewal Plan A', 30, 50.0, 1)").lastrowid # No display_name
+    p2_id = cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, is_active) VALUES ('Renewal Plan B', 60, 60.0, 1)").lastrowid # No display_name
     db_manager.conn.commit()
     start_m1 = (datetime.strptime(future_date_str(15), "%Y-%m-%d").date() - timedelta(days=30-1)).strftime("%Y-%m-%d")
     cursor.execute("INSERT INTO group_class_memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?,?,?,?,?,?,?,?)",
@@ -277,15 +276,14 @@ def test_add_pt_membership_stub(db_manager: DatabaseManager):
     cursor = db_manager.conn.cursor()
     m_id = cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES ('PT User', '7778889999', 'pt@example.com', ?, 1)", (today_str(),)).lastrowid
     db_manager.conn.commit()
-    # add_pt_membership now requires sessions_remaining
-    pt_id = db_manager.add_pt_membership(m_id, today_str(), 150.0, 10, "Test PT notes", 10) # sessions_remaining = 10
+    pt_id = db_manager.add_pt_membership(m_id, today_str(), 150.0, 10)
     assert pt_id is not None
-    record = cursor.execute("SELECT member_id, sessions_total, sessions_remaining, notes FROM pt_memberships WHERE id = ?", (pt_id,)).fetchone()
+    record = cursor.execute("SELECT member_id, sessions_total, sessions_remaining, amount_paid FROM pt_memberships WHERE id = ?", (pt_id,)).fetchone() # Check amount_paid too
     assert record is not None
     assert record[0] == m_id
     assert record[1] == 10 # sessions_total
     assert record[2] == 10 # sessions_remaining
-    assert record[3] == "Test PT notes"
+    assert record[3] == 150.0 # amount_paid
 
 def test_get_all_pt_memberships_for_view(db_manager: DatabaseManager): # Renamed from test_get_all_pt_memberships_stub and updated
     cursor = db_manager.conn.cursor()
@@ -293,8 +291,8 @@ def test_get_all_pt_memberships_for_view(db_manager: DatabaseManager): # Renamed
     db_manager.conn.commit()
 
     # Add sample data using the updated add_pt_membership
-    db_manager.add_pt_membership(m_id, today_str(), 150.0, 10, "Test PT notes new", 8) # sessions_total=10, sessions_remaining=8
-    db_manager.add_pt_membership(m_id, past_date_str(5), 70.0, 5, "Old PT notes", 2)  # sessions_total=5, sessions_remaining=2
+    db_manager.add_pt_membership(m_id, today_str(), 150.0, 10) # sessions_total=10, sessions_remaining=10 initially
+    db_manager.add_pt_membership(m_id, past_date_str(5), 70.0, 5)  # sessions_total=5, sessions_remaining=5 initially
 
     all_pt_memberships_view = db_manager.get_all_pt_memberships_for_view()
     assert len(all_pt_memberships_view) == 2
@@ -306,15 +304,15 @@ def test_get_all_pt_memberships_for_view(db_manager: DatabaseManager): # Renamed
 
     assert latest_membership.member_name == 'PT User View'
     assert latest_membership.sessions_total == 10
-    assert latest_membership.sessions_remaining == 8
-    assert latest_membership.notes == "Test PT notes new"
+    assert latest_membership.sessions_remaining == 10 # Should be equal to total as per add_pt_membership
     assert latest_membership.purchase_date == today_str()
+    assert latest_membership.amount_paid == 150.0
 
     assert older_membership.member_name == 'PT User View'
     assert older_membership.sessions_total == 5
-    assert older_membership.sessions_remaining == 2
-    assert older_membership.notes == "Old PT notes"
+    assert older_membership.sessions_remaining == 5 # Should be equal to total
     assert older_membership.purchase_date == past_date_str(5)
+    assert older_membership.amount_paid == 70.0
 
 # Test for simplified MemberView
 def test_get_all_members_for_view(db_manager: DatabaseManager):
@@ -349,7 +347,8 @@ def test_get_all_members_for_view(db_manager: DatabaseManager):
 def test_get_all_group_class_memberships_for_view(db_manager: DatabaseManager):
     cursor = db_manager.conn.cursor()
     m1_id = cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES ('GC Member A', '111000001', 'gc_a@example.com', ?, 1)", (past_date_str(20),)).lastrowid
-    p1_id = cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, display_name, is_active, description, status) VALUES ('GC Plan X', 30, 75.0, 'GC Plan X - 30 days', 1, 'Desc X', 'Active')", ).lastrowid
+    # Corrected group_plans insert: no display_name, description, status (text)
+    p1_id = cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, is_active) VALUES ('GC Plan X', 30, 75.0, 1)").lastrowid
     db_manager.conn.commit()
 
     start_date_val = past_date_str(15)
@@ -362,7 +361,7 @@ def test_get_all_group_class_memberships_for_view(db_manager: DatabaseManager):
     assert len(memberships_view) == 1
 
     view_item = memberships_view[0]
-    # GroupClassMembershipView DTO: id, member_id, member_name, plan_id, plan_name, start_date, end_date, status, auto_renewal_enabled, amount_paid
+    # GroupClassMembershipView DTO: id, member_id, member_name, plan_id, plan_name, start_date, end_date, amount_paid, purchase_date, membership_type, is_active
     assert view_item.id == gcm_id
     assert view_item.member_id == m1_id
     assert view_item.member_name == "GC Member A"
@@ -371,16 +370,17 @@ def test_get_all_group_class_memberships_for_view(db_manager: DatabaseManager):
     assert view_item.start_date == start_date_val
     expected_end_date = (datetime.strptime(start_date_val, "%Y-%m-%d").date() + timedelta(days=30-1)).strftime("%Y-%m-%d")
     assert view_item.end_date == expected_end_date
-    assert view_item.status == "Active" # Default from table
-    assert view_item.auto_renewal_enabled == 0 # Default from table
     assert view_item.amount_paid == amount_paid_val # Should be from the membership record
+    assert date.fromisoformat(view_item.purchase_date.split(" ")[0]) == date.today()
+    assert view_item.membership_type == "New"
+    assert view_item.is_active == 1 # Directly from gcm.is_active
 
 
 def test_delete_pt_membership_stub(db_manager: DatabaseManager): # Kept stub name, but updated call
     cursor = db_manager.conn.cursor()
     m_id = cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES ('PT User 3', '7778889901', 'pt3@example.com', ?, 1)", (today_str(),)).lastrowid
     db_manager.conn.commit()
-    pt_id = db_manager.add_pt_membership(m_id, today_str(), 150.0, 10, "To be deleted", 10) # Added sessions_remaining
+    pt_id = db_manager.add_pt_membership(m_id, today_str(), 150.0, 10)
     assert pt_id is not None
 
     deleted = db_manager.delete_pt_membership(pt_id)

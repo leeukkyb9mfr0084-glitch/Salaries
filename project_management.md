@@ -77,17 +77,17 @@
         2.  Move the entire `st.form` for creating and editing a membership into the `with left_col:` block.
         3.  In the `with right_col:` block, add widgets to display a list of all existing memberships. This list needs a selection mechanism (e.g., a "Select" button for each row) that, when clicked, populates the form on the left for editing. Use `st.session_state` to pass the ID of the selected record.
 
-* **Task 4.2: Remove "Notes" Field from UI**
+* **Task 4.2: Remove "Notes" Field from UI - DONE**
     * **File:** `reporter/streamlit_ui/app.py`
     * **Context:** Notes are no longer part of the PT membership data model and must be removed from the UI.
     * **Instruction:** From the PT membership form you just refactored, find and delete the `st.text_area("Notes", ...)` widget.
 
-* **Task 4.3: Fix PT Membership Edit Bug**
+* **Task 4.3: Fix PT Membership Edit Bug - DONE**
     * **File:** `reporter/streamlit_ui/app.py`
     * **Context:** This fixes a critical data corruption bug where the amount paid could be reset to zero upon editing.
     * **Instruction:** When a PT membership is selected for editing, ensure the `amount_paid` value from its DTO (`selected_pt_data.amount_paid`) is used to populate the `value` of the "Amount Paid (₹)" `st.number_input` in the form.
 
-* **Task 4.4: Implement UI-Side Filtering**
+* **Task 4.4: Implement UI-Side Filtering - DONE**
     * **File:** `reporter/streamlit_ui/app.py`
     * **Context:** We are adopting a new, standard pattern for filtering data in the UI to simplify the backend.
     * **Instruction:** Find all UI dropdowns that need to be populated with only *active* members or plans. Change them to fetch all items using `get_all_..._for_view()` and then filter the list in your UI code before displaying it.
@@ -101,16 +101,16 @@
 ### **Phase 5: Update Verification & Data Migration**
 *This final development phase ensures our application is correct and our tests are reliable.*
 
-* **Task 5.1: Update Data Migration Script**
+* **Task 5.1: Update Data Migration Script - DONE**
     * **File:** `reporter/migrate_historical_data.py`
     * **Context:** The migration script is broken because our function signatures have changed.
     * **Instruction:** Find the line that calls `create_pt_membership` and update the function call to use the new, simpler signature from Phase 3.
 
-* **Task 5.2: Rewrite Database & Logic Tests**
+* **Task 5.2: Rewrite Database & Logic Tests - DONE**
     * **Files:** `reporter/tests/test_database_manager.py`, `reporter/tests/test_pt_memberships.py`
     * **Context:** Our tests are our safety net and must be updated to reflect the new code logic. These tests must not involve the UI.
     * **Instruction:** Go through these files test by test. Each test must follow this pattern: 1. Create a temporary in-memory database. 2. Call the `database_manager` function being tested. 3. Use `cursor.execute('SELECT ...')` to check if the data was written to the database correctly according to the new schemas.
 
-* **Task 5.3: Run the Full Test Suite**
+* **Task 5.3: Run the Full Test Suite - DONE**
     * **Context:** This is the final quality gate before the work is considered complete.
     * **Instruction:** Open your command line terminal, navigate to the project's root directory, and run the command `pytest`. All tests must pass with no errors or failures.

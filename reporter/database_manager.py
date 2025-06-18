@@ -459,8 +459,8 @@ class DatabaseManager:
             sql_insert = """
             INSERT INTO group_class_memberships (
                 member_id, plan_id, start_date, end_date, amount_paid,
-                purchase_date, membership_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                purchase_date, membership_type, is_active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """
             cursor.execute(
                 sql_insert,
@@ -472,6 +472,7 @@ class DatabaseManager:
                     amount_paid,
                     transaction_date_str, # Stored in purchase_date
                     membership_type,
+                    1 # Explicitly set is_active to 1 (True)
                 ),
             )
             self.conn.commit()
@@ -487,9 +488,9 @@ class DatabaseManager:
             self.conn.rollback()
             logging.error(f"DB integrity error creating group_class_membership for member {member_id}, plan {plan_id}: {ie}", exc_info=True)
             raise # Re-raise the IntegrityError
-        except sqlite3.Error as e:
+        except sqlite3.Error as e: # Catches other sqlite errors
             self.conn.rollback()
-            logging.error(f"DB error creating group_class_membership for member {member_id}, plan {plan_id}: {e}", exc_info=True)
+            logging.error(f"DB error (type: {type(e)}) creating group_class_membership for member {member_id}, plan {plan_id}: {e}", exc_info=True) # Modified logging
             return None
         except ValueError: # Re-raise ValueError for plan_id not found or date format issues
             raise
@@ -516,7 +517,6 @@ class DatabaseManager:
                 gcm.start_date,
                 gcm.end_date,
                 gcm.is_active,
-                # gcm.auto_renewal_enabled, -- THIS LINE IS REMOVED
                 gcm.amount_paid,
                 gcm.purchase_date,
                 gcm.membership_type
@@ -870,7 +870,7 @@ class DatabaseManager:
                 ptm.amount_paid,
                 'Personal Training' as type,
                 m.name as member_name,
-                CAST(ptm.sessions_purchased AS TEXT) || ' PT Sessions' as item_name -- e.g., "10 PT Sessions"
+                CAST(ptm.sessions_total AS TEXT) || ' PT Sessions' as item_name -- e.g., "10 PT Sessions"
             FROM pt_memberships ptm
             JOIN members m ON ptm.member_id = m.id
             WHERE ptm.purchase_date BETWEEN ? AND ?
@@ -926,7 +926,8 @@ class DatabaseManager:
             FROM group_class_memberships gcm
             JOIN members m ON gcm.member_id = m.id
             JOIN group_plans gp ON gcm.plan_id = gp.id
-            WHERE date('now') BETWEEN gcm.start_date AND gcm.end_date -- Check for current active status
+            WHERE gcm.is_active = 1 -- Ensure the membership itself is marked active
+            AND date('now') BETWEEN gcm.start_date AND gcm.end_date -- Check for current active status by date range
             AND gcm.end_date BETWEEN ? AND ? -- Check for renewal period
             ORDER BY gcm.end_date ASC, m.name ASC;
             """
