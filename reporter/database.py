@@ -36,7 +36,9 @@ def create_database(db_name: str):
             member_id INTEGER,
             purchase_date TEXT,
             amount_paid REAL,
-            sessions_purchased INTEGER,
+            sessions_total INTEGER,
+            sessions_remaining INTEGER,
+            notes TEXT,
             FOREIGN KEY (member_id) REFERENCES members(id)
         );
         """

@@ -715,33 +715,33 @@ class DatabaseManager:
         try:
             self.conn.row_factory = sqlite3.Row
             cursor = self.conn.cursor()
-            # Query based on prompt for PTMembershipView DTO:
-            # id, member_id, member_name, plan_name, start_date, end_date, sessions_total, sessions_remaining, status
-            # plan_id is in DTO but not in this query from prompt.
-            # The prompt query: "SELECT ptm.id, m.id as member_id, m.name as member_name, ptm.plan_name,
-            # ptm.start_date, ptm.end_date, ptm.sessions_total, ptm.sessions_remaining, ptm.status
-            # FROM pt_memberships ptm JOIN members m ON ptm.member_id = m.id"
-            # This implies pt_memberships table has plan_name, start_date, etc.
             sql_select = """
             SELECT
-                ptm.id,
-                m.id as member_id,
-                m.name as member_name,
-                ptm.plan_id, -- Added plan_id as it's in the DTO
-                ptm.plan_name,
-                ptm.start_date,
-                ptm.end_date,
-                ptm.sessions_total,
-                ptm.sessions_remaining,
-                ptm.status,
-                ptm.amount_paid
-            FROM pt_memberships ptm
-            JOIN members m ON ptm.member_id = m.id
-            ORDER BY ptm.start_date DESC, ptm.id DESC
-            """ # Changed ordering to ptm.start_date
+                pt.id AS membership_id,
+                pt.member_id AS member_id,
+                m.name AS member_name,
+                pt.purchase_date AS purchase_date,
+                pt.sessions_total AS sessions_total,
+                pt.sessions_remaining AS sessions_remaining,
+                pt.notes AS notes
+            FROM pt_memberships pt
+            JOIN members m ON pt.member_id = m.id
+            ORDER BY pt.purchase_date DESC, pt.id DESC
+            """
             cursor.execute(sql_select)
             rows = cursor.fetchall()
-            return [PTMembershipView(**row) for row in rows]
+            memberships = []
+            for row in rows:
+                memberships.append(PTMembershipView(
+                    membership_id=row['membership_id'],
+                    member_id=row['member_id'],
+                    member_name=row['member_name'],
+                    purchase_date=row['purchase_date'],
+                    sessions_total=row['sessions_total'],
+                    sessions_remaining=row['sessions_remaining'],
+                    notes=row['notes']
+                ))
+            return memberships
         except sqlite3.Error as e:
             logging.error(f"Database error in get_all_pt_memberships_for_view: {e}", exc_info=True)
             return []
