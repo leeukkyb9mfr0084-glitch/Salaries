@@ -1,8 +1,9 @@
 import unittest.mock
 from reporter.streamlit_ui.app import AppAPI
-from reporter.models import GroupPlanView
+from reporter.models import GroupPlanView, MemberView # Added MemberView
 from streamlit.testing.v1 import AppTest
 from reporter.database import initialize_database # Added import
+import datetime # Added datetime
 
 def test_ui_filters_for_active_plans():
     """
@@ -50,4 +51,68 @@ def test_ui_displays_correct_plan_amount():
 
         # Assert that the number_input for the amount shows the correct value
         assert at.number_input(key="group_plan_form_amount").value == 1234.56
+        assert at.error == []
+
+
+def test_ui_create_new_group_class_membership():
+    """
+    Tests the creation of a new group class membership via the UI.
+    """
+    mock_api = unittest.mock.MagicMock(spec=AppAPI)
+
+    sample_member = MemberView(id=1, name="Test Member", phone="1234567890", email="test@example.com", join_date="2024-01-01", is_active=True)
+    sample_plan = GroupPlanView(id=1, name="Gold Plan", display_name="Gold Plan (30 days)", is_active=True, default_amount=100.0, duration_days=30)
+
+    mock_api.get_all_members_for_view.return_value = [sample_member]
+    mock_api.get_all_group_plans_for_view.return_value = [sample_plan]
+    mock_api.create_group_class_membership.return_value = 99 # Mocked new membership ID
+
+    with unittest.mock.patch('reporter.streamlit_ui.app.api', new=mock_api):
+        initialize_database()
+        at = AppTest.from_file("reporter/streamlit_ui/app.py").run()
+
+        # Navigate to Memberships Tab
+        at.tabs[2].run() # Members, Group Plans, Memberships, Reporting
+
+        # Ensure Group Class Memberships mode is selected (it's default, this confirms)
+        assert at.radio(key="membership_mode_selector").value == 'Group Class Memberships'
+
+        # Click "Add New Group Class Membership" button
+        # This button sets session_state.selected_gc_membership_id = "add_new"
+        # which should make the correct form appear.
+        add_new_button = at.button(key="gc_add_new_button")
+        assert add_new_button is not None
+        add_new_button.click().run()
+
+        # Verify the subheader changed, indicating the form for adding is likely active
+        # This is a proxy for checking st.session_state.selected_gc_membership_id == "add_new"
+        assert "Add New Group Class Membership" in [h.value for h in at.subheader]
+
+        # Interact with the form elements
+        # The form key is dynamic (st.session_state.gc_membership_form_key),
+        # so we assume it's the first (and only active) form after clicking "Add New".
+        form = at.form[0]
+        form.selectbox(key="gc_form_member_id_select").select(option=sample_member.id).run()
+        form.selectbox(key="gc_form_plan_id_select").select(option=sample_plan.id).run()
+
+        test_start_date = datetime.date(2024, 7, 1)
+        form.date_input(key="gc_form_start_date").set_value(test_start_date).run()
+
+        test_amount_paid = 150.0
+        form.number_input(key="gc_form_amount_paid").set_value(test_amount_paid).run()
+
+        # Submit the form
+        form.submit().run()
+
+        # Assertions
+        mock_api.create_group_class_membership.assert_called_once_with(
+            member_id=sample_member.id,
+            plan_id=sample_plan.id,
+            start_date_str=test_start_date.strftime("%Y-%m-%d"),
+            amount_paid=test_amount_paid
+        )
+
+        # Check for success message (optional, but good)
+        assert len(at.success) > 0
+        assert "Group Class Membership created with ID: 99" in at.success[0].value
         assert at.error == []
