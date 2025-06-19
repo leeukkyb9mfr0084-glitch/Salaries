@@ -5,12 +5,14 @@ from typing import List, Dict, Optional
 
 from reporter.database_manager import DatabaseManager
 from reporter.database import create_database # To set up schema in memory
+from reporter.models import MemberView # Import DTO
 
 # Fixture for database manager with an in-memory database
 @pytest.fixture
 def db_manager() -> DatabaseManager:
     conn = create_database(":memory:") # Use the actual schema creation
     # No need to seed initial plans for member tests specifically
+    conn.execute("PRAGMA foreign_keys = ON;") # Ensure FKs are on for :memory:
     manager = DatabaseManager(connection=conn)
     return manager
 
@@ -40,6 +42,10 @@ def test_add_member_duplicate_phone(db_manager: DatabaseManager):
     with pytest.raises(ValueError, match=f"Phone number {MEMBER_JOHN['phone']} already exists."):
         db_manager.add_member("Another Name", MEMBER_JOHN["phone"], "another.email@example.com")
 
+def test_add_member_null_phone(db_manager: DatabaseManager):
+    with pytest.raises(sqlite3.IntegrityError): # NOT NULL constraint
+        db_manager.add_member(name="Test Null Phone", phone=None, email="null_phone@example.com")
+
 def test_get_all_members_empty(db_manager: DatabaseManager):
     members = db_manager.get_all_members()
     assert isinstance(members, list)
@@ -50,19 +56,22 @@ def test_get_all_members_multiple(db_manager: DatabaseManager):
     db_manager.add_member(MEMBER_JANE["name"], MEMBER_JANE["phone"], MEMBER_JANE["email"])
     db_manager.add_member(MEMBER_ALICE["name"], MEMBER_ALICE["phone"], MEMBER_ALICE["email"])
 
-    members = db_manager.get_all_members()
+    members = db_manager.get_all_members() # This now returns List[MemberView]
     assert len(members) == 3
     # Names should be sorted: Alice, Jane, John
-    assert members[0]["name"] == MEMBER_ALICE["name"]
-    assert members[1]["name"] == MEMBER_JANE["name"]
-    assert members[2]["name"] == MEMBER_JOHN["name"]
+    assert isinstance(members[0], MemberView)
+    assert members[0].name == MEMBER_ALICE["name"]
+    assert isinstance(members[1], MemberView)
+    assert members[1].name == MEMBER_JANE["name"]
+    assert isinstance(members[2], MemberView)
+    assert members[2].name == MEMBER_JOHN["name"]
 
-    # Check structure of one member
-    john_details = next(m for m in members if m["name"] == MEMBER_JOHN["name"])
-    assert john_details["phone"] == MEMBER_JOHN["phone"]
-    assert john_details["email"] == MEMBER_JOHN["email"]
-    assert john_details["join_date"] == date.today().strftime("%Y-%m-%d")
-    assert john_details["is_active"] == 1
+    # Check structure of one member (now a MemberView object)
+    john_details = next(m for m in members if m.name == MEMBER_JOHN["name"])
+    assert john_details.phone == MEMBER_JOHN["phone"]
+    assert john_details.email == MEMBER_JOHN["email"]
+    assert john_details.join_date == date.today().strftime("%Y-%m-%d")
+    assert john_details.is_active is True # is_active is bool in DTO
 
 def test_update_member_success_all_fields(db_manager: DatabaseManager):
     member_id = db_manager.add_member(MEMBER_JOHN["name"], MEMBER_JOHN["phone"], MEMBER_JOHN["email"])

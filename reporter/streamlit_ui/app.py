@@ -155,7 +155,7 @@ def render_new_group_class_membership_form():
     try:
         all_group_plans = api.get_all_group_plans_for_view() # Updated API call
         plan_options = {
-            plan.id: f"{plan.name} ({plan.duration_days} days, ₹{plan.price or 0:.2f})"
+            plan.id: f"{plan.name} ({plan.duration_days} days, ₹{plan.default_amount or 0:.2f})"
             for plan in all_group_plans if plan.is_active # Corrected
         }
         if not plan_options:
@@ -272,7 +272,11 @@ def render_memberships_tab():
         with right_col:
             st.subheader("Existing Group Class Memberships")
             try:
-                all_gc_memberships = api.get_all_group_class_memberships_for_view()
+                # Removed phone_filter from the call below
+                all_gc_memberships = api.get_all_group_class_memberships_for_view(
+                    name_filter=st.session_state.get("gc_name_filter"), # Assuming you might add filters
+                    status_filter=st.session_state.get("gc_status_filter")
+                )
                 if not all_gc_memberships:
                     all_gc_memberships = []
             except Exception as e:
@@ -329,7 +333,7 @@ def render_memberships_tab():
             try:
                 all_group_plans_gc_form_data = api.get_all_group_plans_for_view()
                 plan_options_for_select = {
-                    plan.id: f"{plan.name} ({plan.duration_days} days, ₹{plan.price or 0:.2f})"
+                    plan.id: f"{plan.name} ({plan.duration_days} days, ₹{plan.default_amount or 0:.2f})"
                     for plan in all_group_plans_gc_form_data if plan.is_active
                 }
             except Exception as e:
@@ -832,97 +836,97 @@ def render_members_tab():
         else:
             st.subheader(f"Edit Member: {st.session_state.member_name}")
 
-        st.write("Member form is temporarily commented out for debugging.")
-        # with st.form(key=st.session_state.member_form_key, clear_on_submit=False):
-        #     name_form_val = st.text_input("Name", value=st.session_state.member_name, key="member_form_name") # Renamed
-        #     email_form_val = st.text_input("Email", value=st.session_state.member_email, key="member_form_email") # Renamed
-        #     phone_form_val = st.text_input("Phone", value=st.session_state.member_phone, key="member_form_phone") # Renamed
-        #     is_active_form_val = st.checkbox("Is Active", value=st.session_state.member_is_active, key="member_form_is_active") # Renamed
+        # st.write("Member form is temporarily commented out for debugging.")
+        with st.form(key=st.session_state.member_form_key, clear_on_submit=False):
+            name_form_val = st.text_input("Name", value=st.session_state.member_name, key="member_form_name") # Renamed
+            email_form_val = st.text_input("Email", value=st.session_state.member_email, key="member_form_email") # Renamed
+            phone_form_val = st.text_input("Phone", value=st.session_state.member_phone, key="member_form_phone") # Renamed
+            is_active_form_val = st.checkbox("Is Active", value=st.session_state.member_is_active, key="member_form_is_active") # Renamed
 
-        #     form_col1, form_col2, form_col3 = st.columns(3)
-        #     with form_col1:
-        #         save_button_member = st.form_submit_button("Save Member" if st.session_state.member_selected_id else "Add Member") # Renamed
-        #     delete_button_member = None # Initialize
-        #     if st.session_state.member_selected_id is not None:
-        #         with form_col2:
-        #             delete_button_member = st.form_submit_button("Delete Member") # Renamed
-        #     with form_col3:
-        #         clear_button_member = st.form_submit_button("Clear / New") # Renamed
+            form_col1, form_col2, form_col3 = st.columns(3)
+            with form_col1:
+                save_button_member = st.form_submit_button("Save Member" if st.session_state.member_selected_id else "Add Member") # Renamed
+            delete_button_member = None # Initialize
+            if st.session_state.member_selected_id is not None:
+                with form_col2:
+                    delete_button_member = st.form_submit_button("Delete Member") # Renamed
+            with form_col3:
+                clear_button_member = st.form_submit_button("Clear / New") # Renamed
 
-        # if save_button_member: # Use Renamed
-        #     if st.session_state.member_selected_id is None: # ADD Path
-        #         if not name_form_val or not phone_form_val: # Use Renamed
-        #             st.error("Name and Phone are required.")
-        #         else:
-        #             try:
-        #                 member_id = api.add_member(name=name_form_val, phone=phone_form_val, email=email_form_val) # Use Renamed
-        #                 if member_id:
-        #                     st.success(f"Member '{name_form_val}' added successfully with ID: {member_id}") # Use Renamed
-        #                     clear_member_form(clear_selection=True)
-        #                     # st.rerun() # Commented for testing
-        #                 else:
-        #                     st.error("Failed to add member. Please check details.")
-        #             except ValueError as e:
-        #                 st.error(f"Error: {e}")
-        #             except Exception as e:
-        #                 st.error(f"An unexpected error occurred: {e}")
-        #     else: # UPDATE Path
-        #         if not name_form_val or not phone_form_val: # Use Renamed
-        #             st.error("Name and Phone cannot be empty.")
-        #         else:
-        #             try:
-        #                 success_member_update = api.update_member( # Renamed
-        #                     member_id=st.session_state.member_selected_id,
-        #                     name=name_form_val, # Use Renamed
-        #                     phone=phone_form_val, # Use Renamed
-        #                     email=email_form_val, # Use Renamed
-        #                     is_active=is_active_form_val # Use Renamed
-        #                 )
-        #                 if success_member_update: # Use Renamed
-        #                     st.success(f"Member '{name_form_val}' updated successfully.") # Use Renamed
-        #                     clear_member_form(clear_selection=True)
-        #                     # st.rerun() # Commented for testing
-        #                 else:
-        #                     st.error("Failed to update member. The phone number might already be in use by another member.")
-        #             except ValueError as e:
-        #                 st.error(f"Error: {e}")
-        #             except Exception as e:
-        #                 st.error(f"An unexpected error occurred: {e}")
+        if save_button_member: # Use Renamed
+            if st.session_state.member_selected_id is None: # ADD Path
+                if not name_form_val or not phone_form_val: # Use Renamed
+                    st.error("Name and Phone are required.")
+                else:
+                    try:
+                        member_id = api.add_member(name=name_form_val, phone=phone_form_val, email=email_form_val) # Use Renamed
+                        if member_id:
+                            st.success(f"Member '{name_form_val}' added successfully with ID: {member_id}") # Use Renamed
+                            clear_member_form(clear_selection=True)
+                            # st.rerun() # Commented for testing
+                        else:
+                            st.error("Failed to add member. Please check details.")
+                    except ValueError as e:
+                        st.error(f"Error: {e}")
+                    except Exception as e:
+                        st.error(f"An unexpected error occurred: {e}")
+            else: # UPDATE Path
+                if not name_form_val or not phone_form_val: # Use Renamed
+                    st.error("Name and Phone cannot be empty.")
+                else:
+                    try:
+                        success_member_update = api.update_member( # Renamed
+                            member_id=st.session_state.member_selected_id,
+                            name=name_form_val, # Use Renamed
+                            phone=phone_form_val, # Use Renamed
+                            email=email_form_val, # Use Renamed
+                            is_active=is_active_form_val # Use Renamed
+                        )
+                        if success_member_update: # Use Renamed
+                            st.success(f"Member '{name_form_val}' updated successfully.") # Use Renamed
+                            clear_member_form(clear_selection=True)
+                            # st.rerun() # Commented for testing
+                        else:
+                            st.error("Failed to update member. The phone number might already be in use by another member.")
+                    except ValueError as e:
+                        st.error(f"Error: {e}")
+                    except Exception as e:
+                        st.error(f"An unexpected error occurred: {e}")
 
-        # if st.session_state.member_selected_id is not None and delete_button_member: # Use Renamed
-        #     # Confirmation logic starts here
-        #     if st.session_state.confirm_delete_member_id != st.session_state.member_selected_id:
-        #         st.session_state.confirm_delete_member_id = st.session_state.member_selected_id
-        #         # No immediate rerun, let the warning and buttons appear below
-        #     # This part will now always execute if confirm_delete_member_id is set
-        #     if st.session_state.confirm_delete_member_id == st.session_state.member_selected_id: # Ensure it's for current selection
-        #         st.warning(f"Are you sure you want to delete member '{st.session_state.member_name}'? This action cannot be undone.")
-        #         confirm_col1, confirm_col2 = st.columns(2)
-        #         with confirm_col1:
-        #             if st.button("YES, DELETE Permanently", key=f"confirm_delete_member_btn_{st.session_state.member_selected_id}"):
-        #                 try:
-        #                     deleted_member = api.delete_member(st.session_state.member_selected_id) # Renamed
-        #                     if deleted_member: # Use Renamed
-        #                         st.success(f"Member '{st.session_state.member_name}' deleted successfully.")
-        #                         clear_member_form(clear_selection=True)
-        #                         st.session_state.confirm_delete_member_id = None
-        #                         # st.rerun() # Commented for testing
-        #                     else:
-        #                         st.error("Failed to delete member. They might have active memberships or other issue.")
-        #                         st.session_state.confirm_delete_member_id = None
-        #                         # st.rerun() # Commented for testing
-        #                 except Exception as e:
-        #                     st.error(f"Error deleting member: {e}")
-        #                     st.session_state.confirm_delete_member_id = None
-        #                     # st.rerun() # Commented for testing
-        #         with confirm_col2:
-        #             if st.button("Cancel Deletion", key=f"cancel_delete_member_btn_{st.session_state.member_selected_id}"):
-        #                 st.session_state.confirm_delete_member_id = None
-        #                 # st.rerun() # Commented for testing
+        if st.session_state.member_selected_id is not None and delete_button_member: # Use Renamed
+            # Confirmation logic starts here
+            if st.session_state.confirm_delete_member_id != st.session_state.member_selected_id:
+                st.session_state.confirm_delete_member_id = st.session_state.member_selected_id
+                # No immediate rerun, let the warning and buttons appear below
+            # This part will now always execute if confirm_delete_member_id is set
+            if st.session_state.confirm_delete_member_id == st.session_state.member_selected_id: # Ensure it's for current selection
+                st.warning(f"Are you sure you want to delete member '{st.session_state.member_name}'? This action cannot be undone.")
+                confirm_col1, confirm_col2 = st.columns(2)
+                with confirm_col1:
+                    if st.button("YES, DELETE Permanently", key=f"confirm_delete_member_btn_{st.session_state.member_selected_id}"):
+                        try:
+                            deleted_member = api.delete_member(st.session_state.member_selected_id) # Renamed
+                            if deleted_member: # Use Renamed
+                                st.success(f"Member '{st.session_state.member_name}' deleted successfully.")
+                                clear_member_form(clear_selection=True)
+                                st.session_state.confirm_delete_member_id = None
+                                # st.rerun() # Commented for testing
+                            else:
+                                st.error("Failed to delete member. They might have active memberships or other issue.")
+                                st.session_state.confirm_delete_member_id = None
+                                # st.rerun() # Commented for testing
+                        except Exception as e:
+                            st.error(f"Error deleting member: {e}")
+                            st.session_state.confirm_delete_member_id = None
+                            # st.rerun() # Commented for testing
+                with confirm_col2:
+                    if st.button("Cancel Deletion", key=f"cancel_delete_member_btn_{st.session_state.member_selected_id}"):
+                        st.session_state.confirm_delete_member_id = None
+                        # st.rerun() # Commented for testing
 
-        # if clear_button_member: # Use Renamed
-        #     clear_member_form(clear_selection=True)
-        #     # st.rerun() # Commented for testing
+        if clear_button_member: # Use Renamed
+            clear_member_form(clear_selection=True)
+            # st.rerun() # Commented for testing
 
 
 def render_group_plans_tab():
@@ -976,7 +980,7 @@ def render_group_plans_tab():
                 if selected_plan_data:
                     st.session_state.group_plan_name = selected_plan_data.name or ""
                     st.session_state.group_plan_duration_days = selected_plan_data.duration_days or 30
-                    st.session_state.group_plan_default_amount = selected_plan_data.price or 0.0
+                    st.session_state.group_plan_default_amount = selected_plan_data.default_amount or 0.0 # Changed from price
                     st.session_state.group_plan_is_active = selected_plan_data.is_active # Corrected: Use boolean is_active
                     st.session_state.group_plan_display_name_readonly = f"{selected_plan_data.name} ({selected_plan_data.duration_days} days)"
                     st.session_state.group_plan_form_key = f"group_plan_form_{datetime.now().timestamp()}"
@@ -990,97 +994,97 @@ def render_group_plans_tab():
         else:
             st.subheader(f"Edit Group Plan: {st.session_state.group_plan_display_name_readonly}")
 
-        st.write("Group Plan form is temporarily commented out for debugging.")
-        # with st.form(key=st.session_state.group_plan_form_key, clear_on_submit=False):
-        #     plan_name_form_val = st.text_input("Group Plan Name (e.g., Gold, Monthly)", value=st.session_state.group_plan_name, key="group_plan_form_name")
-        #     duration_days_form_val = st.number_input("Duration (Days)", value=st.session_state.group_plan_duration_days, min_value=1, step=1, key="group_plan_form_duration")
-        #     default_amount_form_val = st.number_input("Default Amount (₹)", value=st.session_state.group_plan_default_amount, min_value=0.0, format="%.2f", key="group_plan_form_amount")
-        #     is_active_form_gp = st.checkbox("Is Active", value=st.session_state.group_plan_is_active, key="group_plan_form_is_active") # Renamed
+        # st.write("Group Plan form is temporarily commented out for debugging.")
+        with st.form(key=st.session_state.group_plan_form_key, clear_on_submit=False):
+            plan_name_form_val = st.text_input("Group Plan Name (e.g., Gold, Monthly)", value=st.session_state.group_plan_name, key="group_plan_form_name")
+            duration_days_form_val = st.number_input("Duration (Days)", value=st.session_state.group_plan_duration_days, min_value=1, step=1, key="group_plan_form_duration")
+            default_amount_form_val = st.number_input("Default Amount (₹)", value=st.session_state.group_plan_default_amount, min_value=0.0, format="%.2f", key="group_plan_form_amount")
+            is_active_form_gp = st.checkbox("Is Active", value=st.session_state.group_plan_is_active, key="group_plan_form_is_active") # Renamed
 
-        #     if st.session_state.group_plan_selected_id is not None and st.session_state.group_plan_display_name_readonly:
-        #         st.text_input("Display Name (Auto-generated)", value=st.session_state.group_plan_display_name_readonly, disabled=True)
+            if st.session_state.group_plan_selected_id is not None and st.session_state.group_plan_display_name_readonly:
+                st.text_input("Display Name (Auto-generated)", value=st.session_state.group_plan_display_name_readonly, disabled=True)
 
-        #     form_col1, form_col2, form_col3 = st.columns(3)
-        #     with form_col1:
-        #         save_plan_button = st.form_submit_button(
-        #             "Save Group Plan" if st.session_state.group_plan_selected_id else "Add Group Plan"
-        #         )
-        #     delete_plan_button = None # Initialize
-        #     if st.session_state.group_plan_selected_id is not None:
-        #         with form_col2:
-        #             delete_plan_button = st.form_submit_button("Delete Group Plan")
-        #     with form_col3:
-        #         clear_plan_form_button = st.form_submit_button("Clear / New")
+            form_col1, form_col2, form_col3 = st.columns(3)
+            with form_col1:
+                save_plan_button = st.form_submit_button(
+                    "Save Group Plan" if st.session_state.group_plan_selected_id else "Add Group Plan"
+                )
+            delete_plan_button = None # Initialize
+            if st.session_state.group_plan_selected_id is not None:
+                with form_col2:
+                    delete_plan_button = st.form_submit_button("Delete Group Plan")
+            with form_col3:
+                clear_plan_form_button = st.form_submit_button("Clear / New")
 
-        # if save_plan_button:
-        #     try:
-        #         if not plan_name_form_val or duration_days_form_val <= 0:
-        #             st.error("Group Plan Name and valid Duration (days > 0) are required.")
-        #         elif st.session_state.group_plan_selected_id is None:  # ADD PATH
-        #             plan_id = api.add_group_plan(
-        #                 name=plan_name_form_val,
-        #                 duration_days=duration_days_form_val,
-        #                 default_amount=default_amount_form_val
-        #                 # Note: is_active is not passed for add, API likely defaults it.
-        #             )
-        #             if plan_id:
-        #                 st.success(f"Group Plan '{plan_name_form_val}' added successfully.")
-        #                 clear_group_plan_form(clear_selection=True)
-        #                 # st.rerun() # Commented for testing
-        #             else:
-        #                 st.error("Failed to add group plan. Display name might already exist or other validation error.")
-        #         else:  # UPDATE PATH
-        #             success_gp_update = api.update_group_plan( # Renamed result variable
-        #                 plan_id=st.session_state.group_plan_selected_id,
-        #                 name=plan_name_form_val,
-        #                 duration_days=duration_days_form_val,
-        #                 default_amount=default_amount_form_val,
-        #                 is_active=is_active_form_gp # Use renamed checkbox value
-        #             )
-        #             if success_gp_update: # Use renamed result
-        #                 st.success(f"Group Plan updated successfully.")
-        #                 clear_group_plan_form(clear_selection=True)
-        #                 # st.rerun() # Commented for testing
-        #             else:
-        #                 st.error("Failed to update group plan. Display name might already exist or other validation error.")
-        #     except ValueError as ve:
-        #         st.error(f"Validation error: {ve}")
-        #     except Exception as e: # Catch-all for other exceptions
-        #         st.error(f"An error occurred: {e}")
+        if save_plan_button:
+            try:
+                if not plan_name_form_val or duration_days_form_val <= 0:
+                    st.error("Group Plan Name and valid Duration (days > 0) are required.")
+                elif st.session_state.group_plan_selected_id is None:  # ADD PATH
+                    plan_id = api.add_group_plan(
+                        name=plan_name_form_val,
+                        duration_days=duration_days_form_val,
+                        default_amount=default_amount_form_val
+                        # Note: is_active is not passed for add, API likely defaults it.
+                    )
+                    if plan_id:
+                        st.success(f"Group Plan '{plan_name_form_val}' added successfully.")
+                        clear_group_plan_form(clear_selection=True)
+                        # st.rerun() # Commented for testing
+                    else:
+                        st.error("Failed to add group plan. Display name might already exist or other validation error.")
+                else:  # UPDATE PATH
+                    success_gp_update = api.update_group_plan( # Renamed result variable
+                        plan_id=st.session_state.group_plan_selected_id,
+                        name=plan_name_form_val,
+                        duration_days=duration_days_form_val,
+                        default_amount=default_amount_form_val,
+                        is_active=is_active_form_gp # Use renamed checkbox value
+                    )
+                    if success_gp_update: # Use renamed result
+                        st.success(f"Group Plan updated successfully.")
+                        clear_group_plan_form(clear_selection=True)
+                        # st.rerun() # Commented for testing
+                    else:
+                        st.error("Failed to update group plan. Display name might already exist or other validation error.")
+            except ValueError as ve:
+                st.error(f"Validation error: {ve}")
+            except Exception as e: # Catch-all for other exceptions
+                st.error(f"An error occurred: {e}")
 
-        # # Confirmation logic for delete
-        # if st.session_state.group_plan_selected_id is not None and delete_plan_button:
-        #     if st.session_state.confirm_delete_group_plan_id != st.session_state.group_plan_selected_id:
-        #          st.session_state.confirm_delete_group_plan_id = st.session_state.group_plan_selected_id
-        #     # This block now executes if confirm_delete_group_plan_id is set appropriately
-        #     if st.session_state.confirm_delete_group_plan_id == st.session_state.group_plan_selected_id: # Check if it's the current one
-        #         st.warning(f"Are you sure you want to delete group plan '{st.session_state.group_plan_display_name_readonly}'? This action cannot be undone.")
-        #         confirm_col1, confirm_col2 = st.columns(2)
-        #         with confirm_col1:
-        #             if st.button("YES, DELETE Group Plan Permanently", key=f"confirm_delete_gplan_btn_{st.session_state.group_plan_selected_id}"):
-        #                 try:
-        #                     deleted_gp = api.delete_group_plan(st.session_state.group_plan_selected_id) # Renamed
-        #                     if deleted_gp: # Use renamed
-        #                         st.success(f"Group Plan '{st.session_state.group_plan_display_name_readonly}' deleted successfully.")
-        #                         clear_group_plan_form(clear_selection=True)
-        #                         st.session_state.confirm_delete_group_plan_id = None # Reset confirmation
-        #                         # st.rerun() # Commented for testing
-        #                     else:
-        #                         st.error("Failed to delete group plan. It might be in use or another issue occurred.")
-        #                         st.session_state.confirm_delete_group_plan_id = None # Reset confirmation
-        #                         # st.rerun() # Commented for testing
-        #                 except Exception as e:
-        #                     st.error(f"Error deleting group plan: {e}")
-        #                     st.session_state.confirm_delete_group_plan_id = None # Reset confirmation
-        #                     # st.rerun() # Commented for testing
-        #         with confirm_col2:
-        #             if st.button("Cancel Group Plan Deletion", key=f"cancel_delete_gplan_btn_{st.session_state.group_plan_selected_id}"):
-        #                 st.session_state.confirm_delete_group_plan_id = None # Reset confirmation
-        #                 # st.rerun() # Commented for testing
+        # Confirmation logic for delete
+        if st.session_state.group_plan_selected_id is not None and delete_plan_button:
+            if st.session_state.confirm_delete_group_plan_id != st.session_state.group_plan_selected_id:
+                 st.session_state.confirm_delete_group_plan_id = st.session_state.group_plan_selected_id
+            # This block now executes if confirm_delete_group_plan_id is set appropriately
+            if st.session_state.confirm_delete_group_plan_id == st.session_state.group_plan_selected_id: # Check if it's the current one
+                st.warning(f"Are you sure you want to delete group plan '{st.session_state.group_plan_display_name_readonly}'? This action cannot be undone.")
+                confirm_col1, confirm_col2 = st.columns(2)
+                with confirm_col1:
+                    if st.button("YES, DELETE Group Plan Permanently", key=f"confirm_delete_gplan_btn_{st.session_state.group_plan_selected_id}"):
+                        try:
+                            deleted_gp = api.delete_group_plan(st.session_state.group_plan_selected_id) # Renamed
+                            if deleted_gp: # Use renamed
+                                st.success(f"Group Plan '{st.session_state.group_plan_display_name_readonly}' deleted successfully.")
+                                clear_group_plan_form(clear_selection=True)
+                                st.session_state.confirm_delete_group_plan_id = None # Reset confirmation
+                                # st.rerun() # Commented for testing
+                            else:
+                                st.error("Failed to delete group plan. It might be in use or another issue occurred.")
+                                st.session_state.confirm_delete_group_plan_id = None # Reset confirmation
+                                # st.rerun() # Commented for testing
+                        except Exception as e:
+                            st.error(f"Error deleting group plan: {e}")
+                            st.session_state.confirm_delete_group_plan_id = None # Reset confirmation
+                            # st.rerun() # Commented for testing
+                with confirm_col2:
+                    if st.button("Cancel Group Plan Deletion", key=f"cancel_delete_gplan_btn_{st.session_state.group_plan_selected_id}"):
+                        st.session_state.confirm_delete_group_plan_id = None # Reset confirmation
+                        # st.rerun() # Commented for testing
 
-        # if clear_plan_form_button:
-        #     clear_group_plan_form(clear_selection=True)
-        #     # st.rerun() # Commented for testing
+        if clear_plan_form_button:
+            clear_group_plan_form(clear_selection=True)
+            # st.rerun() # Commented for testing
 
 def render_reporting_tab():
     st.header("Financial & Renewals Reporting")

@@ -127,16 +127,17 @@ class DatabaseManager:
         except ValueError: # Re-raise ValueError for phone uniqueness
             raise
 
-    def get_all_members(self) -> List[Dict]:
+    def get_all_members(self) -> List[MemberView]:
         """Retrieves all members from the database."""
         cursor = self.conn.cursor()
         try:
             self.conn.row_factory = sqlite3.Row # To get results as dicts
             cursor = self.conn.cursor()
             cursor.execute("SELECT id, name, phone, email, join_date, is_active FROM members ORDER BY name ASC")
-            members = [dict(row) for row in cursor.fetchall()]
+            rows = cursor.fetchall()
             self.conn.row_factory = None # Reset row_factory
-            return members
+            # Explicitly map to MemberView, ensuring is_active is bool
+            return [MemberView(id=row['id'], name=row['name'], phone=row['phone'], email=row['email'], join_date=row['join_date'], is_active=bool(row['is_active'])) for row in rows]
         except sqlite3.Error as e:
             logging.error(f"Database error in get_all_members: {e}", exc_info=True)
             self.conn.row_factory = None # Ensure reset on error too
@@ -310,16 +311,17 @@ class DatabaseManager:
         except ValueError: # Re-raise ValueError for display_name uniqueness
             raise
 
-    def get_all_group_plans(self) -> List[Dict]:
+    def get_all_group_plans(self) -> List[GroupPlanView]:
         """Retrieves all group_plans from the database."""
         cursor = self.conn.cursor()
         try:
             self.conn.row_factory = sqlite3.Row # To get results as dicts
             cursor = self.conn.cursor()
             cursor.execute("SELECT id, name, duration_days, default_amount, display_name, is_active FROM group_plans ORDER BY name ASC")
-            plans = [dict(row) for row in cursor.fetchall()]
+            rows = cursor.fetchall()
             self.conn.row_factory = None # Reset row_factory
-            return plans
+            # Explicitly map to GroupPlanView, ensuring is_active is bool and default_amount is float
+            return [GroupPlanView(id=row['id'], name=row['name'], display_name=row['display_name'], is_active=bool(row['is_active']), default_amount=float(row['default_amount']), duration_days=row['duration_days']) for row in rows]
         except sqlite3.Error as e:
             logging.error(f"Database error in get_all_group_plans: {e}", exc_info=True)
             self.conn.row_factory = None # Ensure reset on error too
@@ -330,12 +332,12 @@ class DatabaseManager:
         try:
             self.conn.row_factory = sqlite3.Row
             cursor = self.conn.cursor()
-            # GroupPlanView: id, name, price, duration_days, display_name, is_active (changed from status)
-            # Query maps default_amount to price, and selects is_active.
-            cursor.execute("SELECT id, name, default_amount as price, duration_days, display_name, is_active FROM group_plans ORDER BY name ASC")
+            # GroupPlanView: id, name, default_amount, duration_days, display_name, is_active
+            # Query selects default_amount directly, no alias needed.
+            cursor.execute("SELECT id, name, default_amount, duration_days, display_name, is_active FROM group_plans ORDER BY name ASC")
             rows = cursor.fetchall()
-            # Ensure GroupPlanView DTO constructor aligns with these fields, especially 'is_active'
-            return [GroupPlanView(**row) for row in rows]
+            # Ensure GroupPlanView DTO constructor aligns with these fields, especially 'is_active' and 'default_amount'
+            return [GroupPlanView(id=row['id'], name=row['name'], display_name=row['display_name'], is_active=bool(row['is_active']), default_amount=float(row['default_amount']), duration_days=row['duration_days']) for row in rows]
         except sqlite3.Error as e:
             logging.error(f"Database error in get_all_group_plans_for_view: {e}", exc_info=True)
             return []
@@ -499,7 +501,7 @@ class DatabaseManager:
     def get_all_group_class_memberships_for_view( # Renamed function
         self,
         name_filter: Optional[str] = None,
-        phone_filter: Optional[str] = None,
+        # phone_filter: Optional[str] = None, # Removed phone_filter
         status_filter: Optional[str] = None,  # 'Active', 'Inactive', or None
     ) -> List[GroupClassMembershipView]:
         try:
@@ -530,9 +532,7 @@ class DatabaseManager:
             if name_filter:
                 conditions.append("m.name LIKE ?")
                 params.append(f"%{name_filter}%")
-            # phone_filter was in original, but GroupClassMembershipView doesn't have phone.
-            # If needed, DTO should be updated or a different view model used.
-            # For now, removing phone_filter from conditions based on current DTO.
+            # phone_filter was removed.
             if status_filter:
                 # Convert 'Active'/'Inactive' to boolean/integer for query
                 is_active_val = 1 if status_filter.lower() == 'active' else 0

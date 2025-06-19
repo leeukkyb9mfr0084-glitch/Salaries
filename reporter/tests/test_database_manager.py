@@ -5,6 +5,7 @@ from datetime import datetime, date, timedelta
 
 from reporter.database_manager import DatabaseManager
 from reporter.database import create_database
+from reporter.models import MemberView, GroupPlanView, GroupClassMembershipView # Import DTOs
 
 # Define the test database path
 TEST_DB_PATH = "test_app_manager.db"
@@ -285,6 +286,10 @@ def test_add_pt_membership_stub(db_manager: DatabaseManager):
     assert record[2] == 10 # sessions_remaining
     assert record[3] == 150.0 # amount_paid
 
+def test_add_member_null_phone(db_manager: DatabaseManager):
+    with pytest.raises(sqlite3.IntegrityError):
+        db_manager.add_member(name="Test Null Phone", phone=None, email="null_phone@example.com")
+
 def test_get_all_pt_memberships_for_view(db_manager: DatabaseManager): # Renamed from test_get_all_pt_memberships_stub and updated
     cursor = db_manager.conn.cursor()
     m_id = cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES ('PT User View', '7778889900', 'pt_view@example.com', ?, 1)", (today_str(),)).lastrowid
@@ -329,13 +334,15 @@ def test_get_all_members_for_view(db_manager: DatabaseManager):
     alpha = members_view[0]
     beta = members_view[1]
 
+    assert isinstance(alpha, MemberView)
     assert alpha.id == m1_id
     assert alpha.name == "Member Alpha"
     assert alpha.phone == "000000001"
     assert alpha.email == "alpha@example.com"
     assert alpha.join_date == past_date_str(10)
-    assert alpha.is_active is True # is_active is int (0 or 1) in DB
+    assert alpha.is_active is True
 
+    assert isinstance(beta, MemberView)
     assert beta.id == m2_id
     assert beta.name == "Member Beta"
     assert beta.phone == "000000002"
@@ -343,12 +350,40 @@ def test_get_all_members_for_view(db_manager: DatabaseManager):
     assert beta.join_date == past_date_str(5)
     assert beta.is_active is False
 
+def test_get_all_group_plans_for_view(db_manager: DatabaseManager):
+    cursor = db_manager.conn.cursor()
+    p1_id = cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, display_name, is_active) VALUES ('Plan Alpha', 30, 100.0, 'Plan Alpha - 30 days', 1)").lastrowid
+    p2_id = cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, display_name, is_active) VALUES ('Plan Beta', 90, 250.0, 'Plan Beta - 90 days', 0)").lastrowid
+    db_manager.conn.commit()
+
+    plans_view = db_manager.get_all_group_plans_for_view()
+    assert len(plans_view) == 2
+
+    alpha_plan = plans_view[0] # Assuming order by name
+    beta_plan = plans_view[1]
+
+    assert isinstance(alpha_plan, GroupPlanView)
+    assert alpha_plan.id == p1_id
+    assert alpha_plan.name == "Plan Alpha"
+    assert alpha_plan.duration_days == 30
+    assert alpha_plan.default_amount == 100.0
+    assert alpha_plan.display_name == "Plan Alpha - 30 days"
+    assert alpha_plan.is_active is True
+
+    assert isinstance(beta_plan, GroupPlanView)
+    assert beta_plan.id == p2_id
+    assert beta_plan.name == "Plan Beta"
+    assert beta_plan.duration_days == 90
+    assert beta_plan.default_amount == 250.0
+    assert beta_plan.display_name == "Plan Beta - 90 days"
+    assert beta_plan.is_active is False
+
 # Test for GroupClassMembershipView (including amount_paid, no display_names)
 def test_get_all_group_class_memberships_for_view(db_manager: DatabaseManager):
     cursor = db_manager.conn.cursor()
     m1_id = cursor.execute("INSERT INTO members (name, phone, email, join_date, is_active) VALUES ('GC Member A', '111000001', 'gc_a@example.com', ?, 1)", (past_date_str(20),)).lastrowid
     # Corrected group_plans insert: no display_name, description, status (text)
-    p1_id = cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, is_active) VALUES ('GC Plan X', 30, 75.0, 1)").lastrowid
+    p1_id = cursor.execute("INSERT INTO group_plans (name, duration_days, default_amount, display_name, is_active) VALUES ('GC Plan X', 30, 75.0, 'GC Plan X - 30 days', 1)").lastrowid
     db_manager.conn.commit()
 
     start_date_val = past_date_str(15)
@@ -357,10 +392,11 @@ def test_get_all_group_class_memberships_for_view(db_manager: DatabaseManager):
     gcm_id = db_manager.create_group_class_membership(m1_id, p1_id, start_date_val, amount_paid_val)
     assert gcm_id is not None
 
-    memberships_view = db_manager.get_all_group_class_memberships_for_view()
+    memberships_view = db_manager.get_all_group_class_memberships_for_view(name_filter=None, status_filter=None) # Pass filters as None
     assert len(memberships_view) == 1
 
     view_item = memberships_view[0]
+    assert isinstance(view_item, GroupClassMembershipView)
     # GroupClassMembershipView DTO: id, member_id, member_name, plan_id, plan_name, start_date, end_date, amount_paid, purchase_date, membership_type, is_active
     assert view_item.id == gcm_id
     assert view_item.member_id == m1_id

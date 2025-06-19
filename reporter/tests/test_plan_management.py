@@ -4,10 +4,12 @@ from typing import List, Dict, Optional
 
 from reporter.database_manager import DatabaseManager
 from reporter.database import create_database
+from reporter.models import GroupPlanView # Import DTO
 
 @pytest.fixture
 def db_manager() -> DatabaseManager:
     conn = create_database(":memory:")
+    conn.execute("PRAGMA foreign_keys = ON;") # Ensure FKs are on for :memory:
     manager = DatabaseManager(connection=conn)
     return manager
 
@@ -53,18 +55,22 @@ def test_get_all_group_plans_multiple(db_manager: DatabaseManager): # RENAMED
     db_manager.add_group_plan(GROUP_PLAN_QUARTERLY["name"], GROUP_PLAN_QUARTERLY["duration_days"], GROUP_PLAN_QUARTERLY["default_amount"]) # RENAMED
     db_manager.add_group_plan(GROUP_PLAN_ANNUAL["name"], GROUP_PLAN_ANNUAL["duration_days"], GROUP_PLAN_ANNUAL["default_amount"]) # RENAMED
 
-    plans = db_manager.get_all_group_plans() # RENAMED
+    plans = db_manager.get_all_group_plans() # RENAMED - now returns List[GroupPlanView]
     assert len(plans) == 3
-    assert plans[0]["name"] == GROUP_PLAN_ANNUAL["name"] # Assuming sort order by name ASC
-    assert plans[1]["name"] == GROUP_PLAN_MONTHLY["name"]
-    assert plans[2]["name"] == GROUP_PLAN_QUARTERLY["name"]
+    # Assuming sort order by name ASC (Annual, Monthly, Quarterly based on current names)
+    assert isinstance(plans[0], GroupPlanView)
+    assert plans[0].name == GROUP_PLAN_ANNUAL["name"]
+    assert isinstance(plans[1], GroupPlanView)
+    assert plans[1].name == GROUP_PLAN_MONTHLY["name"]
+    assert isinstance(plans[2], GroupPlanView)
+    assert plans[2].name == GROUP_PLAN_QUARTERLY["name"]
 
-    monthly_details = next(p for p in plans if p["name"] == GROUP_PLAN_MONTHLY["name"])
+    monthly_details = next(p for p in plans if p.name == GROUP_PLAN_MONTHLY["name"])
     expected_monthly_display_name = generate_expected_display_name(GROUP_PLAN_MONTHLY["name"], GROUP_PLAN_MONTHLY["duration_days"])
-    assert monthly_details["duration_days"] == GROUP_PLAN_MONTHLY["duration_days"]
-    assert monthly_details["default_amount"] == GROUP_PLAN_MONTHLY["default_amount"]
-    assert monthly_details["display_name"] == expected_monthly_display_name
-    assert monthly_details["is_active"] == 1 # is_active is boolean in new schema, 1 for True
+    assert monthly_details.duration_days == GROUP_PLAN_MONTHLY["duration_days"]
+    assert monthly_details.default_amount == GROUP_PLAN_MONTHLY["default_amount"]
+    assert monthly_details.display_name == expected_monthly_display_name
+    assert monthly_details.is_active is True # is_active is bool in DTO
 
 def test_update_group_plan_success_all_fields(db_manager: DatabaseManager): # RENAMED
     plan_id = db_manager.add_group_plan(GROUP_PLAN_MONTHLY["name"], GROUP_PLAN_MONTHLY["duration_days"], GROUP_PLAN_MONTHLY["default_amount"]) # RENAMED
