@@ -1,3 +1,11 @@
+### **Application Context**
+
+#### **Application Specifications (app_specs.md)**
+This document (`app_specs.md`) is the primary source of truth for all functional and technical specifications of the Kranos Reporter application. It details the database schema, UI funcionality by tab, and overall application behavior. All development work should align with these specifications.
+
+#### **Developer's Guide (Developers_Guide.md)**
+The `Developers_Guide.md` outlines the official development standards, architectural patterns (including the four-layer architecture: UI, API, Data Access, Database Schema), and the schema-first development workflow. Adherence to this guide is mandatory to ensure consistency, maintainability, and stability of the application.
+
 ### **Overall Objective for Jules**
 
 Your goal is to align the application's source code with the corrected documentation. This involves updating the Data Transfer Objects (DTOs) and the Streamlit UI code. Finally, you will create new UI-level tests to verify these changes.
@@ -137,3 +145,50 @@ def test_ui_displays_correct_plan_amount():
   * `reporter/tests/test_ui_logic.py::test_ui_filters_for_active_plans`
   * `reporter/tests/test_ui_logic.py::test_ui_displays_correct_plan_amount`
 - Due to these unresolved errors, full verification of all changes was not possible at this time.
+
+---
+
+### **Phase 4: Addressing UI Test Failures (New Tasks)**
+
+**TASK 1: Analyze `st.button()` in `st.form()` error in `render_memberships_tab`**
+
+**>> COMMAND:** Review `reporter/streamlit_ui/app.py` (specifically `render_memberships_tab`) and `Developers_Guide.md` to understand the root cause of the `streamlit.errors.StreamlitAPIException: st.button() can't be used in an st.form()` error.
+
+**>> FINDINGS:**
+*   In `render_memberships_tab` (for both Group Class and PT memberships), the "Add New" buttons (`gc_add_new_button`, `pt_add_new_button`) and the "Select" buttons for each existing membership are defined *outside* any `st.form()` context. The main forms for adding/editing memberships (`new_gc_membership_form`, `new_pt_membership_form`, and the edit forms keyed by `st.session_state.gc_membership_form_key` or `st.session_state.pt_membership_form_key`) correctly use `st.form_submit_button()` for their internal actions (Save, Delete, Clear). However, the "YES, DELETE Permanently" and "Cancel Deletion" buttons, which appear after a delete button *within* a form is clicked, are standard `st.button()` instances. These confirmation buttons are *not* inside an `st.form` block themselves, but their appearance is triggered by a `st.form_submit_button` from the edit form. This interaction, where a form submission leads to the conditional display of regular buttons that then manage form-related state or trigger reruns, might be the source of the `AppTest` conflict. The `AppTest` environment might be stricter about how form submissions and subsequent button interactions are handled.
+*   The `Developers_Guide.md` does not contain specific guidelines on the use of `st.form()` in conjunction with `st.button()`, nor does it detail specific patterns for confirmation dialogs that involve forms. Section 4.3. "UI State Management" emphasizes initializing session state keys and using unique keys for widgets, which is generally followed. However, it doesn't address the specific scenario of nested interactions between form submission triggers and subsequent regular button actions that might affect or be perceived as part of the form's lifecycle by `AppTest`.
+
+**STATUS: Completed**
+
+---
+**TASK 4: Add a new UI test for group class membership creation**
+
+**>> COMMAND:** Add a new test to `reporter/tests/test_ui_logic.py` using `AppTest` to verify the creation of a new group class membership via the UI in `render_memberships_tab`.
+
+**>> TEST ADDED:**
+*   Added `test_ui_create_new_group_class_membership` to `reporter/tests/test_ui_logic.py`.
+*   The test mocks `AppAPI` calls for fetching members and plans, and for creating the membership.
+*   It simulates user input for member selection, plan selection, start date, and amount paid.
+*   It verifies that the correct data is passed to `api.create_group_class_membership` upon form submission.
+
+**STATUS: Completed**
+
+---
+**TASK 2: Propose a solution for `st.button()` in `st.form()` error**
+
+**>> COMMAND:** Based on the analysis in Task 1, propose a code modification strategy to resolve the `streamlit.errors.StreamlitAPIException`.
+
+**>> PROPOSED SOLUTION:**
+*   The error `streamlit.errors.StreamlitAPIException: st.button() can't be used in an st.form()` in `render_memberships_tab` likely occurs because action buttons (e.g., 'Clear Selections', 'Delete Selected Membership') are placed within the logical scope of an `st.form` block without being `st.form_submit_button`. The solution is to refactor the UI layout in `render_memberships_tab` to ensure that such action buttons are moved outside any `st.form` definitions. Each form should only contain its specific input fields and one `st.form_submit_button` for its primary action (e.g., 'Add/Update Membership'). Auxiliary actions should be triggered by buttons outside these forms.
+
+**STATUS: Completed**
+
+---
+**TASK 3: Implement the solution for `st.button()` in `st.form()` error**
+
+**>> COMMAND:** Modify `reporter/streamlit_ui/app.py` (specifically `render_memberships_tab`) according to the PROPOSED SOLUTION in TASK 2 to resolve the `streamlit.errors.StreamlitAPIException`.
+
+**>> MODIFICATIONS:**
+*   Refactored `render_memberships_tab` in `reporter/streamlit_ui/app.py` to move the delete confirmation buttons (which use `st.button`) completely outside of the `st.form` blocks. The `st.form_submit_button("Delete Membership")` now sets a session state variable, and the confirmation buttons are displayed based on this state, ensuring they are not nested within or logically tied to the form in a way that `AppTest` would flag. All actions triggered by form submission buttons (Save, Delete trigger, Clear) are now processed immediately after the form definition, followed by the out-of-form confirmation logic if applicable.
+
+**STATUS: Completed**
