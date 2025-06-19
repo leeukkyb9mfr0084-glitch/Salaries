@@ -9,6 +9,7 @@ sys.path.append(str(project_root))
 
 from streamlit.testing.v1 import AppTest
 from reporter.models import GroupPlanView, MemberView
+from reporter.database import initialize_database # Added import
 
 @patch("sqlite3.connect")
 @patch("reporter.database_manager.DatabaseManager")
@@ -21,8 +22,8 @@ def test_group_plan_filter_uses_is_active(MockAppAPIClass_Source, MockDBManagerC
     mock_app_api_instance = MockAppAPIClass_Source.return_value
 
     mock_plans_data = [
-        GroupPlanView(id=1, name="Active Plan", display_name="Active Plan Display", price=100.0, duration_days=30, is_active=True),
-        GroupPlanView(id=2, name="Inactive Plan", display_name="Inactive Plan Display", price=50.0, duration_days=30, is_active=False),
+        GroupPlanView(id=1, name="Active Plan", display_name="Active Plan Display", default_amount=100.0, duration_days=30, is_active=True),
+        GroupPlanView(id=2, name="Inactive Plan", display_name="Inactive Plan Display", default_amount=50.0, duration_days=30, is_active=False),
     ]
 
     def print_and_return_mock_plans(*args, **kwargs):
@@ -42,6 +43,8 @@ def test_group_plan_filter_uses_is_active(MockAppAPIClass_Source, MockDBManagerC
 
     mock_sqlite_connect_std.return_value = MagicMock()
     MockDBManagerClass_Source.return_value = MagicMock()
+
+    initialize_database() # Initialize database before running the app
 
     at = AppTest.from_file("reporter/streamlit_ui/app.py", default_timeout=60)
     at.run() # Initial run.
