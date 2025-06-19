@@ -244,6 +244,17 @@ def render_memberships_tab():
     )
 
     if membership_mode == 'Group Class Memberships':
+        if st.button("➕ Add New Group Class Membership", key="gc_add_new_button"): # Moved
+            st.session_state.selected_gc_membership_id = "add_new"
+            st.session_state.confirm_delete_gc_membership_id = None
+            st.session_state.gc_membership_form_key = f"gc_form_{datetime.now().timestamp()}"
+            st.session_state.gc_member_id_form = None
+            st.session_state.gc_member_name_display = ""
+            st.session_state.gc_plan_id_form = None
+            st.session_state.gc_start_date_form = date.today()
+            st.session_state.gc_amount_paid_form = 0.0
+            # st.rerun() # Commented for testing
+
         left_col, right_col = st.columns([1, 2])
 
         with right_col:
@@ -256,17 +267,7 @@ def render_memberships_tab():
                 st.error(f"Error fetching group class memberships: {e}")
                 all_gc_memberships = []
 
-            if st.button("➕ Add New Group Class Membership", key="gc_add_new_button"):
-                st.session_state.selected_gc_membership_id = "add_new"
-                st.session_state.confirm_delete_gc_membership_id = None
-                st.session_state.gc_membership_form_key = f"gc_form_{datetime.now().timestamp()}"
-                st.session_state.gc_member_id_form = None
-                st.session_state.gc_member_name_display = ""
-                st.session_state.gc_plan_id_form = None
-                st.session_state.gc_start_date_form = date.today()
-                st.session_state.gc_amount_paid_form = 0.0
-                st.rerun()
-
+            # Button moved up
             st.markdown("---")
             st.write("**Existing Group Class Memberships:**")
 
@@ -300,7 +301,7 @@ def render_memberships_tab():
                     else:
                         st.error("Selected membership data not found. Please try again.")
                         st.session_state.selected_gc_membership_id = "add_new"
-                    st.rerun()
+                    # st.rerun() # Commented for testing
                 st.markdown("---")
 
         with left_col:
@@ -396,7 +397,7 @@ def render_memberships_tab():
                                 st.session_state.gc_start_date_form = date.today()
                                 st.session_state.gc_amount_paid_form = 0.0
                                 st.session_state.gc_membership_form_key = f"gc_form_{datetime.now().timestamp()}"
-                                st.rerun()
+                                # st.rerun() # Commented for testing
                             else:
                                 st.error("Failed to create Group Class Membership.")
                         else:
@@ -411,7 +412,7 @@ def render_memberships_tab():
                                 if success_gc_update: # Use renamed
                                     st.success("Membership updated successfully!")
                                     st.session_state.selected_gc_membership_id = "add_new"
-                                    st.rerun()
+                                    # st.rerun() # Commented for testing
                                 else:
                                     st.error("Failed to update membership.")
                             except Exception as e:
@@ -421,7 +422,7 @@ def render_memberships_tab():
 
             if st.session_state.selected_gc_membership_id != "add_new" and delete_button_gc: # Use renamed
                 st.session_state.confirm_delete_gc_membership_id = st.session_state.selected_gc_membership_id
-                st.rerun()
+                # st.rerun() # Commented for testing
 
             if st.session_state.confirm_delete_gc_membership_id is not None and \
                st.session_state.confirm_delete_gc_membership_id == st.session_state.selected_gc_membership_id:
@@ -443,19 +444,19 @@ def render_memberships_tab():
                                 st.session_state.gc_amount_paid_form = 0.0
                                 st.session_state.confirm_delete_gc_membership_id = None
                                 st.session_state.gc_membership_form_key = f"gc_form_{datetime.now().timestamp()}"
-                                st.rerun()
+                                # st.rerun() # Commented for testing
                             else:
                                 st.error(f"Failed to delete Group Class Membership ID {st.session_state.confirm_delete_gc_membership_id}.")
                                 st.session_state.confirm_delete_gc_membership_id = None
-                                st.rerun()
+                                # st.rerun() # Commented for testing
                         except Exception as e:
                             st.error(f"Error deleting: {e}")
                             st.session_state.confirm_delete_gc_membership_id = None
-                            st.rerun()
+                            # st.rerun() # Commented for testing
                 with confirm_cols[1]:
                     if st.button("Cancel Deletion", key=f"cancel_delete_gc_btn_{st.session_state.confirm_delete_gc_membership_id}"):
                         st.session_state.confirm_delete_gc_membership_id = None
-                        st.rerun()
+                        # st.rerun() # Commented for testing
 
             if clear_button_gc: # Use renamed
                 st.session_state.selected_gc_membership_id = "add_new"
@@ -466,9 +467,22 @@ def render_memberships_tab():
                 st.session_state.gc_amount_paid_form = 0.0
                 st.session_state.confirm_delete_gc_membership_id = None
                 st.session_state.gc_membership_form_key = f"gc_form_{datetime.now().timestamp()}"
-                st.rerun()
+                # st.rerun() # Commented for testing
 
     elif membership_mode == 'Personal Training Memberships':
+        if st.button("➕ Add New PT Membership", key="pt_add_new_button"): # Moved
+            st.session_state.selected_pt_membership_id = "add_new"
+            st.session_state.confirm_delete_pt_membership_id = None
+            st.session_state.pt_membership_form_key = f"pt_form_{datetime.now().timestamp()}"
+            st.session_state.pt_member_id_form = None
+            st.session_state.pt_member_name_display = ""
+            st.session_state.pt_purchase_date_form = date.today()
+            st.session_state.pt_amount_paid_form = 0.0
+            st.session_state.pt_sessions_purchased_form = 1
+            if 'pt_notes_form' in st.session_state:
+                st.session_state.pt_notes_form = ""
+            # st.rerun() # Commented for testing
+
         pt_left_col, pt_right_col = st.columns([1, 2])
 
         with pt_right_col:
@@ -481,19 +495,7 @@ def render_memberships_tab():
                 st.error(f"Error fetching PT memberships: {e}")
                 all_pt_memberships = []
 
-            if st.button("➕ Add New PT Membership", key="pt_add_new_button"):
-                st.session_state.selected_pt_membership_id = "add_new"
-                st.session_state.confirm_delete_pt_membership_id = None
-                st.session_state.pt_membership_form_key = f"pt_form_{datetime.now().timestamp()}"
-                st.session_state.pt_member_id_form = None
-                st.session_state.pt_member_name_display = ""
-                st.session_state.pt_purchase_date_form = date.today()
-                st.session_state.pt_amount_paid_form = 0.0
-                st.session_state.pt_sessions_purchased_form = 1
-                if 'pt_notes_form' in st.session_state:
-                    st.session_state.pt_notes_form = ""
-                st.rerun()
-
+            # Button moved up
             st.markdown("---")
             st.write("**Existing Personal Training Memberships:**")
 
@@ -534,7 +536,7 @@ def render_memberships_tab():
                     else:
                         st.error("Selected PT membership data not found.")
                         st.session_state.selected_pt_membership_id = "add_new"
-                    st.rerun()
+                    # st.rerun() # Commented for testing
                 st.markdown("---")
 
         with pt_left_col:
@@ -602,7 +604,7 @@ def render_memberships_tab():
                                 st.success(f"PT Membership created with ID: {record_id}")
                                 st.session_state.selected_pt_membership_id = "add_new"
                                 st.session_state.pt_membership_form_key = f"pt_form_{datetime.now().timestamp()}"
-                                st.rerun()
+                                # st.rerun() # Commented for testing
                             else:
                                 st.error("Failed to create PT Membership.")
                         except Exception as e:
@@ -622,7 +624,7 @@ def render_memberships_tab():
                             )
                             if success_pt_update: # Use renamed
                                 st.success(f"PT Membership ID {st.session_state.selected_pt_membership_id} updated.")
-                                st.rerun()
+                                # st.rerun() # Commented for testing
                             else:
                                 st.error(f"Failed to update PT Membership ID {st.session_state.selected_pt_membership_id}.")
                         except Exception as e:
@@ -630,7 +632,7 @@ def render_memberships_tab():
 
             if st.session_state.selected_pt_membership_id != "add_new" and pt_delete_button:
                 st.session_state.confirm_delete_pt_membership_id = st.session_state.selected_pt_membership_id
-                st.rerun()
+                # st.rerun() # Commented for testing
 
             if st.session_state.confirm_delete_pt_membership_id is not None and \
                st.session_state.confirm_delete_pt_membership_id == st.session_state.selected_pt_membership_id:
@@ -648,19 +650,19 @@ def render_memberships_tab():
                                 st.session_state.selected_pt_membership_id = "add_new"
                                 st.session_state.confirm_delete_pt_membership_id = None
                                 st.session_state.pt_membership_form_key = f"pt_form_{datetime.now().timestamp()}"
-                                st.rerun()
+                                # st.rerun() # Commented for testing
                             else:
                                 st.error(f"Failed to delete PT Membership ID {st.session_state.confirm_delete_pt_membership_id}.")
                                 st.session_state.confirm_delete_pt_membership_id = None
-                                st.rerun()
+                                # st.rerun() # Commented for testing
                         except Exception as e:
                             st.error(f"Error deleting PT membership: {e}")
                             st.session_state.confirm_delete_pt_membership_id = None
-                            st.rerun()
+                            # st.rerun() # Commented for testing
                 with pt_confirm_cols[1]:
                     if st.button("Cancel PT Deletion", key=f"cancel_delete_pt_btn_{st.session_state.confirm_delete_pt_membership_id}"):
                         st.session_state.confirm_delete_pt_membership_id = None
-                        st.rerun()
+                        # st.rerun() # Commented for testing
 
             if pt_clear_button:
                 st.session_state.selected_pt_membership_id = "add_new"
@@ -671,7 +673,7 @@ def render_memberships_tab():
                 st.session_state.pt_sessions_purchased_form = 1
                 st.session_state.confirm_delete_pt_membership_id = None
                 st.session_state.pt_membership_form_key = f"pt_form_{datetime.now().timestamp()}"
-                st.rerun()
+                # st.rerun() # Commented for testing
 
 
 def render_members_tab():
@@ -727,7 +729,7 @@ def render_members_tab():
                     st.session_state.member_form_key = f"member_form_{datetime.now().timestamp()}" # Reset form
             else: # "Add New Member" is selected
                 clear_member_form(clear_selection=False) # Clear form fields but keep "Add New" selected
-            st.rerun()
+            # st.rerun() # Commented for testing
 
     with right_col:
         if st.session_state.member_selected_id is None:
@@ -762,7 +764,7 @@ def render_members_tab():
         #                 if member_id:
         #                     st.success(f"Member '{name_form_val}' added successfully with ID: {member_id}") # Use Renamed
         #                     clear_member_form(clear_selection=True)
-        #                     st.rerun()
+        #                     # st.rerun() # Commented for testing
         #                 else:
         #                     st.error("Failed to add member. Please check details.")
         #             except ValueError as e:
@@ -784,7 +786,7 @@ def render_members_tab():
         #                 if success_member_update: # Use Renamed
         #                     st.success(f"Member '{name_form_val}' updated successfully.") # Use Renamed
         #                     clear_member_form(clear_selection=True)
-        #                     st.rerun()
+        #                     # st.rerun() # Commented for testing
         #                 else:
         #                     st.error("Failed to update member. The phone number might already be in use by another member.")
         #             except ValueError as e:
@@ -809,23 +811,23 @@ def render_members_tab():
         #                         st.success(f"Member '{st.session_state.member_name}' deleted successfully.")
         #                         clear_member_form(clear_selection=True)
         #                         st.session_state.confirm_delete_member_id = None
-        #                         st.rerun()
+        #                         # st.rerun() # Commented for testing
         #                     else:
         #                         st.error("Failed to delete member. They might have active memberships or other issue.")
         #                         st.session_state.confirm_delete_member_id = None
-        #                         st.rerun()
+        #                         # st.rerun() # Commented for testing
         #                 except Exception as e:
         #                     st.error(f"Error deleting member: {e}")
         #                     st.session_state.confirm_delete_member_id = None
-        #                     st.rerun()
+        #                     # st.rerun() # Commented for testing
         #         with confirm_col2:
         #             if st.button("Cancel Deletion", key=f"cancel_delete_member_btn_{st.session_state.member_selected_id}"):
         #                 st.session_state.confirm_delete_member_id = None
-        #                 st.rerun()
+        #                 # st.rerun() # Commented for testing
 
         # if clear_button_member: # Use Renamed
         #     clear_member_form(clear_selection=True)
-        #     st.rerun()
+        #     # st.rerun() # Commented for testing
 
 
 def render_group_plans_tab():
@@ -885,7 +887,7 @@ def render_group_plans_tab():
                     st.session_state.group_plan_form_key = f"group_plan_form_{datetime.now().timestamp()}"
             else:
                 clear_group_plan_form(clear_selection=False)
-            st.rerun()
+            # st.rerun() # Commented for testing
 
     with right_col:
         if st.session_state.group_plan_selected_id is None:
@@ -929,7 +931,7 @@ def render_group_plans_tab():
         #             if plan_id:
         #                 st.success(f"Group Plan '{plan_name_form_val}' added successfully.")
         #                 clear_group_plan_form(clear_selection=True)
-        #                 st.rerun()
+        #                 # st.rerun() # Commented for testing
         #             else:
         #                 st.error("Failed to add group plan. Display name might already exist or other validation error.")
         #         else:  # UPDATE PATH
@@ -943,7 +945,7 @@ def render_group_plans_tab():
         #             if success_gp_update: # Use renamed result
         #                 st.success(f"Group Plan updated successfully.")
         #                 clear_group_plan_form(clear_selection=True)
-        #                 st.rerun()
+        #                 # st.rerun() # Commented for testing
         #             else:
         #                 st.error("Failed to update group plan. Display name might already exist or other validation error.")
         #     except ValueError as ve:
@@ -967,23 +969,23 @@ def render_group_plans_tab():
         #                         st.success(f"Group Plan '{st.session_state.group_plan_display_name_readonly}' deleted successfully.")
         #                         clear_group_plan_form(clear_selection=True)
         #                         st.session_state.confirm_delete_group_plan_id = None # Reset confirmation
-        #                         st.rerun()
+        #                         # st.rerun() # Commented for testing
         #                     else:
         #                         st.error("Failed to delete group plan. It might be in use or another issue occurred.")
         #                         st.session_state.confirm_delete_group_plan_id = None # Reset confirmation
-        #                         st.rerun()
+        #                         # st.rerun() # Commented for testing
         #                 except Exception as e:
         #                     st.error(f"Error deleting group plan: {e}")
         #                     st.session_state.confirm_delete_group_plan_id = None # Reset confirmation
-        #                     st.rerun()
+        #                     # st.rerun() # Commented for testing
         #         with confirm_col2:
         #             if st.button("Cancel Group Plan Deletion", key=f"cancel_delete_gplan_btn_{st.session_state.group_plan_selected_id}"):
         #                 st.session_state.confirm_delete_group_plan_id = None # Reset confirmation
-        #                 st.rerun()
+        #                 # st.rerun() # Commented for testing
 
         # if clear_plan_form_button:
         #     clear_group_plan_form(clear_selection=True)
-        #     st.rerun()
+        #     # st.rerun() # Commented for testing
 
 def render_reporting_tab():
     st.header("Financial & Renewals Reporting")

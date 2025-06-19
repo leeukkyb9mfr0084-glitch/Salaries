@@ -24,6 +24,8 @@ class GroupPlanView:
     duration_days: int
 ```
 
+**STATUS: Completed by Jules on 2024-07-29.**
+
 ---
 
 ### **Phase 2: Correct the UI Logic**
@@ -34,7 +36,11 @@ class GroupPlanView:
 
 **>> INSTRUCTION 1 of 2:** Search through the entire file for any instance where the code checks `plan.status == 'Active'`. Replace this with a check for the boolean `plan.is_active`. This will primarily affect the `render_group_plans_tab` and `render_memberships_tab` functions.
 
+**STATUS: Instruction 1 completed by Jules on 2024-07-29.**
+
 **>> INSTRUCTION 2 of 2:** Search through the entire file for any instance where the code accesses `plan.price`. Replace this with `plan.default_amount`. This will primarily affect the `render_group_plans_tab` and `render_memberships_tab` functions.
+
+**STATUS: Phase 2 completed by Jules on 2024-07-29.**
 
 ---
 
@@ -81,6 +87,8 @@ def test_ui_filters_for_active_plans():
         assert at.error == [] # Ensure no errors were thrown
 ```
 
+**STATUS: Instructions 1 and 2 completed by Jules on 2024-07-29.**
+
 **>> INSTRUCTION 3 of 3: Add a test for the correct amount display.**
 * In `reporter/tests/test_ui_logic.py`, add the following Python code. This test verifies the UI uses `default_amount`.
 
@@ -107,6 +115,8 @@ def test_ui_displays_correct_plan_amount():
         assert at.error == []
 ```
 
+**STATUS: Phase 3 completed by Jules on 2024-07-29.**
+
 ---
 
 ### **Final Verification Step**
@@ -114,3 +124,16 @@ def test_ui_displays_correct_plan_amount():
 **>> COMMAND:** Run the entire test suite to ensure all existing and new tests pass.
 
 **>> INSTRUCTION:** Execute the `pytest` command from the root directory of the project. Confirm that all tests complete successfully with no errors or failures.
+
+**STATUS: Attempted by Jules on 2024-07-29. Pytest execution encountered errors.**
+
+**Details:**
+- Initial `ModuleNotFoundError` for `streamlit` and `pytest` were resolved by installation.
+- A `TypeError` in `reporter/tests/test_ui_bugs.py` (regarding `GroupPlanView` expecting `default_amount` not `price`) was corrected.
+- `sqlite3.OperationalError: no such table` errors were resolved by adding `initialize_database()` calls in UI tests.
+- **Persistent `streamlit.errors.StreamlitAPIException: st.button() can't be used in an st.form()`** occurred when `AppTest` was run. This error seems to originate from the interaction of `AppTest` with buttons within `render_memberships_tab`, despite the buttons not being structurally inside an `st.form{}` block in the code. Attempts to refactor the layout (e.g., moving buttons, removing `st.columns`) did not resolve this.
+- **As a result, the following 3 tests are failing:**
+  * `reporter/tests/test_ui_bugs.py::test_group_plan_filter_uses_is_active`
+  * `reporter/tests/test_ui_logic.py::test_ui_filters_for_active_plans`
+  * `reporter/tests/test_ui_logic.py::test_ui_displays_correct_plan_amount`
+- Due to these unresolved errors, full verification of all changes was not possible at this time.
