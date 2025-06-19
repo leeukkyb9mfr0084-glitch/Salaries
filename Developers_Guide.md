@@ -10,7 +10,7 @@ The application follows a strict, multi-layered architecture. Understanding this
 ### 2.1. The Four Layers
 1.  **UI Layer (`reporter/streamlit_ui/app.py`)**
     * **Responsibility:** Solely for rendering UI components and capturing user input.
-    * **Rule:** This layer must not contain any business logic (e.g., calculating dates, complex validation). It receives data via DTOs and sends user input to the API Layer. It is meant to be as "dumb" as possible.
+    * **Rule:** This layer must not contain complex business logic (e.g., calculating expiration dates, processing payments). However, simple presentation logic, such as filtering or sorting a list of data already received from the API, is permissible to improve user experience. It receives data via DTOs and sends user input to the API Layer.
 
 2.  **API Layer (`reporter/app_api.py`)**
     * **Responsibility:** To act as the single, clean interface between the UI and the backend logic.
