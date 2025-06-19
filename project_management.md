@@ -1,116 +1,122 @@
-**Objective:** To refactor the application to be fully functional and bug-free. Follow these instructions precisely to build the required functionality.
+Of course. Now that the documentation is aligned, we can proceed with updating the application code.
 
-### **Phase 1: Align Database Schema & Data Models**
-*This phase is the foundation. We are making our database and data models match the required application structure.*
+Here is the complete, executable plan for Jules. It is broken down into phases: first, we will update the code to match the new documentation, and second, we will create new UI tests to prove that the fixes are working as intended.
 
-* **Task 1.1: Update `pt_memberships` Table** - DONE
-    * **File:** `reporter/database.py`
-    * **Context:** We are simplifying the personal training data model by removing unused fields.
-    * **Instruction:** Find the `CREATE TABLE pt_memberships` SQL statement and delete the entire line containing the `notes TEXT,` definition.
+---
 
-* **Task 1.2: Align `group_class_memberships` Table** - DONE
-    * **File:** `reporter/database.py`
-    * **Context:** To ensure complete and accurate tracking of time-based memberships, we need a precise table structure.
-    * **Instruction:** Modify the `CREATE TABLE group_class_memberships` statement to ensure it contains exactly these columns in this order: `id`, `member_id`, `plan_id`, `start_date`, `end_date`, `amount_paid`, `purchase_date`, `membership_type`, and `is_active`.
+### **Overall Objective for Jules**
 
-* **Task 1.3: Verify `group_plans` Table** - DONE
-    * **File:** `reporter/database.py`
-    * **Context:** The `group_plans` table defines the templates for all group memberships, and its structure must be exact for consistency.
-    * **Instruction:** Ensure the `group_plans` table schema in `database.py` exactly matches the following structure: `id` (INTEGER, PK), `name` (TEXT), `duration_days` (INTEGER), `default_amount` (REAL), `display_name` (TEXT, UNIQUE), `is_active` (BOOLEAN).
+Your goal is to align the application's source code with the corrected documentation. This involves updating the Data Transfer Objects (DTOs) and the Streamlit UI code. Finally, you will create new UI-level tests to verify these changes.
 
-* **Task 1.4: Update `PTMembershipView` DTO - DONE**
-    * **File:** `reporter/models.py`
-    * **Context:** To fix a critical data bug where the "amount paid" was being lost during UI edits, and to match our simplified database, we need to update the `PTMembershipView` DTO.
-    * **Instruction:** In the `@dataclass class PTMembershipView`, delete the `notes: str` attribute. Then, add a new attribute: `amount_paid: float`.
+---
 
-* **Task 1.5: Standardize `is_active` Flag in DTOs - DONE**
-    * **File:** `reporter/models.py`
-    * **Context:** We are implementing a project-wide standard for consistency. This ensures we handle active/inactive records the same way everywhere.
-    * **Instruction:** For all "View" DTOs in this file (`MemberView`, `GroupPlanView`, `GroupClassMembershipView`), you must replace any `status: str` attribute with `is_active: bool`.
+### **Phase 1: Align the Data Model (DTO)**
 
-* **Task 1.6: Final Schema-DTO Verification - DONE**
-    * **Files:** `reporter/database.py`, `reporter/models.py`
-    * **Context:** This step is a crucial quality check to ensure data flows predictably between the database and the application.
-    * **Instruction:** Perform a final visual check. For every column in each table in `database.py`, confirm that a matching attribute with the correct Python type exists in the corresponding DTO in `models.py`.
+**>> COMMAND:** Update the `GroupPlanView` DTO to use the correct attribute for price, matching the specification.
 
-### **Phase 2: Refactor the Data Access Layer**
-*This phase ensures our code communicates correctly with the updated database.*
+**>> FILE:** `reporter/models.py`
 
-* **Task 2.1: Correct All `get` Queries - DONE**
-    * **File:** `reporter/database_manager.py`
-    * **Context:** The queries are currently broken because they refer to old column names. They must be updated to correctly populate our new DTOs from Phase 1.
-    * **Instruction:** Review every function that fetches data for a "View" (e.g., `get_all_pt_memberships_for_view`). Modify its SQL `SELECT` statement to use the corrected column names (`is_active` instead of `status`) and to fetch all fields required by the updated DTOs (like `amount_paid` for `PTMembershipView`).
+**>> INSTRUCTION:** Find the `@dataclass class GroupPlanView` and replace its entire definition with the following corrected version.
 
-* **Task 2.2: Fix `add_pt_membership` Logic - DONE**
-    * **File:** `reporter/database_manager.py`
-    * **Context:** We are moving the business logic for new PT packages into the data layer to make it more robust and reliable.
-    * **Instruction:** Modify the `add_pt_membership` function so it automatically sets the remaining sessions.
-        1.  Remove the `notes` and `sessions_remaining` parameters from the function signature.
-        2.  In the `INSERT` statement, use the `sessions_purchased` value passed into the function for *both* the `sessions_total` and `sessions_remaining` columns.
+**>> REPLACE WITH:**
+```python
+@dataclass
+class GroupPlanView:
+    id: int
+    name: str
+    display_name: str
+    is_active: bool # Moved before fields with defaults
+    default_amount: float
+    duration_days: int
+```
 
-* **Task 2.3: Remove Redundant Function - DONE**
-    * **File:** `reporter/database_manager.py`
-    * **Context:** To simplify our backend and reduce redundant code, we are removing this function. The new, cleaner pattern is to filter data in the UI layer.
-    * **Instruction:** Delete the entire `get_active_members_for_view` function.
+---
 
-### **Phase 3: Synchronize the API Layer**
-*This phase ensures the API provides a clean, correct interface to the UI.*
+### **Phase 2: Correct the UI Logic**
 
-* **Task 3.1: Fix `create_pt_membership` Signature - DONE**
-    * **File:** `reporter/app_api.py`
-    * **Context:** The API layer must always stay in sync with the Data Access Layer it calls.
-    * **Instruction:** Find the `create_pt_membership` function. Update its signature to match the changes from Phase 2. Remove the `notes` and `sessions_remaining` parameters from the function signature and from the call to the database manager.
+**>> COMMAND:** Update the Streamlit UI to use the corrected DTO attributes. This will fix the runtime bugs.
 
-* **Task 3.2: Verify All API Signatures - DONE**
-    * **File:** `reporter/app_api.py`
-    * **Context:** This is a quality check to ensure data consistency across the application layers.
-    * **Instruction:** Briefly review all other functions in this file. Ensure the arguments they accept and the DTOs they return are consistent with the updated functions in `database_manager.py` and the DTOs in `models.py`.
+**>> FILE:** `reporter/streamlit_ui/app.py`
 
-### **Phase 4: Realign the User Interface**
-*This phase implements the required user experience.*
+**>> INSTRUCTION 1 of 2:** Search through the entire file for any instance where the code checks `plan.status == 'Active'`. Replace this with a check for the boolean `plan.is_active`. This will primarily affect the `render_group_plans_tab` and `render_memberships_tab` functions.
 
-* **Task 4.1: Restructure the `Memberships` Tab Layout - DONE**
-    * **File:** `reporter/streamlit_ui/app.py`
-    * **Context:** We are redesigning the Memberships tab for a more intuitive workflow, with creation/editing on the left and viewing/selection on the right.
-    * **Instruction:** In the `render_memberships_tab` function:
-        1.  Define a two-column layout: `left_col, right_col = st.columns([1, 2])`.
-        2.  Move the entire `st.form` for creating and editing a membership into the `with left_col:` block.
-        3.  In the `with right_col:` block, add widgets to display a list of all existing memberships. This list needs a selection mechanism (e.g., a "Select" button for each row) that, when clicked, populates the form on the left for editing. Use `st.session_state` to pass the ID of the selected record.
+**>> INSTRUCTION 2 of 2:** Search through the entire file for any instance where the code accesses `plan.price`. Replace this with `plan.default_amount`. This will primarily affect the `render_group_plans_tab` and `render_memberships_tab` functions.
 
-* **Task 4.2: Remove "Notes" Field from UI - DONE**
-    * **File:** `reporter/streamlit_ui/app.py`
-    * **Context:** Notes are no longer part of the PT membership data model and must be removed from the UI.
-    * **Instruction:** From the PT membership form you just refactored, find and delete the `st.text_area("Notes", ...)` widget.
+---
 
-* **Task 4.3: Fix PT Membership Edit Bug - DONE**
-    * **File:** `reporter/streamlit_ui/app.py`
-    * **Context:** This fixes a critical data corruption bug where the amount paid could be reset to zero upon editing.
-    * **Instruction:** When a PT membership is selected for editing, ensure the `amount_paid` value from its DTO (`selected_pt_data.amount_paid`) is used to populate the `value` of the "Amount Paid (₹)" `st.number_input` in the form.
+### **Phase 3: Implement UI Verification Tests**
 
-* **Task 4.4: Implement UI-Side Filtering - DONE**
-    * **File:** `reporter/streamlit_ui/app.py`
-    * **Context:** We are adopting a new, standard pattern for filtering data in the UI to simplify the backend.
-    * **Instruction:** Find all UI dropdowns that need to be populated with only *active* members or plans. Change them to fetch all items using `get_all_..._for_view()` and then filter the list in your UI code before displaying it.
-        * **Example Pattern:**
-            ```python
-            all_members = api.get_all_members_for_view()
-            active_members = [m for m in all_members if m.is_active]
-            # ... now use the 'active_members' list to populate the st.selectbox
-            ```
+**>> COMMAND:** Create a new test file and add specific tests for the UI logic using Streamlit's `AppTest` framework. This will confirm the fixes from Phase 2 are working correctly.
 
-### **Phase 5: Update Verification & Data Migration**
-*This final development phase ensures our application is correct and our tests are reliable.*
+**>> INSTRUCTION 1 of 3: Create the new test file.**
+* Create a new, empty file at this exact path: `reporter/tests/test_ui_logic.py`.
 
-* **Task 5.1: Update Data Migration Script - DONE**
-    * **File:** `reporter/migrate_historical_data.py`
-    * **Context:** The migration script is broken because our function signatures have changed.
-    * **Instruction:** Find the line that calls `create_pt_membership` and update the function call to use the new, simpler signature from Phase 3.
+**>> INSTRUCTION 2 of 3: Add a test for the active plan filter.**
+* In `reporter/tests/test_ui_logic.py`, add the following Python code. This test will mock the API and verify that the UI correctly filters for active plans.
 
-* **Task 5.2: Rewrite Database & Logic Tests - DONE**
-    * **Files:** `reporter/tests/test_database_manager.py`, `reporter/tests/test_pt_memberships.py`
-    * **Context:** Our tests are our safety net and must be updated to reflect the new code logic. These tests must not involve the UI.
-    * **Instruction:** Go through these files test by test. Each test must follow this pattern: 1. Create a temporary in-memory database. 2. Call the `database_manager` function being tested. 3. Use `cursor.execute('SELECT ...')` to check if the data was written to the database correctly according to the new schemas.
+**>> ADD THE FOLLOWING CODE:**
+```python
+import unittest.mock
+from reporter.streamlit_ui.app import AppAPI
+from reporter.models import GroupPlanView
+from streamlit.testing.v1 import AppTest
 
-* **Task 5.3: Run the Full Test Suite - DONE**
-    * **Context:** This is the final quality gate before the work is considered complete.
-    * **Instruction:** Open your command line terminal, navigate to the project's root directory, and run the command `pytest`. All tests must pass with no errors or failures.
+def test_ui_filters_for_active_plans():
+    """
+    Tests that the UI correctly uses plan.is_active to filter plans.
+    """
+    # 1. Mock the API to avoid real database calls
+    mock_api = unittest.mock.MagicMock(spec=AppAPI)
+    mock_api.get_all_group_plans_for_view.return_value = [
+        GroupPlanView(id=1, name="Active Plan", display_name="Active Plan (30 days)", is_active=True, default_amount=100.0, duration_days=30),
+        GroupPlanView(id=2, name="Inactive Plan", display_name="Inactive Plan (30 days)", is_active=False, default_amount=100.0, duration_days=30)
+    ]
+
+    # 2. Patch the API instance in the app's namespace
+    with unittest.mock.patch('reporter.streamlit_ui.app.api', new=mock_api):
+        # 3. Initialize the AppTest on the UI file
+        at = AppTest.from_file("reporter/streamlit_ui/app.py").run()
+        
+        # 4. Navigate to the Group Plans tab
+        at.tabs[1].run()
+
+        # 5. Assert that only the active plan is shown in the selectbox
+        assert len(at.selectbox) > 0 # Ensure the selectbox is present
+        assert "Active Plan" in at.selectbox(key="group_plan_select_widget").options[1]
+        assert "Inactive Plan" not in str(at.selectbox(key="group_plan_select_widget").options)
+        assert at.error == [] # Ensure no errors were thrown
+```
+
+**>> INSTRUCTION 3 of 3: Add a test for the correct amount display.**
+* In `reporter/tests/test_ui_logic.py`, add the following Python code. This test verifies the UI uses `default_amount`.
+
+**>> ADD THE FOLLOWING CODE:**
+```python
+def test_ui_displays_correct_plan_amount():
+    """
+    Tests that the UI correctly uses plan.default_amount to display the price.
+    """
+    mock_api = unittest.mock.MagicMock(spec=AppAPI)
+    mock_api.get_all_group_plans_for_view.return_value = [
+        GroupPlanView(id=1, name="Test Plan", display_name="Test Plan (30 days)", is_active=True, default_amount=1234.56, duration_days=30)
+    ]
+
+    with unittest.mock.patch('reporter.streamlit_ui.app.api', new=mock_api):
+        at = AppTest.from_file("reporter/streamlit_ui/app.py").run()
+        at.tabs[1].run() # Navigate to Group Plans tab
+        
+        # Select the plan to populate the edit form
+        at.selectbox(key="group_plan_select_widget").select(1).run()
+
+        # Assert that the number_input for the amount shows the correct value
+        assert at.number_input(key="group_plan_form_amount").value == 1234.56
+        assert at.error == []
+```
+
+---
+
+### **Final Verification Step**
+
+**>> COMMAND:** Run the entire test suite to ensure all existing and new tests pass.
+
+**>> INSTRUCTION:** Execute the `pytest` command from the root directory of the project. Confirm that all tests complete successfully with no errors or failures.
