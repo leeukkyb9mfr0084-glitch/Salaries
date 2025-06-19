@@ -20,7 +20,7 @@ def create_database(db_name: str):
         CREATE TABLE IF NOT EXISTS members (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            phone TEXT UNIQUE,
+            phone TEXT NOT NULL UNIQUE,
             email TEXT,
     join_date TEXT,
     is_active BOOLEAN NOT NULL DEFAULT 1
