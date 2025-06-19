@@ -42,7 +42,7 @@ The application will use an SQLite database with the following four core tables.
 * `member_id` (INTEGER, Foreign Key to `members.id`)
 * `purchase_date` (TEXT)
 * `amount_paid` (REAL)
-* `sessions_purchased` (INTEGER)
+* `sessions_total` (INTEGER)
 * `sessions_remaining` (INTEGER)
 
 #### 3. Functional Specifications by Tab

@@ -16,7 +16,7 @@ class GroupPlanView:
     name: str
     display_name: str
     is_active: bool # Moved before fields with defaults
-    price: float
+    default_amount: float
     duration_days: int
 
 @dataclass
