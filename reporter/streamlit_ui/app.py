@@ -34,6 +34,8 @@ if 'gc_membership_form_key' not in st.session_state:
     st.session_state.gc_membership_form_key = "gc_membership_form_initial"
 if 'confirm_delete_gc_membership_id' not in st.session_state:
     st.session_state.confirm_delete_gc_membership_id = None
+if 'show_gc_delete_confirmation_form' not in st.session_state:
+    st.session_state.show_gc_delete_confirmation_form = False
 
 # Keys from render_memberships_tab (Personal Training)
 if 'selected_pt_membership_id' not in st.session_state:
@@ -52,6 +54,8 @@ if 'pt_membership_form_key' not in st.session_state:
     st.session_state.pt_membership_form_key = "pt_membership_form_initial"
 if 'confirm_delete_pt_membership_id' not in st.session_state:
     st.session_state.confirm_delete_pt_membership_id = None
+if 'show_pt_delete_confirmation_form' not in st.session_state:
+    st.session_state.show_pt_delete_confirmation_form = False
 
 # Keys from render_members_tab
 if 'member_selected_id' not in st.session_state:
@@ -247,6 +251,7 @@ def render_memberships_tab():
         if st.button("➕ Add New Group Class Membership", key="gc_add_new_button"): # Moved
             st.session_state.selected_gc_membership_id = "add_new"
             st.session_state.confirm_delete_gc_membership_id = None
+            st.session_state.show_gc_delete_confirmation_form = False # Ensure confirmation form is hidden
             st.session_state.gc_membership_form_key = f"gc_form_{datetime.now().timestamp()}"
             st.session_state.gc_member_id_form = None
             st.session_state.gc_member_name_display = ""
@@ -377,6 +382,7 @@ def render_memberships_tab():
 
             # Actions triggered by form submission buttons are processed here, outside the form context.
             if save_button_gc: # Use renamed
+                st.session_state.show_gc_delete_confirmation_form = False # Hide confirmation form on save
                 if not form_member_id_gc or not form_plan_id_gc: # Use renamed
                     st.error("Member and Plan must be selected.")
                 elif form_amount_paid_gc <= 0 and st.session_state.selected_gc_membership_id == "add_new":
@@ -423,9 +429,11 @@ def render_memberships_tab():
 
             if st.session_state.selected_gc_membership_id != "add_new" and delete_button_gc: # Use renamed
                 st.session_state.confirm_delete_gc_membership_id = st.session_state.selected_gc_membership_id
-                # st.rerun() # Commented for testing to allow confirmation to show
+                st.session_state.show_gc_delete_confirmation_form = True
+                # No st.rerun() here, allow the confirmation form to display
 
             if clear_button_gc: # Use renamed
+                st.session_state.show_gc_delete_confirmation_form = False # Hide confirmation form on clear
                 st.session_state.selected_gc_membership_id = "add_new"
                 st.session_state.gc_member_id_form = None
                 st.session_state.gc_member_name_display = ""
@@ -436,46 +444,53 @@ def render_memberships_tab():
                 st.session_state.gc_membership_form_key = f"gc_form_{datetime.now().timestamp()}"
                 # st.rerun() # Commented for testing
 
-            # Confirmation dialog for GC deletion - Placed outside the form block
-            if st.session_state.confirm_delete_gc_membership_id is not None and \
-               st.session_state.confirm_delete_gc_membership_id == st.session_state.selected_gc_membership_id and \
-               st.session_state.selected_gc_membership_id != "add_new":
+            # New GC Delete Confirmation Form
+            if st.session_state.get('show_gc_delete_confirmation_form', False) and \
+               st.session_state.confirm_delete_gc_membership_id is not None and \
+               st.session_state.confirm_delete_gc_membership_id == st.session_state.selected_gc_membership_id:
 
                 membership_to_delete_info = gc_membership_options.get(st.session_state.confirm_delete_gc_membership_id, "this membership")
-                st.warning(f"Are you sure you want to delete {membership_to_delete_info}? This action cannot be undone.")
+                st.warning(f"Are you sure you want to delete {membership_to_delete_info} (ID: {st.session_state.confirm_delete_gc_membership_id})? This action cannot be undone.")
 
-                confirm_cols_delete_gc = st.columns(2) # Renamed to avoid conflict
-                with confirm_cols_delete_gc[0]:
-                    if st.button("YES, DELETE Permanently", key=f"confirm_delete_gc_btn_{st.session_state.confirm_delete_gc_membership_id}"):
+                confirm_form_key_gc = f"confirm_delete_gc_form_{st.session_state.confirm_delete_gc_membership_id}"
+                with st.form(key=confirm_form_key_gc):
+                    cols_confirm_gc = st.columns(2)
+                    with cols_confirm_gc[0]:
+                        confirmed_delete_gc = st.form_submit_button("YES, DELETE Permanently")
+                    with cols_confirm_gc[1]:
+                        cancelled_delete_gc = st.form_submit_button("Cancel Deletion")
+
+                    if confirmed_delete_gc:
                         try:
-                            success_gc_delete = api.delete_group_class_membership_record(st.session_state.confirm_delete_gc_membership_id) # Renamed
-                            if success_gc_delete: # Use renamed
+                            success_gc_delete = api.delete_group_class_membership_record(st.session_state.confirm_delete_gc_membership_id)
+                            if success_gc_delete:
                                 st.success(f"Group Class Membership ID {st.session_state.confirm_delete_gc_membership_id} deleted.")
-                                st.session_state.selected_gc_membership_id = "add_new" # Reset selection
-                                st.session_state.gc_member_id_form = None
-                                st.session_state.gc_plan_id_form = None
-                                st.session_state.gc_start_date_form = date.today()
-                                st.session_state.gc_amount_paid_form = 0.0
-                                st.session_state.confirm_delete_gc_membership_id = None # Clear confirmation
-                                st.session_state.gc_membership_form_key = f"gc_form_{datetime.now().timestamp()}" # Reset form
-                                # st.rerun() # Commented for testing
                             else:
                                 st.error(f"Failed to delete Group Class Membership ID {st.session_state.confirm_delete_gc_membership_id}.")
-                                st.session_state.confirm_delete_gc_membership_id = None # Clear confirmation on failure
-                                # st.rerun() # Commented for testing
                         except Exception as e:
                             st.error(f"Error deleting: {e}")
-                            st.session_state.confirm_delete_gc_membership_id = None # Clear confirmation on error
-                            # st.rerun() # Commented for testing
-                with confirm_cols_delete_gc[1]: # Use renamed columns
-                    if st.button("Cancel Deletion", key=f"cancel_delete_gc_btn_{st.session_state.confirm_delete_gc_membership_id}"):
-                        st.session_state.confirm_delete_gc_membership_id = None # Clear confirmation
-                        # st.rerun() # Commented for testing
+                        finally: # Always reset state after attempting delete or on error
+                            st.session_state.show_gc_delete_confirmation_form = False
+                            st.session_state.selected_gc_membership_id = "add_new"
+                            st.session_state.gc_member_id_form = None
+                            st.session_state.gc_plan_id_form = None
+                            st.session_state.gc_start_date_form = date.today()
+                            st.session_state.gc_amount_paid_form = 0.0
+                            st.session_state.confirm_delete_gc_membership_id = None
+                            st.session_state.gc_membership_form_key = f"gc_form_{datetime.now().timestamp()}"
+                            st.rerun()
+
+                    if cancelled_delete_gc:
+                        st.info("Deletion cancelled.")
+                        st.session_state.show_gc_delete_confirmation_form = False
+                        st.session_state.confirm_delete_gc_membership_id = None # Clear only the confirmation ID
+                        st.rerun() # Rerun to hide confirmation form
 
     elif membership_mode == 'Personal Training Memberships':
         if st.button("➕ Add New PT Membership", key="pt_add_new_button"):
             st.session_state.selected_pt_membership_id = "add_new"
             st.session_state.confirm_delete_pt_membership_id = None
+            st.session_state.show_pt_delete_confirmation_form = False # Ensure confirmation form is hidden
             st.session_state.pt_membership_form_key = f"pt_form_{datetime.now().timestamp()}"
             st.session_state.pt_member_id_form = None
             st.session_state.pt_member_name_display = ""
@@ -587,6 +602,7 @@ def render_memberships_tab():
 
             # Actions triggered by PT form submission buttons are processed here, outside the form context.
             if pt_save_button:
+                st.session_state.show_pt_delete_confirmation_form = False # Hide confirmation form on save
                 member_id_to_save = form_pt_member_id_select_val if st.session_state.selected_pt_membership_id == "add_new" else st.session_state.pt_member_id_form
 
                 if st.session_state.selected_pt_membership_id == "add_new":
@@ -636,9 +652,11 @@ def render_memberships_tab():
 
             if st.session_state.selected_pt_membership_id != "add_new" and pt_delete_button:
                 st.session_state.confirm_delete_pt_membership_id = st.session_state.selected_pt_membership_id
-                # st.rerun() # Commented for testing to allow confirmation to show
+                st.session_state.show_pt_delete_confirmation_form = True
+                # No st.rerun() here, allow the confirmation form to display
 
             if pt_clear_button:
+                st.session_state.show_pt_delete_confirmation_form = False # Hide confirmation form on clear
                 st.session_state.selected_pt_membership_id = "add_new"
                 st.session_state.pt_member_id_form = None
                 st.session_state.pt_member_name_display = ""
@@ -649,37 +667,47 @@ def render_memberships_tab():
                 st.session_state.pt_membership_form_key = f"pt_form_{datetime.now().timestamp()}"
                 # st.rerun() # Commented for testing
 
-            # Confirmation dialog for PT deletion - Placed outside the form block
-            if st.session_state.confirm_delete_pt_membership_id is not None and \
-               st.session_state.confirm_delete_pt_membership_id == st.session_state.selected_pt_membership_id and \
-               st.session_state.selected_pt_membership_id != "add_new":
+            # New PT Delete Confirmation Form
+            if st.session_state.get('show_pt_delete_confirmation_form', False) and \
+               st.session_state.confirm_delete_pt_membership_id is not None and \
+               st.session_state.confirm_delete_pt_membership_id == st.session_state.selected_pt_membership_id:
 
                 pt_membership_to_delete_info = pt_membership_options.get(st.session_state.confirm_delete_pt_membership_id, "this PT membership")
-                st.warning(f"Are you sure you want to delete {pt_membership_to_delete_info}? This action cannot be undone.")
+                st.warning(f"Are you sure you want to delete {pt_membership_to_delete_info} (ID: {st.session_state.confirm_delete_pt_membership_id})? This action cannot be undone.")
 
-                pt_confirm_cols_delete_pt = st.columns(2) # Renamed to avoid conflict
-                with pt_confirm_cols_delete_pt[0]:
-                    if st.button("YES, DELETE PT Membership Permanently", key=f"confirm_delete_pt_btn_{st.session_state.confirm_delete_pt_membership_id}"):
+                confirm_form_key_pt = f"confirm_delete_pt_form_{st.session_state.confirm_delete_pt_membership_id}"
+                with st.form(key=confirm_form_key_pt):
+                    cols_confirm_pt = st.columns(2)
+                    with cols_confirm_pt[0]:
+                        confirmed_delete_pt = st.form_submit_button("YES, DELETE Permanently")
+                    with cols_confirm_pt[1]:
+                        cancelled_delete_pt = st.form_submit_button("Cancel Deletion")
+
+                    if confirmed_delete_pt:
                         try:
-                            deleted_pt = api.delete_pt_membership(st.session_state.confirm_delete_pt_membership_id) # Renamed
-                            if deleted_pt: # Use renamed
-                                st.success(f"PT Membership ID {st.session_state.confirm_delete_pt_membership_id} deleted.")
-                                st.session_state.selected_pt_membership_id = "add_new" # Reset selection
-                                st.session_state.confirm_delete_pt_membership_id = None # Clear confirmation
-                                st.session_state.pt_membership_form_key = f"pt_form_{datetime.now().timestamp()}" # Reset form
-                                # st.rerun() # Commented for testing
+                            success_pt_delete = api.delete_pt_membership(st.session_state.confirm_delete_pt_membership_id)
+                            if success_pt_delete:
+                                st.success(f"Personal Training Membership ID {st.session_state.confirm_delete_pt_membership_id} deleted.")
                             else:
-                                st.error(f"Failed to delete PT Membership ID {st.session_state.confirm_delete_pt_membership_id}.")
-                                st.session_state.confirm_delete_pt_membership_id = None # Clear confirmation on failure
-                                # st.rerun() # Commented for testing
+                                st.error(f"Failed to delete Personal Training Membership ID {st.session_state.confirm_delete_pt_membership_id}.")
                         except Exception as e:
                             st.error(f"Error deleting PT membership: {e}")
-                            st.session_state.confirm_delete_pt_membership_id = None # Clear confirmation on error
-                            # st.rerun() # Commented for testing
-                with pt_confirm_cols_delete_pt[1]: # Use renamed columns
-                    if st.button("Cancel PT Deletion", key=f"cancel_delete_pt_btn_{st.session_state.confirm_delete_pt_membership_id}"):
-                        st.session_state.confirm_delete_pt_membership_id = None # Clear confirmation
-                        # st.rerun() # Commented for testing
+                        finally: # Always reset state
+                            st.session_state.show_pt_delete_confirmation_form = False
+                            st.session_state.selected_pt_membership_id = "add_new"
+                            st.session_state.pt_member_id_form = None
+                            st.session_state.pt_purchase_date_form = date.today()
+                            st.session_state.pt_amount_paid_form = 0.0
+                            st.session_state.pt_sessions_purchased_form = 1
+                            st.session_state.confirm_delete_pt_membership_id = None
+                            st.session_state.pt_membership_form_key = f"pt_form_{datetime.now().timestamp()}"
+                            st.rerun()
+
+                    if cancelled_delete_pt:
+                        st.info("Deletion cancelled.")
+                        st.session_state.show_pt_delete_confirmation_form = False
+                        st.session_state.confirm_delete_pt_membership_id = None
+                        st.rerun()
 
 
 def render_members_tab():
