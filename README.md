@@ -60,7 +60,7 @@ Once the setup and data migration are complete, you can run the application.
 Execute the following command from the project's root directory. This will start the web server and open the application in your default browser.
 
 ```bash
-streamlit run reporter/main.py
+python -m streamlit run reporter/main.py
 ```
 
 ## Running Tests (For Developers)

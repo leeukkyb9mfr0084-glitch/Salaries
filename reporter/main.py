@@ -13,8 +13,8 @@ import importlib.util
 import subprocess
 # os and sys were already imported by the new snippet
 
-from .database import DB_FILE, initialize_database  # Updated database import
-from .migrate_historical_data import migrate_historical_data
+from reporter.database import DB_FILE, initialize_database  # Updated database import
+from reporter.migrate_historical_data import migrate_historical_data
 
 # Removed old imports:
 # import sqlite3 # No longer directly used here
