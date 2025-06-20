@@ -50,18 +50,18 @@ The application will use an SQLite database with the following four core tables.
 The application will feature a four-tab navigation structure.
 
 **`Members` Tab**
-* **Functionality:** This tab is dedicated exclusively to Member CRUD (Create, Read, Update, Delete) operations. No other functionality will be present.
+* **Functionality:** This tab is for Member CRUD operations. It features a two-panel layout: the left (wider) panel displays a table of all members, and the right (narrower) panel contains a form for adding or editing member details.
 
 **`Group Plans` Tab**
-* **Functionality:** This tab is for managing the templates for group class plans (e.g., "MMA Mastery - 90 Days"). The UI and logic will support full CRUD operations on the `group_plans` table.
+* **Functionality:** This tab manages group class plan templates. It features a two-panel layout: the left (wider) panel displays a table of all group plans, and the right (narrower) panel contains a form for adding or editing plan details. Full CRUD operations are supported.
 
 **`Memberships` Tab**
 * **Functionality:** This tab consolidates the management of both Group Class and Personal Training memberships.
 * **Mode Selector:** A radio button will be placed at the top of this tab with two options: "Group Class Memberships" (default) and "Personal Training Memberships". The selection will determine the content displayed below.
 * **"Group Class Memberships" Mode:**
-    * **UI:** A two-panel layout. The **left panel** will feature the form for creating a new time-based membership. It will include a dropdown to select a member and another to select from the `group_plans` list. The **right panel** will display a filterable, selectable list of all existing records from the `group_class_memberships` table. Selecting a record will populate the form on the left for editing.
+    * **UI:** A two-panel layout. The **left panel (narrower)** features the form for creating/editing group class memberships. The **right panel (wider)** displays a comprehensive table of all existing group class memberships. Below this table, individual memberships can be selected (from the same data source) to populate the form for editing.
 * **"Personal Training Memberships" Mode:**
-    * **UI:** A two-panel layout consistent with the Group Class mode. The **left panel** will feature the form for creating a new PT package, including fields for selecting a member, `Purchase Date`, `Amount Paid`, and `Sessions Purchased`. The **right panel** will display a filterable, selectable list of all existing records from the `pt_memberships` table. Selecting a record will populate the form on the left for editing.
+    * **UI:** A two-panel layout. The **left panel (narrower)** features the form for creating/editing PT memberships. The **right panel (wider)** displays a comprehensive table of all existing PT memberships. Below this table, individual PT memberships can be selected to populate the form for editing.
     * **Note:** The `sessions_remaining` field will be saved to the database but no UI functionality will be built to manage it (e.g., no "Use Session" button).
     
 **`Reporting` Tab**

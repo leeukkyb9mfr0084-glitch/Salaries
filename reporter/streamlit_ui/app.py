@@ -154,7 +154,7 @@ def render_memberships_tab():
             st.session_state.show_gc_delete_confirmation_form = False
             st.session_state.confirm_delete_gc_membership_id = None
 
-        left_col, right_col = st.columns([1, 2])
+        left_col, right_col = st.columns([1, 2.33]) # Form on left (30%), Table/List on right (70%)
 
         with right_col:
             st.subheader("Existing Group Class Memberships")
@@ -169,11 +169,35 @@ def render_memberships_tab():
                 st.error(f"Error fetching group class memberships: {e}")
                 all_gc_memberships = []
 
-            st.markdown("---")
-            st.write("**Existing Group Class Memberships:**")
+            # Prepare data for the table display
+            prepared_data_for_gc_table = []
+            if all_gc_memberships:
+                prepared_data_for_gc_table = [
+                    {
+                        "Membership ID": gc_mem.id,
+                        "Member Name": gc_mem.member_name,
+                        "Plan Name": gc_mem.plan_name,
+                        "Start Date": gc_mem.start_date,
+                        "End Date": gc_mem.end_date,
+                        "Purchase Date": gc_mem.purchase_date,
+                        "Type": gc_mem.membership_type,
+                        "Amount Paid": f"₹{gc_mem.amount_paid:.2f}" if gc_mem.amount_paid is not None else "N/A",
+                        "Active": "Yes" if gc_mem.is_active else "No",
+                    }
+                    for gc_mem in all_gc_memberships
+                ]
 
-            if not all_gc_memberships:
+            if prepared_data_for_gc_table:
+                st.dataframe(prepared_data_for_gc_table, use_container_width=True, hide_index=True)
+            elif not all_gc_memberships: # Ensure message shows if fetch was successful but empty
                 st.info("No group class memberships found.")
+
+            st.markdown("---")
+            st.write("**Select a Membership to Edit:**") # Changed header slightly for clarity
+
+            # This part remains for individual selection and editing
+            if not all_gc_memberships and not prepared_data_for_gc_table: # Redundant check, but safe
+                pass # Already handled by st.info above
 
             gc_membership_options = {
                 m.id: f"{m.member_name} - {m.plan_name}" for m in all_gc_memberships
@@ -498,7 +522,7 @@ def render_memberships_tab():
             st.session_state.show_pt_delete_confirmation_form = False
             st.session_state.confirm_delete_pt_membership_id = None
 
-        pt_left_col, pt_right_col = st.columns([1, 2])
+        pt_left_col, pt_right_col = st.columns([1, 2.33]) # Form on left (30%), Table/List on right (70%)
 
         with pt_right_col:
             st.subheader("Existing Personal Training Memberships")
@@ -510,11 +534,32 @@ def render_memberships_tab():
                 st.error(f"Error fetching PT memberships: {e}")
                 all_pt_memberships = []
 
-            st.markdown("---")
-            st.write("**Existing Personal Training Memberships:**")
+            # Prepare data for the table display for PT Memberships
+            prepared_data_for_pt_table = []
+            if all_pt_memberships:
+                prepared_data_for_pt_table = [
+                    {
+                        "Membership ID": pt_mem.membership_id,
+                        "Member Name": pt_mem.member_name,
+                        "Purchase Date": pt_mem.purchase_date,
+                        "Amount Paid": f"₹{pt_mem.amount_paid:.2f}" if pt_mem.amount_paid is not None else "N/A",
+                        "Sessions Purchased": pt_mem.sessions_total,
+                        "Sessions Remaining": pt_mem.sessions_remaining,
+                    }
+                    for pt_mem in all_pt_memberships
+                ]
 
-            if not all_pt_memberships:
+            if prepared_data_for_pt_table:
+                st.dataframe(prepared_data_for_pt_table, use_container_width=True, hide_index=True)
+            elif not all_pt_memberships: # Ensure message shows if fetch was successful but empty
                 st.info("No Personal Training memberships found.")
+
+            st.markdown("---")
+            st.write("**Select a PT Membership to Edit:**") # Changed header slightly for clarity
+
+            # This part remains for individual selection and editing
+            if not all_pt_memberships and not prepared_data_for_pt_table: # Redundant, but safe
+                pass # Already handled
 
             pt_membership_options = {
                 pt_m.membership_id: f"{pt_m.member_name} - Sessions: {pt_m.sessions_remaining}/{pt_m.sessions_total}"
@@ -842,7 +887,7 @@ def render_members_tab():
         st.session_state.member_form_key = f"member_form_{datetime.now().timestamp()}"
         st.session_state.confirm_delete_member_id = None
 
-    left_col, right_col = st.columns([1, 2])
+    left_col, right_col = st.columns([2.33, 1]) # Table/List on left (70%), Form on right (30%)
     with left_col:
         st.subheader("All Members")
         try:
@@ -1084,22 +1129,36 @@ def render_group_plans_tab():
         )
         st.session_state.confirm_delete_group_plan_id = None
 
-    left_col, right_col = st.columns([1, 2])
+    left_col, right_col = st.columns([2.33, 1]) # Table/List on left (70%), Form on right (30%)
 
     with left_col:
         st.subheader("All Group Plans")
         try:
-            all_group_plans = api.get_all_group_plans_for_view()
-            if not all_group_plans:
+            all_group_plans_data = api.get_all_group_plans_for_view() # Renamed to avoid conflict with outer scope variable
+            if not all_group_plans_data:
                 st.info("No group plans found. Add a plan using the form on the right.")
-                all_group_plans = []
+                all_group_plans_data = []
         except Exception as e:
             st.error(f"Error fetching group plans: {e}")
-            all_group_plans = []
+            all_group_plans_data = []
+
+        # Prepare data for the table display (moved before selectbox)
+        data_for_table = []
+        if all_group_plans_data:
+            data_for_table = [
+                {
+                    "ID": plan.id,
+                    "Plan Name": plan.name,
+                    "Duration (Days)": plan.duration_days,
+                    "Default Amount": f"₹{plan.default_amount:.2f}" if plan.default_amount is not None else "N/A",
+                    "Active": "Yes" if plan.is_active else "No",
+                }
+                for plan in all_group_plans_data
+            ]
 
         plan_options = {
             plan.id: f"{plan.name} ({plan.duration_days} days)"
-            for plan in all_group_plans
+            for plan in all_group_plans_data # Use the fetched data
         }
         plan_options_list = [None] + list(plan_options.keys())
 
@@ -1127,7 +1186,7 @@ def render_group_plans_tab():
                 selected_plan_data = next(
                     (
                         p
-                        for p in all_group_plans
+                        for p in all_group_plans_data # Use the fetched data
                         if p.id == st.session_state.group_plan_selected_id
                     ),
                     None,
@@ -1147,6 +1206,12 @@ def render_group_plans_tab():
                     )
             else:
                 clear_group_plan_form(clear_selection=False)
+
+        # Display the table using st.dataframe
+        # This is placed after the selectbox as per requirements.
+        if data_for_table:
+            st.dataframe(data_for_table, use_container_width=True, hide_index=True)
+        # The "No group plans found..." message is handled by the initial fetch logic.
 
     with right_col:
         if st.session_state.group_plan_selected_id is None:
