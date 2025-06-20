@@ -22,13 +22,18 @@ Of course. Here is the complete, consolidated set of instructions for Jules to e
 
 **Context:** This is a critical step. We must ensure this layer communicates using the standardized dataclasses from `models.py`, not raw database tuples.
 
-**Task 2.1: Refactor all functions in `reporter/database_manager.py`**
+**Task 2.1: Refactor all functions in `reporter/database_manager.py`** - DONE
 * **Instruction 1 (Connection Factory):** In the `get_connection` function, insert the line `conn.row_factory = sqlite3.Row` before `return conn`.
 * **Instruction 2 (Return Types):** Modify all data retrieval functions (`get_all_members`, `get_all_group_plans`, etc.) to return lists of the corresponding dataclass objects (e.g., `List[Member]`). You will use a list comprehension like `[Member(**row) for row in cursor.fetchall()]`.
 * **Instruction 3 (Input & Return Logic):** Modify all data creation functions (`add_member`, `add_group_plan`, etc.) to:
     1.  Accept a dataclass object as their single argument (e.g., `def add_member(member: Member)`).
     2.  Use the attributes of this object in the `cursor.execute` call (e.g., `member.name`, `member.email`).
     3.  After `conn.commit()`, set the ID on the passed object (`member.id = cursor.lastrowid`) and return the modified object.
+* **Outcome Summary:**
+    *   Successfully refactored existing CRUD functions in `database_manager.py` to use dataclasses from `models.py` for inputs and outputs.
+    *   `conn.row_factory = sqlite3.Row` was set in `DatabaseManager.__init__` as `get_connection` was not present in the file.
+    *   New dataclasses (`Member`, `GroupPlan`, `GroupClassMembership`, `PTMembership`) were created in `models.py`.
+    *   Noted that several functions listed in the original Task 2.1 instructions were not present in `database_manager.py` (e.g., `get_member_by_id`, most payment-related functions, session/attendance functions). The refactoring was applied to all applicable, existing functions.
 
 ---
 
