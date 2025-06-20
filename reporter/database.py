@@ -77,12 +77,9 @@ def create_database(db_name: str):
         )
         conn.commit()
     except sqlite3.Error as e:
-        # print(f"Error creating database or tables: {e}") # Removed
         if conn: # If connection was established before error, close it
             conn.close()
         return None # Return None if an error occurred
-    # If successful, return the connection object
-    # The caller will be responsible for closing the connection.
     return conn
 
 
@@ -97,9 +94,7 @@ def initialize_database():
     if not os.path.exists(data_dir):
         try:
             os.makedirs(data_dir)
-            # print(f"Created directory: {data_dir}") # Removed
         except OSError as e:
-            # print(f"Error creating directory {data_dir}: {e}") # Removed
             return  # Stop if directory creation fails
 
     # Call create_database(DB_FILE)
@@ -107,22 +102,7 @@ def initialize_database():
     # It also handles its own connection opening and closing for file-based DBs.
     create_database(DB_FILE)
 
-    # Establish a new connection to DB_FILE for seeding
-    conn = None
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        # If the connection is successful, call seed_initial_plans(conn)
-        # seed_initial_plans(conn) # Call removed
-        # print(f"Database initialized at {DB_FILE}.") # Removed
-    except sqlite3.Error as e:
-        pass
-        # print(f"Error during database initialization: {e}") # Removed
-    finally:
-        # Ensure the connection is closed in a finally block
-        if conn:
-            conn.close()
-
+    # Seeding was removed, so no need to establish a separate connection here.
 
 if __name__ == "__main__":
     initialize_database()
-    # print("Database setup complete.") # Removed
