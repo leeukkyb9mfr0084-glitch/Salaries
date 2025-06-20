@@ -151,16 +151,27 @@ def migrate_gc_data(
                     )
                     continue
 
-                amount_str = (
-                    str(row.get("Amount", "")).strip().replace("₹", "").replace(",", "") # Corrected key to "Amount"
-                )
-                try:
-                    plan_price = float(amount_str)
-                except (ValueError, TypeError):
-                    logging.warning(
-                        f"Could not parse price for row {line_count}. Setting price to 0.0. Value was: '{row.get('Amount')}'" # Corrected key
-                    )
+                raw_amount_val = row.get("Amount")
+                if raw_amount_val is None or (isinstance(raw_amount_val, str) and raw_amount_val.strip().lower() == 'none'):
                     plan_price = 0.0
+                    logging.warning(
+                        f"Price value was None or 'None' for row {line_count}. Original: '{raw_amount_val}'. Setting price to 0.0."
+                    )
+                else:
+                    cleaned_amount_str = str(raw_amount_val).replace("₹", "").replace(",", "").strip()
+                    if not cleaned_amount_str or cleaned_amount_str == '-': # Handle empty or hyphen after cleaning
+                        plan_price = 0.0
+                        logging.warning(
+                            f"Price value became empty or hyphen after cleaning for row {line_count}. Original: '{raw_amount_val}'. Setting price to 0.0."
+                        )
+                    else:
+                        try:
+                            plan_price = float(cleaned_amount_str)
+                        except (ValueError, TypeError):
+                            logging.warning(
+                                f"Could not parse price for row {line_count} after cleaning. Original value: '{raw_amount_val}', Cleaned: '{cleaned_amount_str}'. Setting price to 0.0."
+                            )
+                            plan_price = 0.0
 
                 plan_id = db_mngr.find_or_create_group_plan(
                     name=plan_type, duration_days=plan_duration, price=plan_price
