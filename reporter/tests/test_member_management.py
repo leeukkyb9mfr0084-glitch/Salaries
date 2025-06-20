@@ -4,6 +4,8 @@ from typing import Dict, List, Optional
 
 import pytest
 
+from reporter.app_api import AppAPI
+from reporter.models import Member
 from reporter.database import create_database  # To set up schema in memory
 from reporter.database_manager import DatabaseManager
 from reporter.models import MemberView  # Import DTO
@@ -213,6 +215,53 @@ def test_delete_member_success(db_manager: DatabaseManager):
 def test_delete_member_non_existent(db_manager: DatabaseManager):
     result = db_manager.delete_member(999)
     assert result is False
+
+
+@pytest.fixture
+def app_api_instance(db_manager: DatabaseManager) -> AppAPI:
+    api = AppAPI()
+    # Replace AppAPI's default db_manager with the test one for consistent DB state
+    api.db_manager = db_manager
+    return api
+
+
+def test_app_api_add_member_with_specific_join_date(app_api_instance: AppAPI, db_manager: DatabaseManager):
+    specific_join_date_str = "2023-05-15"
+    member_data = {
+        "name": "Gary Test",
+        "email": "gary@example.com",
+        "phone": "5551234567",
+        "join_date": specific_join_date_str,
+    }
+
+    created_member_model = app_api_instance.add_member(
+        name=member_data["name"],
+        email=member_data["email"],
+        phone=member_data["phone"],
+        join_date=member_data["join_date"],
+    )
+
+    assert created_member_model is not None
+    assert created_member_model.id is not None
+    assert created_member_model.name == member_data["name"]
+    assert created_member_model.join_date == specific_join_date_str
+    assert created_member_model.email == member_data["email"]
+    assert created_member_model.phone == member_data["phone"]
+    assert created_member_model.is_active is True # Default from AppAPI
+
+    # Verify directly in DB via db_manager
+    cursor = db_manager.conn.cursor()
+    cursor.execute(
+        "SELECT name, email, phone, join_date, is_active FROM members WHERE id = ?",
+        (created_member_model.id,),
+    )
+    db_row = cursor.fetchone()
+    assert db_row is not None
+    assert db_row[0] == member_data["name"]
+    assert db_row[1] == member_data["email"]
+    assert db_row[2] == member_data["phone"]
+    assert db_row[3] == specific_join_date_str
+    assert db_row[4] == 1 # is_active stored as 1/0 in DB
 
 
 if __name__ == "__main__":
