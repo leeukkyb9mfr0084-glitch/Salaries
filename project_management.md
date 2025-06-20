@@ -41,11 +41,20 @@ Of course. Here is the complete, consolidated set of instructions for Jules to e
 
 **Context:** This layer must contain all business logic and act as the sole intermediary between the UI and the data access layer.
 
-**Task 3.1: Refactor all functions in `reporter/app_api.py`**
+**Task 3.1: Refactor all functions in `reporter/app_api.py` - DONE**
 * **Instruction 1 (Signatures):** Update all function signatures to match the build guide exactly. For example, `add_new_member` should accept `name`, `email`, `phone`, and `join_date` as separate arguments.
 * **Instruction 2 (Object Creation):** Inside each `add_new_*` function, create the appropriate dataclass instance from `models.py` using the function's arguments.
 * **Instruction 3 (Business Logic):** Implement the core business logic. Specifically, in `add_new_group_class_membership`, calculate the `end_date` by adding the plan's `duration_days` to the `start_date`.
 * **Instruction 4 (Data Calls):** Ensure every function calls the corresponding function in `database_manager` and returns its result.
+* **Outcome Summary for Task 3.1:**
+    *   All functions in `reporter/app_api.py` were refactored to align with the build guide and use dataclasses from `models.py`.
+    *   Function signatures were updated for clarity and to accept specific typed arguments (e.g., `name: str, email: str, phone: str, join_date: str` for `add_member`) and return dataclass objects or lists thereof (e.g., `Optional[models.Member]`).
+    *   `add_*` functions (e.g., `add_member`, `add_group_plan`, `create_group_class_membership`, `create_pt_membership`) now instantiate the corresponding dataclass from `models.py` using their input arguments.
+    *   Business logic within `create_group_class_membership` (formerly `add_new_group_class_membership`) for calculating `end_date` (using `plan_details.duration_days` and `start_date`) and determining `membership_type` (by checking existing memberships) was implemented.
+    *   In `create_pt_membership`, `sessions_remaining` is now initialized to `sessions_total` upon object creation.
+    *   All `app_api.py` functions now correctly call their corresponding `database_manager.py` functions, passing dataclass objects where the `database_manager` expects them (e.g., for add and update operations), and returning the results.
+    *   Update functions in `app_api.py` (like `update_member`, `update_group_plan`, `update_group_class_membership`, `update_pt_membership`) construct and pass the relevant model object to `database_manager`. For `update_member` and `update_group_plan`, `None` values for optional fields are handled gracefully by `database_manager`. For `update_group_class_membership` and `update_pt_membership`, `database_manager` expects complete objects, so AppAPI signatures were adjusted to ensure all necessary data is provided to construct these objects.
+    *   It is noted that `payment_method` and `notes` attributes within the `models.GroupClassMembership` dataclass are handled in `app_api.py` but are not currently persisted to the database by the existing `database_manager.add_group_class_membership` or `database_manager.update_group_class_membership` methods.
 
 ---
 
