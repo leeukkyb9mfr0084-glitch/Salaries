@@ -168,6 +168,26 @@ class DatabaseManager:
             logging.error(f"Database error in get_all_members: {e}", exc_info=True)
             return []
 
+    def get_all_members_for_view(self) -> List[MemberView]:
+        """Retrieves all members formatted for view purposes."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "SELECT id, name, phone, email, join_date, is_active FROM members ORDER BY name ASC"
+            )
+            rows = cursor.fetchall()
+            member_views = []
+            for row in rows:
+                member_data = dict(row)
+                # Convert is_active from integer (0 or 1) to boolean
+                member_data["is_active"] = bool(member_data["is_active"])
+                member_views.append(MemberView(**member_data))
+            logging.info(f"Successfully retrieved {len(member_views)} members for view.")
+            return member_views
+        except sqlite3.Error as e:
+            logging.error(f"Database error in get_all_members_for_view: {e}", exc_info=True)
+            return []
+
     def delete_member(self, member_id: int) -> bool:
         """Deletes a member from the database by their ID.
         Returns True if deletion was successful, False otherwise.
@@ -399,6 +419,26 @@ class DatabaseManager:
             return [GroupPlan(**row) for row in rows]
         except sqlite3.Error as e:
             logging.error(f"Database error in get_all_group_plans: {e}", exc_info=True)
+            return []
+
+    def get_all_group_plans_for_view(self) -> List[GroupPlanView]:
+        """Retrieves all group plans formatted for view purposes."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "SELECT id, name, display_name, is_active, default_amount, duration_days FROM group_plans ORDER BY name ASC"
+            )
+            rows = cursor.fetchall()
+            group_plan_views = []
+            for row in rows:
+                plan_data = dict(row)
+                # Convert is_active from integer (0 or 1) to boolean
+                plan_data["is_active"] = bool(plan_data["is_active"])
+                group_plan_views.append(GroupPlanView(**plan_data))
+            logging.info(f"Successfully retrieved {len(group_plan_views)} group plans for view.")
+            return group_plan_views
+        except sqlite3.Error as e:
+            logging.error(f"Database error in get_all_group_plans_for_view: {e}", exc_info=True)
             return []
 
     def delete_group_plan(self, plan_id: int) -> bool:
@@ -648,6 +688,64 @@ class DatabaseManager:
             )
             return []
 
+    def get_all_group_class_memberships_for_view(
+        self,
+        name_filter: Optional[str] = None,
+        status_filter: Optional[str] = None,  # 'Active', 'Inactive', or None
+    ) -> List[GroupClassMembershipView]:
+        """Retrieves all group class memberships formatted for view purposes, with optional filters."""
+        try:
+            cursor = self.conn.cursor()
+            sql_select = """
+            SELECT
+                gcm.id,
+                gcm.member_id,
+                m.name AS member_name,
+                gcm.plan_id,
+                gp.name AS plan_name,
+                gcm.start_date,
+                gcm.end_date,
+                gcm.purchase_date,
+                gcm.membership_type,
+                gcm.is_active,
+                gcm.amount_paid
+            FROM group_class_memberships gcm
+            JOIN members m ON gcm.member_id = m.id
+            JOIN group_plans gp ON gcm.plan_id = gp.id
+            """
+            conditions = []
+            params = []
+
+            if name_filter:
+                conditions.append("m.name LIKE ?")
+                params.append(f"%{name_filter}%")
+            if status_filter:
+                is_active_val = 1 if status_filter.lower() == "active" else 0
+                conditions.append("gcm.is_active = ?")
+                params.append(is_active_val)
+
+            if conditions:
+                sql_select += " WHERE " + " AND ".join(conditions)
+
+            sql_select += " ORDER BY gcm.start_date DESC, m.name ASC"
+
+            cursor.execute(sql_select, params)
+            rows = cursor.fetchall()
+            membership_views = []
+            for row in rows:
+                membership_data = dict(row)
+                membership_data["is_active"] = bool(membership_data["is_active"])
+                membership_views.append(GroupClassMembershipView(**membership_data))
+
+            logging.info(f"Successfully retrieved {len(membership_views)} group class memberships for view.")
+            return membership_views
+        except sqlite3.Error as e:
+            logging.error(
+                f"Database error while fetching group_class_memberships_for_view: {e}",
+                exc_info=True,
+            )
+            return []
+
     def get_group_class_memberships_by_member_id(
         self, member_id: int
     ) -> List[GroupClassMembership]:
@@ -868,6 +966,34 @@ class DatabaseManager:
         except sqlite3.Error as e:
             logging.error(
                 f"Database error in get_all_pt_memberships: {e}", exc_info=True
+            )
+            return []
+
+    def get_all_pt_memberships_for_view(self) -> List[PTMembershipView]:
+        """Retrieves all PT memberships formatted for view purposes."""
+        try:
+            cursor = self.conn.cursor()
+            sql_select = """
+            SELECT
+                ptm.id AS membership_id,
+                ptm.member_id,
+                m.name AS member_name,
+                ptm.purchase_date,
+                ptm.sessions_total,
+                ptm.sessions_remaining,
+                ptm.amount_paid
+            FROM pt_memberships ptm
+            JOIN members m ON ptm.member_id = m.id
+            ORDER BY ptm.purchase_date DESC, m.name ASC
+            """
+            cursor.execute(sql_select)
+            rows = cursor.fetchall()
+            pt_membership_views = [PTMembershipView(**dict(row)) for row in rows]
+            logging.info(f"Successfully retrieved {len(pt_membership_views)} PT memberships for view.")
+            return pt_membership_views
+        except sqlite3.Error as e:
+            logging.error(
+                f"Database error in get_all_pt_memberships_for_view: {e}", exc_info=True
             )
             return []
 
