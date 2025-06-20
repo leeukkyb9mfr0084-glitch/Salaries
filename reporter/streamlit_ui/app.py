@@ -1,13 +1,18 @@
 import streamlit as st
+
 st.set_page_config(layout="wide")
-import pandas as pd
-from datetime import date, datetime
 import io  # For Excel download
+from datetime import date, datetime
+
+import pandas as pd
+
 from reporter.app_api import AppAPI
+
 # Unused imports removed:
 # import sqlite3
 # from reporter.database_manager import DatabaseManager
-from reporter.models import MemberView, GroupPlanView, GroupClassMembershipView, PTMembershipView # DTOs
+from reporter.models import GroupPlanView  # DTOs
+from reporter.models import GroupClassMembershipView, MemberView, PTMembershipView
 
 api = AppAPI()
 
@@ -15,107 +20,107 @@ api = AppAPI()
 default_today = date.today()
 
 # Keys from render_memberships_tab (Group Class)
-if 'selected_gc_membership_id' not in st.session_state:
+if "selected_gc_membership_id" not in st.session_state:
     st.session_state.selected_gc_membership_id = "add_new"
-if 'gc_member_id_form' not in st.session_state:
+if "gc_member_id_form" not in st.session_state:
     st.session_state.gc_member_id_form = None
-if 'gc_member_name_display' not in st.session_state:
+if "gc_member_name_display" not in st.session_state:
     st.session_state.gc_member_name_display = ""
-if 'gc_plan_id_form' not in st.session_state:
+if "gc_plan_id_form" not in st.session_state:
     st.session_state.gc_plan_id_form = None
-if 'gc_start_date_form' not in st.session_state:
+if "gc_start_date_form" not in st.session_state:
     st.session_state.gc_start_date_form = default_today
-if 'gc_amount_paid_form' not in st.session_state:
+if "gc_amount_paid_form" not in st.session_state:
     st.session_state.gc_amount_paid_form = 0.0
-if 'gc_membership_form_key' not in st.session_state:
+if "gc_membership_form_key" not in st.session_state:
     st.session_state.gc_membership_form_key = "gc_membership_form_initial"
-if 'confirm_delete_gc_membership_id' not in st.session_state:
+if "confirm_delete_gc_membership_id" not in st.session_state:
     st.session_state.confirm_delete_gc_membership_id = None
-if 'show_gc_delete_confirmation_form' not in st.session_state:
+if "show_gc_delete_confirmation_form" not in st.session_state:
     st.session_state.show_gc_delete_confirmation_form = False
 
 # Keys from render_memberships_tab (Personal Training)
-if 'selected_pt_membership_id' not in st.session_state:
+if "selected_pt_membership_id" not in st.session_state:
     st.session_state.selected_pt_membership_id = "add_new"
-if 'pt_member_id_form' not in st.session_state:
+if "pt_member_id_form" not in st.session_state:
     st.session_state.pt_member_id_form = None
-if 'pt_member_name_display' not in st.session_state:
+if "pt_member_name_display" not in st.session_state:
     st.session_state.pt_member_name_display = ""
-if 'pt_purchase_date_form' not in st.session_state:
+if "pt_purchase_date_form" not in st.session_state:
     st.session_state.pt_purchase_date_form = default_today
-if 'pt_amount_paid_form' not in st.session_state:
+if "pt_amount_paid_form" not in st.session_state:
     st.session_state.pt_amount_paid_form = 0.0
-if 'pt_sessions_purchased_form' not in st.session_state:
+if "pt_sessions_purchased_form" not in st.session_state:
     st.session_state.pt_sessions_purchased_form = 1
-if 'pt_membership_form_key' not in st.session_state:
+if "pt_membership_form_key" not in st.session_state:
     st.session_state.pt_membership_form_key = "pt_membership_form_initial"
-if 'confirm_delete_pt_membership_id' not in st.session_state:
+if "confirm_delete_pt_membership_id" not in st.session_state:
     st.session_state.confirm_delete_pt_membership_id = None
-if 'show_pt_delete_confirmation_form' not in st.session_state:
+if "show_pt_delete_confirmation_form" not in st.session_state:
     st.session_state.show_pt_delete_confirmation_form = False
 
-if 'show_add_new_gc_form' not in st.session_state:
+if "show_add_new_gc_form" not in st.session_state:
     st.session_state.show_add_new_gc_form = False
-if 'show_add_new_pt_form' not in st.session_state:
+if "show_add_new_pt_form" not in st.session_state:
     st.session_state.show_add_new_pt_form = False
 
 # Keys from render_members_tab
-if 'member_selected_id' not in st.session_state:
+if "member_selected_id" not in st.session_state:
     st.session_state.member_selected_id = None
-if 'member_name' not in st.session_state:
+if "member_name" not in st.session_state:
     st.session_state.member_name = ""
-if 'member_email' not in st.session_state:
+if "member_email" not in st.session_state:
     st.session_state.member_email = ""
-if 'member_phone' not in st.session_state:
+if "member_phone" not in st.session_state:
     st.session_state.member_phone = ""
-if 'member_is_active' not in st.session_state:
+if "member_is_active" not in st.session_state:
     st.session_state.member_is_active = True
-if 'member_form_key' not in st.session_state:
+if "member_form_key" not in st.session_state:
     st.session_state.member_form_key = "member_form_initial"
-if 'confirm_delete_member_id' not in st.session_state:
+if "confirm_delete_member_id" not in st.session_state:
     st.session_state.confirm_delete_member_id = None
 
 # Keys from render_group_plans_tab
-if 'group_plan_selected_id' not in st.session_state:
+if "group_plan_selected_id" not in st.session_state:
     st.session_state.group_plan_selected_id = None
-if 'group_plan_name' not in st.session_state:
+if "group_plan_name" not in st.session_state:
     st.session_state.group_plan_name = ""
-if 'group_plan_duration_days' not in st.session_state:
+if "group_plan_duration_days" not in st.session_state:
     st.session_state.group_plan_duration_days = 30
-if 'group_plan_default_amount' not in st.session_state:
+if "group_plan_default_amount" not in st.session_state:
     st.session_state.group_plan_default_amount = 0.0
-if 'group_plan_is_active' not in st.session_state:
+if "group_plan_is_active" not in st.session_state:
     st.session_state.group_plan_is_active = True
-if 'group_plan_display_name_readonly' not in st.session_state:
+if "group_plan_display_name_readonly" not in st.session_state:
     st.session_state.group_plan_display_name_readonly = ""
-if 'group_plan_form_key' not in st.session_state:
+if "group_plan_form_key" not in st.session_state:
     st.session_state.group_plan_form_key = "group_plan_form_initial"
-if 'confirm_delete_group_plan_id' not in st.session_state:
+if "confirm_delete_group_plan_id" not in st.session_state:
     st.session_state.confirm_delete_group_plan_id = None
 
 # Keys from render_reporting_tab
-if 'financial_report_output' not in st.session_state:
+if "financial_report_output" not in st.session_state:
     st.session_state.financial_report_output = None
-if 'renewals_report_data' not in st.session_state:
+if "renewals_report_data" not in st.session_state:
     st.session_state.renewals_report_data = None
-if 'report_month_financial' not in st.session_state:
+if "report_month_financial" not in st.session_state:
     st.session_state.report_month_financial = default_today.replace(day=1)
 
 # Key for radio button in memberships tab
-if 'membership_mode_selector' not in st.session_state:
-    st.session_state.membership_mode_selector = 'Group Class Memberships'
+if "membership_mode_selector" not in st.session_state:
+    st.session_state.membership_mode_selector = "Group Class Memberships"
 
 # Keys related to clear_membership_form_state() - these are typically set by the function itself
 # but initializing them can prevent potential conditional read-before-write issues if logic changes.
-if 'create_member_id' not in st.session_state:
+if "create_member_id" not in st.session_state:
     st.session_state.create_member_id = None
-if 'create_plan_id_display' not in st.session_state:
-    st.session_state.create_plan_id_display = None # Or ""
-if 'create_transaction_amount' not in st.session_state:
+if "create_plan_id_display" not in st.session_state:
+    st.session_state.create_plan_id_display = None  # Or ""
+if "create_transaction_amount" not in st.session_state:
     st.session_state.create_transaction_amount = 0.0
-if 'create_start_date' not in st.session_state:
+if "create_start_date" not in st.session_state:
     st.session_state.create_start_date = default_today
-if 'selected_plan_duration_display' not in st.session_state:
+if "selected_plan_duration_display" not in st.session_state:
     st.session_state.selected_plan_duration_display = ""
 
 # Dynamic form keys for clearing/resetting forms (already initialized in the list above, e.g. gc_membership_form_key)
@@ -125,16 +130,17 @@ if 'selected_plan_duration_display' not in st.session_state:
 
 # clear_membership_form_state, render_new_group_class_membership_form, and render_new_pt_membership_form removed.
 
+
 def render_memberships_tab():
     st.header("Manage Memberships")
 
     membership_mode = st.radio(
         "Select Membership Type",
-        ('Group Class Memberships', 'Personal Training Memberships'),
-        key="membership_mode_selector"
+        ("Group Class Memberships", "Personal Training Memberships"),
+        key="membership_mode_selector",
     )
 
-    if membership_mode == 'Group Class Memberships':
+    if membership_mode == "Group Class Memberships":
         if st.button("➕ Add New Group Class Membership", key="gc_add_new_button"):
             st.session_state.show_add_new_gc_form = True
             st.session_state.selected_gc_membership_id = "add_new"
@@ -153,7 +159,7 @@ def render_memberships_tab():
             try:
                 all_gc_memberships = api.get_all_group_class_memberships_for_view(
                     name_filter=st.session_state.get("gc_name_filter"),
-                    status_filter=st.session_state.get("gc_status_filter")
+                    status_filter=st.session_state.get("gc_status_filter"),
                 )
                 if not all_gc_memberships:
                     all_gc_memberships = []
@@ -177,30 +183,49 @@ def render_memberships_tab():
                 if st.button(f"Select##GC{m.id}", key=f"select_gc_{m.id}"):
                     st.session_state.selected_gc_membership_id = m.id
                     st.session_state.confirm_delete_gc_membership_id = None
-                    st.session_state.gc_membership_form_key = f"gc_form_{datetime.now().timestamp()}"
-                    selected_data = next((mem for mem in all_gc_memberships if mem.id == m.id), None)
+                    st.session_state.gc_membership_form_key = (
+                        f"gc_form_{datetime.now().timestamp()}"
+                    )
+                    selected_data = next(
+                        (mem for mem in all_gc_memberships if mem.id == m.id), None
+                    )
                     if selected_data:
                         st.session_state.gc_member_id_form = selected_data.member_id
-                        st.session_state.gc_member_name_display = selected_data.member_name or ""
+                        st.session_state.gc_member_name_display = (
+                            selected_data.member_name or ""
+                        )
                         st.session_state.gc_plan_id_form = selected_data.plan_id
                         start_date_val = selected_data.start_date
                         if isinstance(start_date_val, str):
-                            st.session_state.gc_start_date_form = datetime.strptime(start_date_val, "%Y-%m-%d").date()
+                            st.session_state.gc_start_date_form = datetime.strptime(
+                                start_date_val, "%Y-%m-%d"
+                            ).date()
                         elif isinstance(start_date_val, date):
                             st.session_state.gc_start_date_form = start_date_val
                         else:
                             st.session_state.gc_start_date_form = date.today()
-                        st.session_state.gc_amount_paid_form = selected_data.amount_paid or 0.0
+                        st.session_state.gc_amount_paid_form = (
+                            selected_data.amount_paid or 0.0
+                        )
                     else:
-                        st.error("Selected membership data not found. Please try again.")
+                        st.error(
+                            "Selected membership data not found. Please try again."
+                        )
                         st.session_state.selected_gc_membership_id = "add_new"
                 st.markdown("---")
 
         with left_col:
             try:
                 all_members_gc_form_data = api.get_all_members_for_view()
-                active_members_gc_list = [member for member in all_members_gc_form_data if member.is_active == 1]
-                member_options_for_select = {member.id: f"{member.name} (ID: {member.id})" for member in active_members_gc_list}
+                active_members_gc_list = [
+                    member
+                    for member in all_members_gc_form_data
+                    if member.is_active == 1
+                ]
+                member_options_for_select = {
+                    member.id: f"{member.name} (ID: {member.id})"
+                    for member in active_members_gc_list
+                }
             except Exception as e:
                 st.error(f"Error fetching members for GC form: {e}")
                 member_options_for_select = {}
@@ -209,29 +234,38 @@ def render_memberships_tab():
                 all_group_plans_gc_form_data = api.get_all_group_plans_for_view()
                 plan_options_for_select = {
                     plan.id: f"{plan.name} ({plan.duration_days} days, ₹{plan.default_amount or 0:.2f})"
-                    for plan in all_group_plans_gc_form_data if plan.is_active
+                    for plan in all_group_plans_gc_form_data
+                    if plan.is_active
                 }
             except Exception as e:
                 st.error(f"Error fetching group plans for GC form: {e}")
                 plan_options_for_select = {}
 
-            if st.session_state.get('show_add_new_gc_form', False):
+            if st.session_state.get("show_add_new_gc_form", False):
                 st.subheader("Add New Group Class Membership")
                 with st.form(key="add_new_gc_membership_form", clear_on_submit=True):
                     new_gc_member_id = st.selectbox(
                         "Select Member",
                         options=list(member_options_for_select.keys()),
                         format_func=lambda id_val: member_options_for_select[id_val],
-                        key="new_gc_member_select"
+                        key="new_gc_member_select",
                     )
                     new_gc_plan_id = st.selectbox(
                         "Select Group Plan",
                         options=list(plan_options_for_select.keys()),
                         format_func=lambda id_val: plan_options_for_select[id_val],
-                        key="new_gc_plan_select"
+                        key="new_gc_plan_select",
                     )
-                    new_gc_start_date = st.date_input("Start Date", value=date.today(), key="new_gc_start_date")
-                    new_gc_amount_paid = st.number_input("Amount Paid (₹)", min_value=0.01, value=0.01, format="%.2f", key="new_gc_amount_paid")
+                    new_gc_start_date = st.date_input(
+                        "Start Date", value=date.today(), key="new_gc_start_date"
+                    )
+                    new_gc_amount_paid = st.number_input(
+                        "Amount Paid (₹)",
+                        min_value=0.01,
+                        value=0.01,
+                        format="%.2f",
+                        key="new_gc_amount_paid",
+                    )
 
                     new_gc_save_button = st.form_submit_button("Save New Membership")
                     new_gc_cancel_button = st.form_submit_button("Cancel")
@@ -246,11 +280,15 @@ def render_memberships_tab():
                                 record_id = api.create_group_class_membership(
                                     member_id=new_gc_member_id,
                                     plan_id=new_gc_plan_id,
-                                    start_date_str=new_gc_start_date.strftime("%Y-%m-%d"),
-                                    amount_paid=new_gc_amount_paid
+                                    start_date_str=new_gc_start_date.strftime(
+                                        "%Y-%m-%d"
+                                    ),
+                                    amount_paid=new_gc_amount_paid,
                                 )
                                 if record_id:
-                                    st.success(f"Group Class Membership created with ID: {record_id}")
+                                    st.success(
+                                        f"Group Class Membership created with ID: {record_id}"
+                                    )
                                     st.session_state.show_add_new_gc_form = False
                                     st.session_state.gc_member_id_form = None
                                     st.session_state.gc_plan_id_form = None
@@ -270,33 +308,63 @@ def render_memberships_tab():
                         st.session_state.gc_amount_paid_form = 0.0
                         st.rerun()
 
-            elif st.session_state.selected_gc_membership_id != "add_new": # EDIT GC Membership
-                st.subheader(f"Edit Group Class Membership (ID: {st.session_state.selected_gc_membership_id})")
-                with st.form(key=st.session_state.gc_membership_form_key, clear_on_submit=False):
-                    st.text_input("Member", value=st.session_state.gc_member_name_display, disabled=True, key="edit_gc_member_name_display")
+            elif (
+                st.session_state.selected_gc_membership_id != "add_new"
+            ):  # EDIT GC Membership
+                st.subheader(
+                    f"Edit Group Class Membership (ID: {st.session_state.selected_gc_membership_id})"
+                )
+                with st.form(
+                    key=st.session_state.gc_membership_form_key, clear_on_submit=False
+                ):
+                    st.text_input(
+                        "Member",
+                        value=st.session_state.gc_member_name_display,
+                        disabled=True,
+                        key="edit_gc_member_name_display",
+                    )
 
                     edit_gc_plan_id_index = 0
                     plan_ids_list = list(plan_options_for_select.keys())
-                    if st.session_state.gc_plan_id_form and st.session_state.gc_plan_id_form in plan_ids_list:
-                        edit_gc_plan_id_index = plan_ids_list.index(st.session_state.gc_plan_id_form)
+                    if (
+                        st.session_state.gc_plan_id_form
+                        and st.session_state.gc_plan_id_form in plan_ids_list
+                    ):
+                        edit_gc_plan_id_index = plan_ids_list.index(
+                            st.session_state.gc_plan_id_form
+                        )
 
                     edit_gc_plan_id = st.selectbox(
                         "Select Group Plan",
                         options=plan_ids_list,
                         format_func=lambda id_val: plan_options_for_select[id_val],
                         key="edit_gc_plan_select",
-                        index=edit_gc_plan_id_index
+                        index=edit_gc_plan_id_index,
                     )
-                    edit_gc_start_date = st.date_input("Start Date", value=st.session_state.gc_start_date_form, key="edit_gc_start_date")
-                    edit_gc_amount_paid = st.number_input("Amount Paid (₹)", value=st.session_state.gc_amount_paid_form, min_value=0.0, format="%.2f", key="edit_gc_amount_paid")
+                    edit_gc_start_date = st.date_input(
+                        "Start Date",
+                        value=st.session_state.gc_start_date_form,
+                        key="edit_gc_start_date",
+                    )
+                    edit_gc_amount_paid = st.number_input(
+                        "Amount Paid (₹)",
+                        value=st.session_state.gc_amount_paid_form,
+                        min_value=0.0,
+                        format="%.2f",
+                        key="edit_gc_amount_paid",
+                    )
 
                     form_cols = st.columns(3)
                     with form_cols[0]:
                         save_button_gc_edit = st.form_submit_button("Save Changes")
                     with form_cols[1]:
-                        delete_button_gc_edit = st.form_submit_button("Delete Membership")
+                        delete_button_gc_edit = st.form_submit_button(
+                            "Delete Membership"
+                        )
                     with form_cols[2]:
-                        clear_button_gc_edit = st.form_submit_button("Clear / Cancel Selection")
+                        clear_button_gc_edit = st.form_submit_button(
+                            "Clear / Cancel Selection"
+                        )
 
                 if save_button_gc_edit:
                     st.session_state.show_gc_delete_confirmation_form = False
@@ -309,7 +377,7 @@ def render_memberships_tab():
                                 member_id=st.session_state.gc_member_id_form,
                                 plan_id=edit_gc_plan_id,
                                 start_date=edit_gc_start_date.strftime("%Y-%m-%d"),
-                                amount_paid=edit_gc_amount_paid
+                                amount_paid=edit_gc_amount_paid,
                             )
                             if success_gc_update:
                                 st.success("Membership updated successfully!")
@@ -318,10 +386,14 @@ def render_memberships_tab():
                             else:
                                 st.error("Failed to update membership.")
                         except Exception as e:
-                            st.error(f"An error occurred while updating GC membership: {e}")
+                            st.error(
+                                f"An error occurred while updating GC membership: {e}"
+                            )
 
                 if delete_button_gc_edit:
-                    st.session_state.confirm_delete_gc_membership_id = st.session_state.selected_gc_membership_id
+                    st.session_state.confirm_delete_gc_membership_id = (
+                        st.session_state.selected_gc_membership_id
+                    )
                     st.session_state.show_gc_delete_confirmation_form = True
                     st.rerun()
 
@@ -334,42 +406,63 @@ def render_memberships_tab():
                     st.session_state.gc_start_date_form = date.today()
                     st.session_state.gc_amount_paid_form = 0.0
                     st.session_state.confirm_delete_gc_membership_id = None
-                    st.session_state.gc_membership_form_key = f"gc_form_edit_{datetime.now().timestamp()}" # Ensure form key is fresh
+                    st.session_state.gc_membership_form_key = f"gc_form_edit_{datetime.now().timestamp()}"  # Ensure form key is fresh
                     st.rerun()
 
-                if st.session_state.get('show_gc_delete_confirmation_form', False) and \
-                   st.session_state.confirm_delete_gc_membership_id is not None and \
-                   st.session_state.confirm_delete_gc_membership_id == st.session_state.selected_gc_membership_id:
+                if (
+                    st.session_state.get("show_gc_delete_confirmation_form", False)
+                    and st.session_state.confirm_delete_gc_membership_id is not None
+                    and st.session_state.confirm_delete_gc_membership_id
+                    == st.session_state.selected_gc_membership_id
+                ):
 
                     membership_to_delete_info = f"GC Membership ID {st.session_state.confirm_delete_gc_membership_id}"
-                    st.warning(f"Are you sure you want to delete {membership_to_delete_info}? This action cannot be undone.")
+                    st.warning(
+                        f"Are you sure you want to delete {membership_to_delete_info}? This action cannot be undone."
+                    )
 
                     confirm_form_key_gc_delete = f"confirm_delete_gc_form_{st.session_state.confirm_delete_gc_membership_id}"
                     with st.form(key=confirm_form_key_gc_delete):
                         cols_confirm_gc = st.columns(2)
                         with cols_confirm_gc[0]:
-                            confirmed_delete_gc_final = st.form_submit_button("YES, DELETE Permanently")
+                            confirmed_delete_gc_final = st.form_submit_button(
+                                "YES, DELETE Permanently"
+                            )
                         with cols_confirm_gc[1]:
-                            cancelled_delete_gc_final = st.form_submit_button("Cancel Deletion")
+                            cancelled_delete_gc_final = st.form_submit_button(
+                                "Cancel Deletion"
+                            )
 
                         if confirmed_delete_gc_final:
                             try:
-                                success_gc_delete = api.delete_group_class_membership_record(st.session_state.confirm_delete_gc_membership_id)
+                                success_gc_delete = (
+                                    api.delete_group_class_membership_record(
+                                        st.session_state.confirm_delete_gc_membership_id
+                                    )
+                                )
                                 if success_gc_delete:
-                                    st.success(f"Group Class Membership ID {st.session_state.confirm_delete_gc_membership_id} deleted.")
+                                    st.success(
+                                        f"Group Class Membership ID {st.session_state.confirm_delete_gc_membership_id} deleted."
+                                    )
                                 else:
-                                    st.error(f"Failed to delete Group Class Membership ID {st.session_state.confirm_delete_gc_membership_id}.")
+                                    st.error(
+                                        f"Failed to delete Group Class Membership ID {st.session_state.confirm_delete_gc_membership_id}."
+                                    )
                             except Exception as e:
                                 st.error(f"Error deleting GC membership: {e}")
                             finally:
-                                st.session_state.show_gc_delete_confirmation_form = False
+                                st.session_state.show_gc_delete_confirmation_form = (
+                                    False
+                                )
                                 st.session_state.selected_gc_membership_id = "add_new"
                                 st.session_state.gc_member_id_form = None
                                 st.session_state.gc_plan_id_form = None
                                 st.session_state.gc_start_date_form = date.today()
                                 st.session_state.gc_amount_paid_form = 0.0
                                 st.session_state.confirm_delete_gc_membership_id = None
-                                st.session_state.gc_membership_form_key = f"gc_form_{datetime.now().timestamp()}"
+                                st.session_state.gc_membership_form_key = (
+                                    f"gc_form_{datetime.now().timestamp()}"
+                                )
                                 st.rerun()
 
                         if cancelled_delete_gc_final:
@@ -378,21 +471,27 @@ def render_memberships_tab():
                             st.session_state.confirm_delete_gc_membership_id = None
                             st.rerun()
             else:
-                st.info("Select a GC membership to edit, or click 'Add New Group Class Membership' to create one.")
+                st.info(
+                    "Select a GC membership to edit, or click 'Add New Group Class Membership' to create one."
+                )
 
-    elif membership_mode == 'Personal Training Memberships':
+    elif membership_mode == "Personal Training Memberships":
         if st.button("➕ Add New PT Membership", key="pt_add_new_button"):
             st.session_state.show_add_new_pt_form = True
-            st.session_state.selected_pt_membership_id = "add_new" # Ensure edit form is not triggered
+            st.session_state.selected_pt_membership_id = (
+                "add_new"  # Ensure edit form is not triggered
+            )
             # Reset other relevant form fields for a clean "add new" experience
             st.session_state.pt_member_id_form = None
             st.session_state.pt_member_name_display = ""
             st.session_state.pt_purchase_date_form = date.today()
             st.session_state.pt_amount_paid_form = 0.0
             st.session_state.pt_sessions_purchased_form = 1
-            if 'pt_notes_form' in st.session_state:
+            if "pt_notes_form" in st.session_state:
                 st.session_state.pt_notes_form = ""
-            st.session_state.pt_add_form_key = f"pt_form_add_new_{datetime.now().timestamp()}"
+            st.session_state.pt_add_form_key = (
+                f"pt_form_add_new_{datetime.now().timestamp()}"
+            )
             st.session_state.show_pt_delete_confirmation_form = False
             st.session_state.confirm_delete_pt_membership_id = None
 
@@ -425,26 +524,51 @@ def render_memberships_tab():
                     f"(Purchased: {pt_m.purchase_date}) - ID: {pt_m.membership_id}"
                 )
                 st.markdown(display_text)
-                if st.button(f"Select##PT{pt_m.membership_id}", key=f"select_pt_{pt_m.membership_id}"):
+                if st.button(
+                    f"Select##PT{pt_m.membership_id}",
+                    key=f"select_pt_{pt_m.membership_id}",
+                ):
                     st.session_state.selected_pt_membership_id = pt_m.membership_id
                     st.session_state.confirm_delete_pt_membership_id = None
-                    st.session_state.pt_membership_form_key = f"pt_form_{datetime.now().timestamp()}"
-                    selected_pt_data = next((m_pt for m_pt in all_pt_memberships if m_pt.membership_id == pt_m.membership_id), None) # Shadowing m
+                    st.session_state.pt_membership_form_key = (
+                        f"pt_form_{datetime.now().timestamp()}"
+                    )
+                    selected_pt_data = next(
+                        (
+                            m_pt
+                            for m_pt in all_pt_memberships
+                            if m_pt.membership_id == pt_m.membership_id
+                        ),
+                        None,
+                    )  # Shadowing m
                     if selected_pt_data:
                         st.session_state.pt_member_id_form = selected_pt_data.member_id
-                        st.session_state.pt_member_name_display = selected_pt_data.member_name or ""
+                        st.session_state.pt_member_name_display = (
+                            selected_pt_data.member_name or ""
+                        )
                         purchase_date_val = selected_pt_data.purchase_date
                         if isinstance(purchase_date_val, str):
-                            st.session_state.pt_purchase_date_form = datetime.strptime(purchase_date_val, "%Y-%m-%d").date()
+                            st.session_state.pt_purchase_date_form = datetime.strptime(
+                                purchase_date_val, "%Y-%m-%d"
+                            ).date()
                         elif isinstance(purchase_date_val, date):
                             st.session_state.pt_purchase_date_form = purchase_date_val
                         else:
                             st.session_state.pt_purchase_date_form = date.today()
 
-                        st.session_state.pt_amount_paid_form = selected_pt_data.amount_paid or 0.0
-                        st.session_state.pt_sessions_purchased_form = selected_pt_data.sessions_total or 1
-                        if hasattr(selected_pt_data, 'notes') and 'pt_notes_form' in st.session_state:
-                             st.session_state.pt_notes_form = selected_pt_data.notes or ""
+                        st.session_state.pt_amount_paid_form = (
+                            selected_pt_data.amount_paid or 0.0
+                        )
+                        st.session_state.pt_sessions_purchased_form = (
+                            selected_pt_data.sessions_total or 1
+                        )
+                        if (
+                            hasattr(selected_pt_data, "notes")
+                            and "pt_notes_form" in st.session_state
+                        ):
+                            st.session_state.pt_notes_form = (
+                                selected_pt_data.notes or ""
+                            )
                     else:
                         st.error("Selected PT membership data not found.")
                         st.session_state.selected_pt_membership_id = "add_new"
@@ -453,24 +577,51 @@ def render_memberships_tab():
         with pt_left_col:
             try:
                 all_members_pt_form_data = api.get_all_members_for_view()
-                active_members_pt_list = [member for member in all_members_pt_form_data if member.is_active == 1]
-                member_options_for_pt_select = {member.id: f"{member.name} (ID: {member.id})" for member in active_members_pt_list}
+                active_members_pt_list = [
+                    member
+                    for member in all_members_pt_form_data
+                    if member.is_active == 1
+                ]
+                member_options_for_pt_select = {
+                    member.id: f"{member.name} (ID: {member.id})"
+                    for member in active_members_pt_list
+                }
             except Exception as e:
                 st.error(f"Error fetching members for PT form: {e}")
                 member_options_for_pt_select = {}
 
-            if st.session_state.get('show_add_new_pt_form', False):
+            if st.session_state.get("show_add_new_pt_form", False):
                 st.subheader("Add New PT Membership")
-                with st.form(key=st.session_state.get("pt_add_form_key", f"pt_form_add_new_fallback_{datetime.now().timestamp()}"), clear_on_submit=True):
+                with st.form(
+                    key=st.session_state.get(
+                        "pt_add_form_key",
+                        f"pt_form_add_new_fallback_{datetime.now().timestamp()}",
+                    ),
+                    clear_on_submit=True,
+                ):
                     new_pt_member_id = st.selectbox(
                         "Select Member",
                         options=list(member_options_for_pt_select.keys()),
                         format_func=lambda id_val: member_options_for_pt_select[id_val],
-                        key="new_pt_member_select"
+                        key="new_pt_member_select",
                     )
-                    new_pt_purchase_date = st.date_input("Purchase Date", value=date.today(), key="new_pt_purchase_date")
-                    new_pt_amount_paid = st.number_input("Amount Paid (₹)", min_value=0.01, value=0.01, format="%.2f", key="new_pt_amount_paid")
-                    new_pt_sessions_purchased = st.number_input("Sessions Purchased", min_value=1, value=1, step=1, key="new_pt_sessions_purchased")
+                    new_pt_purchase_date = st.date_input(
+                        "Purchase Date", value=date.today(), key="new_pt_purchase_date"
+                    )
+                    new_pt_amount_paid = st.number_input(
+                        "Amount Paid (₹)",
+                        min_value=0.01,
+                        value=0.01,
+                        format="%.2f",
+                        key="new_pt_amount_paid",
+                    )
+                    new_pt_sessions_purchased = st.number_input(
+                        "Sessions Purchased",
+                        min_value=1,
+                        value=1,
+                        step=1,
+                        key="new_pt_sessions_purchased",
+                    )
 
                     new_pt_save_button = st.form_submit_button("Save New PT Membership")
                     new_pt_cancel_button = st.form_submit_button("Cancel")
@@ -488,10 +639,12 @@ def render_memberships_tab():
                                 member_id=new_pt_member_id,
                                 purchase_date=new_pt_purchase_date.strftime("%Y-%m-%d"),
                                 amount_paid=new_pt_amount_paid,
-                                sessions_purchased=new_pt_sessions_purchased
+                                sessions_purchased=new_pt_sessions_purchased,
                             )
                             if record_id:
-                                st.success(f"PT Membership created with ID: {record_id}")
+                                st.success(
+                                    f"PT Membership created with ID: {record_id}"
+                                )
                                 st.session_state.show_add_new_pt_form = False
                                 st.session_state.pt_member_id_form = None
                                 st.session_state.pt_purchase_date_form = date.today()
@@ -511,22 +664,53 @@ def render_memberships_tab():
                     st.session_state.pt_sessions_purchased_form = 1
                     st.rerun()
 
-            elif st.session_state.selected_pt_membership_id != "add_new": # EDIT PT Membership
-                st.subheader(f"Edit PT Membership (ID: {st.session_state.selected_pt_membership_id})")
-                with st.form(key=st.session_state.pt_membership_form_key, clear_on_submit=False):
-                    st.text_input("Member", value=st.session_state.pt_member_name_display, disabled=True, key="edit_pt_member_name_display")
+            elif (
+                st.session_state.selected_pt_membership_id != "add_new"
+            ):  # EDIT PT Membership
+                st.subheader(
+                    f"Edit PT Membership (ID: {st.session_state.selected_pt_membership_id})"
+                )
+                with st.form(
+                    key=st.session_state.pt_membership_form_key, clear_on_submit=False
+                ):
+                    st.text_input(
+                        "Member",
+                        value=st.session_state.pt_member_name_display,
+                        disabled=True,
+                        key="edit_pt_member_name_display",
+                    )
 
-                    edit_pt_purchase_date = st.date_input("Purchase Date", value=st.session_state.pt_purchase_date_form, key="edit_pt_purchase_date")
-                    edit_pt_amount_paid = st.number_input("Amount Paid (₹)", value=st.session_state.pt_amount_paid_form, min_value=0.0, format="%.2f", key="edit_pt_amount_paid")
-                    edit_pt_sessions_purchased = st.number_input("Sessions Purchased", value=st.session_state.pt_sessions_purchased_form, min_value=1, step=1, key="edit_pt_sessions_purchased")
+                    edit_pt_purchase_date = st.date_input(
+                        "Purchase Date",
+                        value=st.session_state.pt_purchase_date_form,
+                        key="edit_pt_purchase_date",
+                    )
+                    edit_pt_amount_paid = st.number_input(
+                        "Amount Paid (₹)",
+                        value=st.session_state.pt_amount_paid_form,
+                        min_value=0.0,
+                        format="%.2f",
+                        key="edit_pt_amount_paid",
+                    )
+                    edit_pt_sessions_purchased = st.number_input(
+                        "Sessions Purchased",
+                        value=st.session_state.pt_sessions_purchased_form,
+                        min_value=1,
+                        step=1,
+                        key="edit_pt_sessions_purchased",
+                    )
 
                     pt_form_cols = st.columns(3)
                     with pt_form_cols[0]:
                         pt_save_button_edit = st.form_submit_button("Save Changes")
                     with pt_form_cols[1]:
-                        pt_delete_button_edit = st.form_submit_button("Delete Membership")
+                        pt_delete_button_edit = st.form_submit_button(
+                            "Delete Membership"
+                        )
                     with pt_form_cols[2]:
-                        pt_clear_button_edit = st.form_submit_button("Clear / Cancel Selection")
+                        pt_clear_button_edit = st.form_submit_button(
+                            "Clear / Cancel Selection"
+                        )
 
                 if pt_save_button_edit:
                     st.session_state.show_pt_delete_confirmation_form = False
@@ -539,20 +723,28 @@ def render_memberships_tab():
                         try:
                             success_pt_update = api.update_pt_membership(
                                 membership_id=st.session_state.selected_pt_membership_id,
-                                purchase_date=edit_pt_purchase_date.strftime("%Y-%m-%d"),
+                                purchase_date=edit_pt_purchase_date.strftime(
+                                    "%Y-%m-%d"
+                                ),
                                 amount_paid=edit_pt_amount_paid,
-                                sessions_purchased=edit_pt_sessions_purchased
+                                sessions_purchased=edit_pt_sessions_purchased,
                             )
                             if success_pt_update:
-                                st.success(f"PT Membership ID {st.session_state.selected_pt_membership_id} updated.")
+                                st.success(
+                                    f"PT Membership ID {st.session_state.selected_pt_membership_id} updated."
+                                )
                                 st.rerun()
                             else:
-                                st.error(f"Failed to update PT Membership ID {st.session_state.selected_pt_membership_id}.")
+                                st.error(
+                                    f"Failed to update PT Membership ID {st.session_state.selected_pt_membership_id}."
+                                )
                         except Exception as e:
                             st.error(f"Error updating PT membership: {e}")
 
                 if pt_delete_button_edit:
-                    st.session_state.confirm_delete_pt_membership_id = st.session_state.selected_pt_membership_id
+                    st.session_state.confirm_delete_pt_membership_id = (
+                        st.session_state.selected_pt_membership_id
+                    )
                     st.session_state.show_pt_delete_confirmation_form = True
                     st.rerun()
 
@@ -564,44 +756,62 @@ def render_memberships_tab():
                     st.session_state.pt_purchase_date_form = date.today()
                     st.session_state.pt_amount_paid_form = 0.0
                     st.session_state.pt_sessions_purchased_form = 1
-                    if 'pt_notes_form' in st.session_state: st.session_state.pt_notes_form = ""
+                    if "pt_notes_form" in st.session_state:
+                        st.session_state.pt_notes_form = ""
                     st.session_state.confirm_delete_pt_membership_id = None
-                    st.session_state.pt_membership_form_key = f"pt_form_edit_{datetime.now().timestamp()}" # Ensure form key is fresh
+                    st.session_state.pt_membership_form_key = f"pt_form_edit_{datetime.now().timestamp()}"  # Ensure form key is fresh
                     st.rerun()
 
-                if st.session_state.get('show_pt_delete_confirmation_form', False) and \
-                   st.session_state.confirm_delete_pt_membership_id is not None and \
-                   st.session_state.confirm_delete_pt_membership_id == st.session_state.selected_pt_membership_id:
+                if (
+                    st.session_state.get("show_pt_delete_confirmation_form", False)
+                    and st.session_state.confirm_delete_pt_membership_id is not None
+                    and st.session_state.confirm_delete_pt_membership_id
+                    == st.session_state.selected_pt_membership_id
+                ):
 
                     pt_membership_to_delete_info = f"PT Membership ID {st.session_state.confirm_delete_pt_membership_id}"
-                    st.warning(f"Are you sure you want to delete {pt_membership_to_delete_info}? This action cannot be undone.")
+                    st.warning(
+                        f"Are you sure you want to delete {pt_membership_to_delete_info}? This action cannot be undone."
+                    )
 
                     confirm_form_key_pt_delete = f"confirm_delete_pt_form_{st.session_state.confirm_delete_pt_membership_id}"
                     with st.form(key=confirm_form_key_pt_delete):
                         cols_confirm_pt = st.columns(2)
                         with cols_confirm_pt[0]:
-                            confirmed_delete_pt_final = st.form_submit_button("YES, DELETE Permanently")
+                            confirmed_delete_pt_final = st.form_submit_button(
+                                "YES, DELETE Permanently"
+                            )
                         with cols_confirm_pt[1]:
-                            cancelled_delete_pt_final = st.form_submit_button("Cancel Deletion")
+                            cancelled_delete_pt_final = st.form_submit_button(
+                                "Cancel Deletion"
+                            )
 
                         if confirmed_delete_pt_final:
                             try:
-                                success_pt_delete = api.delete_pt_membership(st.session_state.confirm_delete_pt_membership_id)
+                                success_pt_delete = api.delete_pt_membership(
+                                    st.session_state.confirm_delete_pt_membership_id
+                                )
                                 if success_pt_delete:
-                                    st.success(f"Personal Training Membership ID {st.session_state.confirm_delete_pt_membership_id} deleted.")
+                                    st.success(
+                                        f"Personal Training Membership ID {st.session_state.confirm_delete_pt_membership_id} deleted."
+                                    )
                                 else:
-                                    st.error(f"Failed to delete PT Membership ID {st.session_state.confirm_delete_pt_membership_id}.")
+                                    st.error(
+                                        f"Failed to delete PT Membership ID {st.session_state.confirm_delete_pt_membership_id}."
+                                    )
                             except Exception as e:
                                 st.error(f"Error deleting PT membership: {e}")
                             finally:
-                                st.session_state.show_pt_delete_confirmation_form = False
+                                st.session_state.show_pt_delete_confirmation_form = (
+                                    False
+                                )
                                 st.session_state.selected_pt_membership_id = "add_new"
                                 st.session_state.pt_member_id_form = None
                                 st.session_state.pt_purchase_date_form = date.today()
                                 st.session_state.pt_amount_paid_form = 0.0
                                 st.session_state.pt_sessions_purchased_form = 1
                                 st.session_state.confirm_delete_pt_membership_id = None
-                                st.session_state.pt_membership_form_key = f"pt_form_{datetime.now().timestamp()}" # Reset edit form key
+                                st.session_state.pt_membership_form_key = f"pt_form_{datetime.now().timestamp()}"  # Reset edit form key
                                 st.rerun()
 
                         if cancelled_delete_pt_final:
@@ -610,7 +820,9 @@ def render_memberships_tab():
                             st.session_state.confirm_delete_pt_membership_id = None
                             st.rerun()
             else:
-                st.info("Select a PT membership to edit, or click 'Add New PT Membership' to create one.")
+                st.info(
+                    "Select a PT membership to edit, or click 'Add New PT Membership' to create one."
+                )
 
 
 def render_members_tab():
@@ -638,7 +850,10 @@ def render_members_tab():
             st.error(f"Error fetching members: {e}")
             all_members = []
 
-        member_options = {member.id: f"{member.name} ({member.phone or 'N/A'})" for member in all_members}
+        member_options = {
+            member.id: f"{member.name} ({member.phone or 'N/A'})"
+            for member in all_members
+        }
         member_options_list = [None] + list(member_options.keys())
 
         def format_func_member(member_id):
@@ -651,19 +866,34 @@ def render_members_tab():
             options=member_options_list,
             format_func=format_func_member,
             key="member_select_widget",
-            index=member_options_list.index(st.session_state.member_selected_id) if st.session_state.member_selected_id in member_options_list else 0
+            index=(
+                member_options_list.index(st.session_state.member_selected_id)
+                if st.session_state.member_selected_id in member_options_list
+                else 0
+            ),
         )
         if selected_id_display != st.session_state.member_selected_id:
             st.session_state.member_selected_id = selected_id_display
             st.session_state.confirm_delete_member_id = None
             if st.session_state.member_selected_id is not None:
-                selected_member_data = next((m for m in all_members if m.id == st.session_state.member_selected_id), None)
+                selected_member_data = next(
+                    (
+                        m
+                        for m in all_members
+                        if m.id == st.session_state.member_selected_id
+                    ),
+                    None,
+                )
                 if selected_member_data:
                     st.session_state.member_name = selected_member_data.name or ""
                     st.session_state.member_email = selected_member_data.email or ""
                     st.session_state.member_phone = selected_member_data.phone or ""
-                    st.session_state.member_is_active = bool(selected_member_data.is_active)
-                    st.session_state.member_form_key = f"member_form_{datetime.now().timestamp()}"
+                    st.session_state.member_is_active = bool(
+                        selected_member_data.is_active
+                    )
+                    st.session_state.member_form_key = (
+                        f"member_form_{datetime.now().timestamp()}"
+                    )
             else:
                 clear_member_form(clear_selection=False)
 
@@ -674,14 +904,28 @@ def render_members_tab():
             st.subheader(f"Edit Member: {st.session_state.member_name}")
 
         with st.form(key=st.session_state.member_form_key, clear_on_submit=False):
-            name_form_val = st.text_input("Name", value=st.session_state.member_name, key="member_form_name")
-            email_form_val = st.text_input("Email", value=st.session_state.member_email, key="member_form_email")
-            phone_form_val = st.text_input("Phone", value=st.session_state.member_phone, key="member_form_phone")
-            is_active_form_val = st.checkbox("Is Active", value=st.session_state.member_is_active, key="member_form_is_active")
+            name_form_val = st.text_input(
+                "Name", value=st.session_state.member_name, key="member_form_name"
+            )
+            email_form_val = st.text_input(
+                "Email", value=st.session_state.member_email, key="member_form_email"
+            )
+            phone_form_val = st.text_input(
+                "Phone", value=st.session_state.member_phone, key="member_form_phone"
+            )
+            is_active_form_val = st.checkbox(
+                "Is Active",
+                value=st.session_state.member_is_active,
+                key="member_form_is_active",
+            )
 
             form_col1, form_col2, form_col3 = st.columns(3)
             with form_col1:
-                save_button_member = st.form_submit_button("Save Member" if st.session_state.member_selected_id else "Add Member")
+                save_button_member = st.form_submit_button(
+                    "Save Member"
+                    if st.session_state.member_selected_id
+                    else "Add Member"
+                )
             delete_button_member = None
             if st.session_state.member_selected_id is not None:
                 with form_col2:
@@ -690,14 +934,20 @@ def render_members_tab():
                 clear_button_member = st.form_submit_button("Clear / New")
 
         if save_button_member:
-            if st.session_state.member_selected_id is None: # ADD Path
+            if st.session_state.member_selected_id is None:  # ADD Path
                 if not name_form_val or not phone_form_val:
                     st.error("Name and Phone are required.")
                 else:
                     try:
-                        member_id = api.add_member(name=name_form_val, phone=phone_form_val, email=email_form_val)
+                        member_id = api.add_member(
+                            name=name_form_val,
+                            phone=phone_form_val,
+                            email=email_form_val,
+                        )
                         if member_id:
-                            st.success(f"Member '{name_form_val}' added successfully with ID: {member_id}")
+                            st.success(
+                                f"Member '{name_form_val}' added successfully with ID: {member_id}"
+                            )
                             clear_member_form(clear_selection=True)
                         else:
                             st.error("Failed to add member. Please check details.")
@@ -705,7 +955,7 @@ def render_members_tab():
                         st.error(f"Error: {e}")
                     except Exception as e:
                         st.error(f"An unexpected error occurred: {e}")
-            else: # UPDATE Path
+            else:  # UPDATE Path
                 if not name_form_val or not phone_form_val:
                     st.error("Name and Phone cannot be empty.")
                 else:
@@ -715,40 +965,66 @@ def render_members_tab():
                             name=name_form_val,
                             phone=phone_form_val,
                             email=email_form_val,
-                            is_active=is_active_form_val
+                            is_active=is_active_form_val,
                         )
                         if success_member_update:
-                            st.success(f"Member '{name_form_val}' updated successfully.")
+                            st.success(
+                                f"Member '{name_form_val}' updated successfully."
+                            )
                             clear_member_form(clear_selection=True)
                         else:
-                            st.error("Failed to update member. The phone number might already be in use by another member.")
+                            st.error(
+                                "Failed to update member. The phone number might already be in use by another member."
+                            )
                     except ValueError as e:
                         st.error(f"Error: {e}")
                     except Exception as e:
                         st.error(f"An unexpected error occurred: {e}")
 
         if st.session_state.member_selected_id is not None and delete_button_member:
-            if st.session_state.confirm_delete_member_id != st.session_state.member_selected_id:
-                st.session_state.confirm_delete_member_id = st.session_state.member_selected_id
-            if st.session_state.confirm_delete_member_id == st.session_state.member_selected_id:
-                st.warning(f"Are you sure you want to delete member '{st.session_state.member_name}'? This action cannot be undone.")
+            if (
+                st.session_state.confirm_delete_member_id
+                != st.session_state.member_selected_id
+            ):
+                st.session_state.confirm_delete_member_id = (
+                    st.session_state.member_selected_id
+                )
+            if (
+                st.session_state.confirm_delete_member_id
+                == st.session_state.member_selected_id
+            ):
+                st.warning(
+                    f"Are you sure you want to delete member '{st.session_state.member_name}'? This action cannot be undone."
+                )
                 confirm_col1, confirm_col2 = st.columns(2)
                 with confirm_col1:
-                    if st.button("YES, DELETE Permanently", key=f"confirm_delete_member_btn_{st.session_state.member_selected_id}"):
+                    if st.button(
+                        "YES, DELETE Permanently",
+                        key=f"confirm_delete_member_btn_{st.session_state.member_selected_id}",
+                    ):
                         try:
-                            deleted_member = api.delete_member(st.session_state.member_selected_id)
+                            deleted_member = api.delete_member(
+                                st.session_state.member_selected_id
+                            )
                             if deleted_member:
-                                st.success(f"Member '{st.session_state.member_name}' deleted successfully.")
+                                st.success(
+                                    f"Member '{st.session_state.member_name}' deleted successfully."
+                                )
                                 clear_member_form(clear_selection=True)
                                 st.session_state.confirm_delete_member_id = None
                             else:
-                                st.error("Failed to delete member. They might have active memberships or other issue.")
+                                st.error(
+                                    "Failed to delete member. They might have active memberships or other issue."
+                                )
                                 st.session_state.confirm_delete_member_id = None
                         except Exception as e:
                             st.error(f"Error deleting member: {e}")
                             st.session_state.confirm_delete_member_id = None
                 with confirm_col2:
-                    if st.button("Cancel Deletion", key=f"cancel_delete_member_btn_{st.session_state.member_selected_id}"):
+                    if st.button(
+                        "Cancel Deletion",
+                        key=f"cancel_delete_member_btn_{st.session_state.member_selected_id}",
+                    ):
                         st.session_state.confirm_delete_member_id = None
 
         if clear_button_member:
@@ -766,7 +1042,9 @@ def render_group_plans_tab():
         st.session_state.group_plan_default_amount = 0.0
         st.session_state.group_plan_is_active = True
         st.session_state.group_plan_display_name_readonly = ""
-        st.session_state.group_plan_form_key = f"group_plan_form_{datetime.now().timestamp()}"
+        st.session_state.group_plan_form_key = (
+            f"group_plan_form_{datetime.now().timestamp()}"
+        )
         st.session_state.confirm_delete_group_plan_id = None
 
     left_col, right_col = st.columns([1, 2])
@@ -782,7 +1060,10 @@ def render_group_plans_tab():
             st.error(f"Error fetching group plans: {e}")
             all_group_plans = []
 
-        plan_options = {plan.id: f"{plan.name} ({plan.duration_days} days)" for plan in all_group_plans}
+        plan_options = {
+            plan.id: f"{plan.name} ({plan.duration_days} days)"
+            for plan in all_group_plans
+        }
         plan_options_list = [None] + list(plan_options.keys())
 
         def format_func_group_plan(plan_id):
@@ -795,21 +1076,38 @@ def render_group_plans_tab():
             options=plan_options_list,
             format_func=format_func_group_plan,
             key="group_plan_select_widget",
-            index=plan_options_list.index(st.session_state.group_plan_selected_id) if st.session_state.group_plan_selected_id in plan_options_list else 0
+            index=(
+                plan_options_list.index(st.session_state.group_plan_selected_id)
+                if st.session_state.group_plan_selected_id in plan_options_list
+                else 0
+            ),
         )
 
         if selected_group_plan_id_widget != st.session_state.group_plan_selected_id:
             st.session_state.group_plan_selected_id = selected_group_plan_id_widget
             st.session_state.confirm_delete_group_plan_id = None
             if st.session_state.group_plan_selected_id is not None:
-                selected_plan_data = next((p for p in all_group_plans if p.id == st.session_state.group_plan_selected_id), None)
+                selected_plan_data = next(
+                    (
+                        p
+                        for p in all_group_plans
+                        if p.id == st.session_state.group_plan_selected_id
+                    ),
+                    None,
+                )
                 if selected_plan_data:
                     st.session_state.group_plan_name = selected_plan_data.name or ""
-                    st.session_state.group_plan_duration_days = selected_plan_data.duration_days or 30
-                    st.session_state.group_plan_default_amount = selected_plan_data.default_amount or 0.0 # Changed from price
+                    st.session_state.group_plan_duration_days = (
+                        selected_plan_data.duration_days or 30
+                    )
+                    st.session_state.group_plan_default_amount = (
+                        selected_plan_data.default_amount or 0.0
+                    )  # Changed from price
                     st.session_state.group_plan_is_active = selected_plan_data.is_active
                     st.session_state.group_plan_display_name_readonly = f"{selected_plan_data.name} ({selected_plan_data.duration_days} days)"
-                    st.session_state.group_plan_form_key = f"group_plan_form_{datetime.now().timestamp()}"
+                    st.session_state.group_plan_form_key = (
+                        f"group_plan_form_{datetime.now().timestamp()}"
+                    )
             else:
                 clear_group_plan_form(clear_selection=False)
 
@@ -817,21 +1115,52 @@ def render_group_plans_tab():
         if st.session_state.group_plan_selected_id is None:
             st.subheader("Add New Group Plan")
         else:
-            st.subheader(f"Edit Group Plan: {st.session_state.group_plan_display_name_readonly}")
+            st.subheader(
+                f"Edit Group Plan: {st.session_state.group_plan_display_name_readonly}"
+            )
 
         with st.form(key=st.session_state.group_plan_form_key, clear_on_submit=False):
-            plan_name_form_val = st.text_input("Group Plan Name (e.g., Gold, Monthly)", value=st.session_state.group_plan_name, key="group_plan_form_name")
-            duration_days_form_val = st.number_input("Duration (Days)", value=st.session_state.group_plan_duration_days, min_value=1, step=1, key="group_plan_form_duration")
-            default_amount_form_val = st.number_input("Default Amount (₹)", value=st.session_state.group_plan_default_amount, min_value=0.0, format="%.2f", key="group_plan_form_amount")
-            is_active_form_gp = st.checkbox("Is Active", value=st.session_state.group_plan_is_active, key="group_plan_form_is_active")
+            plan_name_form_val = st.text_input(
+                "Group Plan Name (e.g., Gold, Monthly)",
+                value=st.session_state.group_plan_name,
+                key="group_plan_form_name",
+            )
+            duration_days_form_val = st.number_input(
+                "Duration (Days)",
+                value=st.session_state.group_plan_duration_days,
+                min_value=1,
+                step=1,
+                key="group_plan_form_duration",
+            )
+            default_amount_form_val = st.number_input(
+                "Default Amount (₹)",
+                value=st.session_state.group_plan_default_amount,
+                min_value=0.0,
+                format="%.2f",
+                key="group_plan_form_amount",
+            )
+            is_active_form_gp = st.checkbox(
+                "Is Active",
+                value=st.session_state.group_plan_is_active,
+                key="group_plan_form_is_active",
+            )
 
-            if st.session_state.group_plan_selected_id is not None and st.session_state.group_plan_display_name_readonly:
-                st.text_input("Display Name (Auto-generated)", value=st.session_state.group_plan_display_name_readonly, disabled=True)
+            if (
+                st.session_state.group_plan_selected_id is not None
+                and st.session_state.group_plan_display_name_readonly
+            ):
+                st.text_input(
+                    "Display Name (Auto-generated)",
+                    value=st.session_state.group_plan_display_name_readonly,
+                    disabled=True,
+                )
 
             form_col1, form_col2, form_col3 = st.columns(3)
             with form_col1:
                 save_plan_button = st.form_submit_button(
-                    "Save Group Plan" if st.session_state.group_plan_selected_id else "Add Group Plan"
+                    "Save Group Plan"
+                    if st.session_state.group_plan_selected_id
+                    else "Add Group Plan"
                 )
             delete_plan_button = None
             if st.session_state.group_plan_selected_id is not None:
@@ -843,62 +1172,93 @@ def render_group_plans_tab():
         if save_plan_button:
             try:
                 if not plan_name_form_val or duration_days_form_val <= 0:
-                    st.error("Group Plan Name and valid Duration (days > 0) are required.")
+                    st.error(
+                        "Group Plan Name and valid Duration (days > 0) are required."
+                    )
                 elif st.session_state.group_plan_selected_id is None:  # ADD PATH
                     plan_id = api.add_group_plan(
                         name=plan_name_form_val,
                         duration_days=duration_days_form_val,
-                        default_amount=default_amount_form_val
+                        default_amount=default_amount_form_val,
                     )
                     if plan_id:
-                        st.success(f"Group Plan '{plan_name_form_val}' added successfully.")
+                        st.success(
+                            f"Group Plan '{plan_name_form_val}' added successfully."
+                        )
                         clear_group_plan_form(clear_selection=True)
                     else:
-                        st.error("Failed to add group plan. Display name might already exist or other validation error.")
+                        st.error(
+                            "Failed to add group plan. Display name might already exist or other validation error."
+                        )
                 else:  # UPDATE PATH
                     success_gp_update = api.update_group_plan(
                         plan_id=st.session_state.group_plan_selected_id,
                         name=plan_name_form_val,
                         duration_days=duration_days_form_val,
                         default_amount=default_amount_form_val,
-                        is_active=is_active_form_gp
+                        is_active=is_active_form_gp,
                     )
                     if success_gp_update:
                         st.success(f"Group Plan updated successfully.")
                         clear_group_plan_form(clear_selection=True)
                     else:
-                        st.error("Failed to update group plan. Display name might already exist or other validation error.")
+                        st.error(
+                            "Failed to update group plan. Display name might already exist or other validation error."
+                        )
             except ValueError as ve:
                 st.error(f"Validation error: {ve}")
             except Exception as e:
                 st.error(f"An error occurred: {e}")
 
         if st.session_state.group_plan_selected_id is not None and delete_plan_button:
-            if st.session_state.confirm_delete_group_plan_id != st.session_state.group_plan_selected_id:
-                 st.session_state.confirm_delete_group_plan_id = st.session_state.group_plan_selected_id
-            if st.session_state.confirm_delete_group_plan_id == st.session_state.group_plan_selected_id:
-                st.warning(f"Are you sure you want to delete group plan '{st.session_state.group_plan_display_name_readonly}'? This action cannot be undone.")
+            if (
+                st.session_state.confirm_delete_group_plan_id
+                != st.session_state.group_plan_selected_id
+            ):
+                st.session_state.confirm_delete_group_plan_id = (
+                    st.session_state.group_plan_selected_id
+                )
+            if (
+                st.session_state.confirm_delete_group_plan_id
+                == st.session_state.group_plan_selected_id
+            ):
+                st.warning(
+                    f"Are you sure you want to delete group plan '{st.session_state.group_plan_display_name_readonly}'? This action cannot be undone."
+                )
                 confirm_col1, confirm_col2 = st.columns(2)
                 with confirm_col1:
-                    if st.button("YES, DELETE Group Plan Permanently", key=f"confirm_delete_gplan_btn_{st.session_state.group_plan_selected_id}"):
+                    if st.button(
+                        "YES, DELETE Group Plan Permanently",
+                        key=f"confirm_delete_gplan_btn_{st.session_state.group_plan_selected_id}",
+                    ):
                         try:
-                            deleted_gp = api.delete_group_plan(st.session_state.group_plan_selected_id)
+                            deleted_gp = api.delete_group_plan(
+                                st.session_state.group_plan_selected_id
+                            )
                             if deleted_gp:
-                                st.success(f"Group Plan '{st.session_state.group_plan_display_name_readonly}' deleted successfully.")
+                                st.success(
+                                    f"Group Plan '{st.session_state.group_plan_display_name_readonly}' deleted successfully."
+                                )
                                 clear_group_plan_form(clear_selection=True)
                                 st.session_state.confirm_delete_group_plan_id = None
                             else:
-                                st.error("Failed to delete group plan. It might be in use or another issue occurred.")
+                                st.error(
+                                    "Failed to delete group plan. It might be in use or another issue occurred."
+                                )
                                 st.session_state.confirm_delete_group_plan_id = None
                         except Exception as e:
                             st.error(f"Error deleting group plan: {e}")
                             st.session_state.confirm_delete_group_plan_id = None
                 with confirm_col2:
-                    if st.button("Cancel Group Plan Deletion", key=f"cancel_delete_gplan_btn_{st.session_state.group_plan_selected_id}"):
+                    if st.button(
+                        "Cancel Group Plan Deletion",
+                        key=f"cancel_delete_gplan_btn_{st.session_state.group_plan_selected_id}",
+                    ):
                         st.session_state.confirm_delete_group_plan_id = None
 
         if clear_plan_form_button:
             clear_group_plan_form(clear_selection=True)
+
 
 def render_reporting_tab():
     st.header("Financial & Renewals Reporting")
@@ -906,20 +1266,25 @@ def render_reporting_tab():
     st.subheader("Monthly Financial Report")
     report_month_financial_val = st.date_input(
         "Select Month for Financial Report",
-        value=st.session_state.report_month_financial, # Default to session state
+        value=st.session_state.report_month_financial,  # Default to session state
         key="financial_report_month_selector",
     )
     # Update session state only if the widget value changes from the current session state
     if report_month_financial_val != st.session_state.report_month_financial:
         st.session_state.report_month_financial = report_month_financial_val
-        st.session_state.financial_report_output = None # Clear old report data
+        st.session_state.financial_report_output = None  # Clear old report data
 
     if st.button("Generate Monthly Financial Report", key="generate_financial_report"):
         # Use the value from session state, which is synced with the widget
         start_date_financial = st.session_state.report_month_financial
         import calendar
-        last_day = calendar.monthrange(start_date_financial.year, start_date_financial.month)[1]
-        end_date_financial_correct = date(start_date_financial.year, start_date_financial.month, last_day)
+
+        last_day = calendar.monthrange(
+            start_date_financial.year, start_date_financial.month
+        )[1]
+        end_date_financial_correct = date(
+            start_date_financial.year, start_date_financial.month, last_day
+        )
         start_date_str = start_date_financial.strftime("%Y-%m-%d")
         end_date_str_correct = end_date_financial_correct.strftime("%Y-%m-%d")
         try:
@@ -928,13 +1293,19 @@ def render_reporting_tab():
             )
             st.session_state.financial_report_output = report_output
 
-            if not report_output or not report_output.get("details"): # Check for empty details
-                st.info(f"No financial data found for {st.session_state.report_month_financial.strftime('%B %Y')}.")
+            if not report_output or not report_output.get(
+                "details"
+            ):  # Check for empty details
+                st.info(
+                    f"No financial data found for {st.session_state.report_month_financial.strftime('%B %Y')}."
+                )
             else:
-                st.success(f"Financial report generated for {st.session_state.report_month_financial.strftime('%B %Y')}.")
+                st.success(
+                    f"Financial report generated for {st.session_state.report_month_financial.strftime('%B %Y')}."
+                )
         except Exception as e:
             st.error(f"Error generating financial report: {e}")
-            st.session_state.financial_report_output = None # Clear on error
+            st.session_state.financial_report_output = None  # Clear on error
 
     if st.session_state.financial_report_output:
         summary_data = st.session_state.financial_report_output.get("summary", {})
@@ -946,34 +1317,44 @@ def render_reporting_tab():
             value=f"₹{total_income:.2f}",
         )
 
-        if details_data: # Only show dataframe and download if details exist
+        if details_data:  # Only show dataframe and download if details exist
             df_financial = pd.DataFrame(details_data)
             st.dataframe(
                 df_financial,
                 hide_index=True,
                 use_container_width=True,
                 column_config={
-                    "purchase_date": st.column_config.DateColumn("Purchase Date", format="YYYY-MM-DD"),
-                    "amount_paid": st.column_config.NumberColumn("Amount Paid (₹)", format="%.2f"),
+                    "purchase_date": st.column_config.DateColumn(
+                        "Purchase Date", format="YYYY-MM-DD"
+                    ),
+                    "amount_paid": st.column_config.NumberColumn(
+                        "Amount Paid (₹)", format="%.2f"
+                    ),
                     "type": "Type",
                     "member_name": "Member Name",
-                    "item_name": "Item/Plan Name"
-                }
+                    "item_name": "Item/Plan Name",
+                },
             )
             # Excel Download
-            output_excel = io.BytesIO() # Renamed to avoid conflict
-            with pd.ExcelWriter(output_excel, engine="openpyxl") as writer: # Use renamed
-                df_financial.to_excel(writer, index=False, sheet_name="Financial Report")
+            output_excel = io.BytesIO()  # Renamed to avoid conflict
+            with pd.ExcelWriter(
+                output_excel, engine="openpyxl"
+            ) as writer:  # Use renamed
+                df_financial.to_excel(
+                    writer, index=False, sheet_name="Financial Report"
+                )
             excel_data = output_excel.getvalue()
             st.download_button(
                 label="Download Financial Report as Excel",
-                data=excel_data, # Use the new variable name
+                data=excel_data,  # Use the new variable name
                 file_name=f"financial_report_{st.session_state.report_month_financial.strftime('%Y_%m')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
         # If no details but there was a summary (e.g. total income > 0 but no line items)
-        elif total_income > 0: # total_income is already calculated
-            st.info(f"Summary available, but no detailed transactions for {st.session_state.report_month_financial.strftime('%B %Y')}.")
+        elif total_income > 0:  # total_income is already calculated
+            st.info(
+                f"Summary available, but no detailed transactions for {st.session_state.report_month_financial.strftime('%B %Y')}."
+            )
         # If financial_report_output exists but was empty (already handled by "No financial data found" above)
     st.divider()
 
@@ -981,17 +1362,23 @@ def render_reporting_tab():
     if st.button("Generate Upcoming Renewals Report", key="generate_renewals_report"):
         try:
             renewal_data_list = api.generate_renewal_report()
-            st.session_state.renewals_report_data = renewal_data_list # Store in session state
-            if not renewal_data_list: # Check if list is empty
-                st.info("No upcoming group class renewals found (e.g., in the next 30 days).")
+            st.session_state.renewals_report_data = (
+                renewal_data_list  # Store in session state
+            )
+            if not renewal_data_list:  # Check if list is empty
+                st.info(
+                    "No upcoming group class renewals found (e.g., in the next 30 days)."
+                )
             else:
-                st.success("Upcoming group class renewals report generated successfully.")
+                st.success(
+                    "Upcoming group class renewals report generated successfully."
+                )
         except Exception as e:
             st.error(f"Error generating renewals report: {e}")
-            st.session_state.renewals_report_data = None # Clear on error
+            st.session_state.renewals_report_data = None  # Clear on error
 
     # Display logic based on session state
-    if st.session_state.renewals_report_data: # Check if data (even empty list) exists
+    if st.session_state.renewals_report_data:  # Check if data (even empty list) exists
         df_renewals = pd.DataFrame(st.session_state.renewals_report_data)
         st.dataframe(
             df_renewals,
@@ -1001,13 +1388,21 @@ def render_reporting_tab():
                 "member_name": "Member Name",
                 "member_phone": "Phone",
                 "plan_name": "Plan Name",
-                "start_date": st.column_config.DateColumn("Start Date", format="YYYY-MM-DD"),
-                "end_date": st.column_config.DateColumn("End Date", format="YYYY-MM-DD"),
-                "amount_paid": st.column_config.NumberColumn("Amount Paid (₹)", format="%.2f"),
-                "membership_type": "Type" # Assuming this field exists in the DTO from API
-            }
+                "start_date": st.column_config.DateColumn(
+                    "Start Date", format="YYYY-MM-DD"
+                ),
+                "end_date": st.column_config.DateColumn(
+                    "End Date", format="YYYY-MM-DD"
+                ),
+                "amount_paid": st.column_config.NumberColumn(
+                    "Amount Paid (₹)", format="%.2f"
+                ),
+                "membership_type": "Type",  # Assuming this field exists in the DTO from API
+            },
         )
-    elif st.session_state.renewals_report_data == []: # Explicitly check for empty list if already fetched
+    elif (
+        st.session_state.renewals_report_data == []
+    ):  # Explicitly check for empty list if already fetched
         st.info("No upcoming group class renewals found (e.g., in the next 30 days).")
 
 

@@ -1,8 +1,15 @@
-import sqlite3
-from datetime import datetime, timedelta, date
-from typing import Tuple, Optional, List, Dict
 import logging
-from .models import MemberView, GroupPlanView, GroupClassMembershipView, PTMembershipView, Member # Assuming Member dataclass exists
+import sqlite3
+from datetime import date, datetime, timedelta
+from typing import Dict, List, Optional, Tuple
+
+from .models import (  # Assuming Member dataclass exists
+    GroupClassMembershipView,
+    GroupPlanView,
+    Member,
+    MemberView,
+    PTMembershipView,
+)
 
 # Basic logging configuration (can be overridden by application's config)
 logging.basicConfig(
@@ -29,16 +36,26 @@ class DatabaseManager:
             # Check for phone uniqueness
             cursor.execute("SELECT id FROM members WHERE phone = ?", (member.phone,))
             if cursor.fetchone():
-                logging.warning(f"Attempt to add member with existing phone number: {member.phone}")
+                logging.warning(
+                    f"Attempt to add member with existing phone number: {member.phone}"
+                )
                 raise ValueError(f"Phone number {member.phone} already exists.")
 
-            join_date_to_use = member.join_date if member.join_date else date.today().isoformat()
+            join_date_to_use = (
+                member.join_date if member.join_date else date.today().isoformat()
+            )
             # Ensure is_active is 1 or 0 for SQLite
             is_active_int = 1 if member.is_active else 0
 
             cursor.execute(
                 "INSERT INTO members (name, phone, email, join_date, is_active) VALUES (?, ?, ?, ?, ?)",
-                (member.name, member.phone, member.email, join_date_to_use, is_active_int),
+                (
+                    member.name,
+                    member.phone,
+                    member.email,
+                    join_date_to_use,
+                    is_active_int,
+                ),
             )
             self.conn.commit()
             member.id = cursor.lastrowid
@@ -46,9 +63,11 @@ class DatabaseManager:
             return member
         except sqlite3.Error as e:
             self.conn.rollback()
-            logging.error(f"Database error in add_member for '{member.name}': {e}", exc_info=True)
+            logging.error(
+                f"Database error in add_member for '{member.name}': {e}", exc_info=True
+            )
             return None
-        except ValueError: # Re-raise ValueError for phone uniqueness
+        except ValueError:  # Re-raise ValueError for phone uniqueness
             raise
 
     def update_member(self, member: Member) -> bool:
@@ -82,22 +101,32 @@ class DatabaseManager:
         try:
             if member.phone is not None and member.phone != current_phone:
                 # If phone is different, check for uniqueness among other members
-                cursor.execute("SELECT id FROM members WHERE phone = ? AND id != ?", (member.phone, member.id))
+                cursor.execute(
+                    "SELECT id FROM members WHERE phone = ? AND id != ?",
+                    (member.phone, member.id),
+                )
                 if cursor.fetchone():
-                    logging.warning(f"Attempt to update member {member.id} with existing phone number: {member.phone}")
-                    raise ValueError(f"Phone number {member.phone} already exists for another member.")
+                    logging.warning(
+                        f"Attempt to update member {member.id} with existing phone number: {member.phone}"
+                    )
+                    raise ValueError(
+                        f"Phone number {member.phone} already exists for another member."
+                    )
                 fields_to_update.append("phone = ?")
                 params.append(member.phone)
-            elif member.phone is not None: # phone is same as current, still add to update if it was provided
+            elif (
+                member.phone is not None
+            ):  # phone is same as current, still add to update if it was provided
                 fields_to_update.append("phone = ?")
                 params.append(member.phone)
-
 
             if not fields_to_update:
                 logging.info(f"No fields provided to update for member ID {member.id}.")
                 return True
 
-            sql_update = f"UPDATE members SET {', '.join(fields_to_update)} WHERE id = ?"
+            sql_update = (
+                f"UPDATE members SET {', '.join(fields_to_update)} WHERE id = ?"
+            )
             params.append(member.id)
 
             cursor.execute(sql_update, tuple(params))
@@ -106,23 +135,30 @@ class DatabaseManager:
             if cursor.rowcount == 0:
                 # This means either member not found or data was the same.
                 # We've already checked if member exists.
-                logging.info(f"Member ID {member.id} data was the same, no update performed.")
-                return True # Data was the same
+                logging.info(
+                    f"Member ID {member.id} data was the same, no update performed."
+                )
+                return True  # Data was the same
 
             logging.info(f"Member ID {member.id} updated successfully.")
             return True
         except sqlite3.Error as e:
             self.conn.rollback()
-            logging.error(f"Database error in update_member for ID {member.id}: {e}", exc_info=True)
+            logging.error(
+                f"Database error in update_member for ID {member.id}: {e}",
+                exc_info=True,
+            )
             return False
-        except ValueError: # Re-raise ValueError for phone uniqueness
+        except ValueError:  # Re-raise ValueError for phone uniqueness
             raise
 
     def get_all_members(self) -> List[Member]:
         """Retrieves all members from the database."""
         try:
             cursor = self.conn.cursor()
-            cursor.execute("SELECT id, name, phone, email, join_date, is_active FROM members ORDER BY name ASC")
+            cursor.execute(
+                "SELECT id, name, phone, email, join_date, is_active FROM members ORDER BY name ASC"
+            )
             rows = cursor.fetchall()
             return [Member(**row) for row in rows]
         except sqlite3.Error as e:
@@ -147,7 +183,10 @@ class DatabaseManager:
             return True
         except sqlite3.Error as e:
             self.conn.rollback()
-            logging.error(f"Database error in delete_member for ID {member_id}: {e}", exc_info=True)
+            logging.error(
+                f"Database error in delete_member for ID {member_id}: {e}",
+                exc_info=True,
+            )
             return False
 
     def add_group_plan(self, group_plan: GroupPlan) -> Optional[GroupPlan]:
@@ -158,30 +197,51 @@ class DatabaseManager:
         Returns the group_plan object with id, or None if an error occurs.
         """
         cursor = self.conn.cursor()
-        display_name = group_plan.display_name if group_plan.display_name else f"{group_plan.name} - {group_plan.duration_days} days"
+        display_name = (
+            group_plan.display_name
+            if group_plan.display_name
+            else f"{group_plan.name} - {group_plan.duration_days} days"
+        )
         is_active_int = 1 if group_plan.is_active else 0
 
         try:
             # Check for display_name uniqueness
-            cursor.execute("SELECT id FROM group_plans WHERE display_name = ?", (display_name,))
+            cursor.execute(
+                "SELECT id FROM group_plans WHERE display_name = ?", (display_name,)
+            )
             if cursor.fetchone():
-                logging.warning(f"Attempt to add group_plan with existing display_name: {display_name}")
+                logging.warning(
+                    f"Attempt to add group_plan with existing display_name: {display_name}"
+                )
                 raise ValueError(f"Display name '{display_name}' already exists.")
 
             cursor.execute(
                 "INSERT INTO group_plans (name, duration_days, default_amount, display_name, is_active) VALUES (?, ?, ?, ?, ?)",
-                (group_plan.name, group_plan.duration_days, group_plan.default_amount, display_name, is_active_int),
+                (
+                    group_plan.name,
+                    group_plan.duration_days,
+                    group_plan.default_amount,
+                    display_name,
+                    is_active_int,
+                ),
             )
             self.conn.commit()
             group_plan.id = cursor.lastrowid
-            group_plan.display_name = display_name # Ensure display_name is set on the object
-            logging.info(f"Group Plan '{group_plan.name}' added with ID {group_plan.id}, display_name '{display_name}'.")
+            group_plan.display_name = (
+                display_name  # Ensure display_name is set on the object
+            )
+            logging.info(
+                f"Group Plan '{group_plan.name}' added with ID {group_plan.id}, display_name '{display_name}'."
+            )
             return group_plan
         except sqlite3.Error as e:
             self.conn.rollback()
-            logging.error(f"Database error in add_group_plan for '{group_plan.name}': {e}", exc_info=True)
+            logging.error(
+                f"Database error in add_group_plan for '{group_plan.name}': {e}",
+                exc_info=True,
+            )
             return None
-        except ValueError: # Re-raise ValueError for display_name uniqueness
+        except ValueError:  # Re-raise ValueError for display_name uniqueness
             raise
 
     def update_group_plan(self, group_plan: GroupPlan) -> bool:
@@ -195,15 +255,28 @@ class DatabaseManager:
 
         # Fetch current group_plan details first to determine if display_name needs update and for current values
         try:
-            cursor.execute("SELECT name, duration_days, display_name FROM group_plans WHERE id = ?", (group_plan.id,))
+            cursor.execute(
+                "SELECT name, duration_days, display_name FROM group_plans WHERE id = ?",
+                (group_plan.id,),
+            )
             current_plan_row = cursor.fetchone()
             if not current_plan_row:
-                logging.warning(f"Group Plan with ID {group_plan.id} not found for update.")
+                logging.warning(
+                    f"Group Plan with ID {group_plan.id} not found for update."
+                )
                 return False
-            current_name, current_duration_days, current_display_name = current_plan_row["name"], current_plan_row["duration_days"], current_plan_row["display_name"]
+            current_name, current_duration_days, current_display_name = (
+                current_plan_row["name"],
+                current_plan_row["duration_days"],
+                current_plan_row["display_name"],
+            )
 
             new_name = group_plan.name if group_plan.name is not None else current_name
-            new_duration_days = group_plan.duration_days if group_plan.duration_days is not None else current_duration_days
+            new_duration_days = (
+                group_plan.duration_days
+                if group_plan.duration_days is not None
+                else current_duration_days
+            )
             new_display_name = group_plan.display_name
 
             display_name_changed = False
@@ -211,15 +284,22 @@ class DatabaseManager:
                 fields_to_update.append("name = ?")
                 params_for_update.append(group_plan.name)
                 display_name_changed = True
-            elif group_plan.name is not None: # Name is same as current, still add to update if it was provided
+            elif (
+                group_plan.name is not None
+            ):  # Name is same as current, still add to update if it was provided
                 fields_to_update.append("name = ?")
                 params_for_update.append(group_plan.name)
 
-            if group_plan.duration_days is not None and group_plan.duration_days != current_duration_days:
+            if (
+                group_plan.duration_days is not None
+                and group_plan.duration_days != current_duration_days
+            ):
                 fields_to_update.append("duration_days = ?")
                 params_for_update.append(group_plan.duration_days)
                 display_name_changed = True
-            elif group_plan.duration_days is not None: # Duration is same as current, still add to update if it was provided
+            elif (
+                group_plan.duration_days is not None
+            ):  # Duration is same as current, still add to update if it was provided
                 fields_to_update.append("duration_days = ?")
                 params_for_update.append(group_plan.duration_days)
 
@@ -228,22 +308,40 @@ class DatabaseManager:
                 new_display_name = f"{new_name} - {new_duration_days} days"
                 if new_display_name != current_display_name:
                     # Check for uniqueness only if the new display_name is actually different
-                    cursor.execute("SELECT id FROM group_plans WHERE display_name = ? AND id != ?", (new_display_name, group_plan.id))
+                    cursor.execute(
+                        "SELECT id FROM group_plans WHERE display_name = ? AND id != ?",
+                        (new_display_name, group_plan.id),
+                    )
                     if cursor.fetchone():
-                        logging.warning(f"Attempt to update group_plan {group_plan.id} with existing display_name: {new_display_name}")
-                        raise ValueError(f"Display name '{new_display_name}' already exists for another group_plan.")
+                        logging.warning(
+                            f"Attempt to update group_plan {group_plan.id} with existing display_name: {new_display_name}"
+                        )
+                        raise ValueError(
+                            f"Display name '{new_display_name}' already exists for another group_plan."
+                        )
                 fields_to_update.append("display_name = ?")
                 params_for_update.append(new_display_name)
-                group_plan.display_name = new_display_name # Update the object's display_name
-            elif group_plan.display_name is not None and group_plan.display_name != current_display_name:
+                group_plan.display_name = (
+                    new_display_name  # Update the object's display_name
+                )
+            elif (
+                group_plan.display_name is not None
+                and group_plan.display_name != current_display_name
+            ):
                 # This case handles if only display_name is provided and different
-                cursor.execute("SELECT id FROM group_plans WHERE display_name = ? AND id != ?", (group_plan.display_name, group_plan.id))
+                cursor.execute(
+                    "SELECT id FROM group_plans WHERE display_name = ? AND id != ?",
+                    (group_plan.display_name, group_plan.id),
+                )
                 if cursor.fetchone():
-                    logging.warning(f"Attempt to update group_plan {group_plan.id} with existing display_name: {group_plan.display_name}")
-                    raise ValueError(f"Display name '{group_plan.display_name}' already exists for another group_plan.")
+                    logging.warning(
+                        f"Attempt to update group_plan {group_plan.id} with existing display_name: {group_plan.display_name}"
+                    )
+                    raise ValueError(
+                        f"Display name '{group_plan.display_name}' already exists for another group_plan."
+                    )
                 fields_to_update.append("display_name = ?")
                 params_for_update.append(group_plan.display_name)
-
 
             if group_plan.default_amount is not None:
                 fields_to_update.append("default_amount = ?")
@@ -254,33 +352,46 @@ class DatabaseManager:
                 params_for_update.append(1 if group_plan.is_active else 0)
 
             if not fields_to_update:
-                logging.info(f"No fields provided to update for group_plan ID {group_plan.id}.")
+                logging.info(
+                    f"No fields provided to update for group_plan ID {group_plan.id}."
+                )
                 return True
 
-            sql_update_stmt = f"UPDATE group_plans SET {', '.join(fields_to_update)} WHERE id = ?"
+            sql_update_stmt = (
+                f"UPDATE group_plans SET {', '.join(fields_to_update)} WHERE id = ?"
+            )
             params_for_update.append(group_plan.id)
 
             cursor.execute(sql_update_stmt, tuple(params_for_update))
             self.conn.commit()
 
             if cursor.rowcount == 0:
-                logging.info(f"Group Plan ID {group_plan.id} data was the same, no update performed.")
+                logging.info(
+                    f"Group Plan ID {group_plan.id} data was the same, no update performed."
+                )
                 return True
 
-            logging.info(f"Group Plan ID {group_plan.id} updated successfully. New display_name: '{group_plan.display_name}'.")
+            logging.info(
+                f"Group Plan ID {group_plan.id} updated successfully. New display_name: '{group_plan.display_name}'."
+            )
             return True
         except sqlite3.Error as e:
             self.conn.rollback()
-            logging.error(f"Database error in update_group_plan for ID {group_plan.id}: {e}", exc_info=True)
+            logging.error(
+                f"Database error in update_group_plan for ID {group_plan.id}: {e}",
+                exc_info=True,
+            )
             return False
-        except ValueError: # Re-raise ValueError for display_name uniqueness
+        except ValueError:  # Re-raise ValueError for display_name uniqueness
             raise
 
     def get_all_group_plans(self) -> List[GroupPlan]:
         """Retrieves all group_plans from the database."""
         try:
             cursor = self.conn.cursor()
-            cursor.execute("SELECT id, name, duration_days, default_amount, display_name, is_active FROM group_plans ORDER BY name ASC")
+            cursor.execute(
+                "SELECT id, name, duration_days, default_amount, display_name, is_active FROM group_plans ORDER BY name ASC"
+            )
             rows = cursor.fetchall()
             return [GroupPlan(**row) for row in rows]
         except sqlite3.Error as e:
@@ -304,101 +415,140 @@ class DatabaseManager:
             return True
         except sqlite3.Error as e:
             self.conn.rollback()
-            logging.error(f"Database error in delete_group_plan for ID {plan_id}: {e}", exc_info=True)
+            logging.error(
+                f"Database error in delete_group_plan for ID {plan_id}: {e}",
+                exc_info=True,
+            )
             return False
 
     def get_group_plan_by_display_name(self, display_name: str) -> Optional[GroupPlan]:
         """Retrieves a specific group_plan by its display_name."""
         cursor = self.conn.cursor()
         try:
-            cursor.execute("SELECT id, name, duration_days, default_amount, display_name, is_active FROM group_plans WHERE display_name = ?", (display_name,))
+            cursor.execute(
+                "SELECT id, name, duration_days, default_amount, display_name, is_active FROM group_plans WHERE display_name = ?",
+                (display_name,),
+            )
             plan_row = cursor.fetchone()
             if plan_row:
                 return GroupPlan(**plan_row)
             return None
         except sqlite3.Error as e:
-            logging.error(f"Database error in get_group_plan_by_display_name for '{display_name}': {e}", exc_info=True)
+            logging.error(
+                f"Database error in get_group_plan_by_display_name for '{display_name}': {e}",
+                exc_info=True,
+            )
             return None
 
     def get_group_plan_by_id(self, plan_id: int) -> Optional[GroupPlan]:
         """Retrieves details for a specific group_plan by its ID."""
         cursor = self.conn.cursor()
         try:
-            cursor.execute("SELECT id, name, duration_days, default_amount, display_name, is_active FROM group_plans WHERE id = ?", (plan_id,))
+            cursor.execute(
+                "SELECT id, name, duration_days, default_amount, display_name, is_active FROM group_plans WHERE id = ?",
+                (plan_id,),
+            )
             plan_row = cursor.fetchone()
             if plan_row:
                 return GroupPlan(**plan_row)
             return None
         except sqlite3.Error as e:
-            logging.error(f"Database error in get_group_plan_by_id for plan_id {plan_id}: {e}", exc_info=True)
+            logging.error(
+                f"Database error in get_group_plan_by_id for plan_id {plan_id}: {e}",
+                exc_info=True,
+            )
             return None
 
-    def add_group_class_membership(self, membership: GroupClassMembership) -> Optional[GroupClassMembership]:
+    def add_group_class_membership(
+        self, membership: GroupClassMembership
+    ) -> Optional[GroupClassMembership]:
         """Creates a new group_class_membership record.
         Sets purchase_date to current timestamp if not provided.
         Raises ValueError if start_date or end_date is invalid.
         Returns the membership object with id, or None if an error occurs.
         """
         cursor = self.conn.cursor()
-        try:
+        try:  # Main try block for all operations
             # Date validation
-            datetime.strptime(membership.start_date, "%Y-%m-%d")
-            datetime.strptime(membership.end_date, "%Y-%m-%d")
-        except ValueError as ve:
-            logging.error(f"Invalid date format: {ve}")
-            raise ValueError(f"Invalid date format for start_date or end_date. Expected YYYY-MM-DD.")
+            try:
+                datetime.strptime(membership.start_date, "%Y-%m-%d")
+                datetime.strptime(membership.end_date, "%Y-%m-%d")
+            except ValueError as ve:  # Handles date validation error specifically
+                logging.error(f"Invalid date format: {ve}")
+                # Re-raise as a new ValueError with a more specific message to the caller
+                raise ValueError(
+                    f"Invalid date format for start_date or end_date. Expected YYYY-MM-DD."
+                )
 
-        purchase_date_to_use = membership.purchase_date if membership.purchase_date else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        is_active_int = 1 if membership.is_active else 0
+            purchase_date_to_use = (
+                membership.purchase_date
+                if membership.purchase_date
+                else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
+            is_active_int = 1 if membership.is_active else 0
 
-        # Note: payment_method and notes are part of the dataclass but not the DB table.
-        # They will not be inserted. Logging them if present.
+            # Note: payment_method and notes are part of the dataclass but not the DB table.
+            # They will not be inserted. Logging them if present.
 
-        sql_insert = """
-        INSERT INTO group_class_memberships (
-            member_id, plan_id, start_date, end_date, amount_paid,
-            purchase_date, membership_type, is_active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """
-        cursor.execute(
-            sql_insert,
-            (
-                membership.member_id,
-                membership.plan_id,
-                membership.start_date,
-                membership.end_date,
-                membership.amount_paid,
-                purchase_date_to_use,
-                membership.membership_type,
-                is_active_int
-            ),
-        )
-        self.conn.commit()
-        membership.id = cursor.lastrowid
-        membership.purchase_date = purchase_date_to_use # Ensure purchase_date is set on the object
+            sql_insert = """
+            INSERT INTO group_class_memberships (
+                member_id, plan_id, start_date, end_date, amount_paid,
+                purchase_date, membership_type, is_active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """
+            cursor.execute(
+                sql_insert,
+                (
+                    membership.member_id,
+                    membership.plan_id,
+                    membership.start_date,
+                    membership.end_date,
+                    membership.amount_paid,
+                    purchase_date_to_use,
+                    membership.membership_type,
+                    is_active_int,
+                ),
+            )
+            self.conn.commit()
+            membership.id = cursor.lastrowid
+            membership.purchase_date = (
+                purchase_date_to_use  # Ensure purchase_date is set on the object
+            )
 
-        log_message = (
-            f"Group Class Membership record created for member ID {membership.member_id}, "
-            f"plan ID {membership.plan_id} with membership ID {membership.id}."
-        )
-        if membership.payment_method:
-            log_message += f" Payment Method (not stored): {membership.payment_method}."
-        if membership.notes:
-            log_message += f" Notes (not stored): {membership.notes}."
-        logging.info(log_message)
+            log_message = (
+                f"Group Class Membership record created for member ID {membership.member_id}, "
+                f"plan ID {membership.plan_id} with membership ID {membership.id}."
+            )
+            if membership.payment_method:
+                log_message += (
+                    f" Payment Method (not stored): {membership.payment_method}."
+                )
+            if membership.notes:
+                log_message += f" Notes (not stored): {membership.notes}."
+            logging.info(log_message)
 
-        return membership
-        except sqlite3.IntegrityError as ie: # Specifically catch IntegrityError
+            return membership
+
+        except sqlite3.IntegrityError as ie:  # Aligned with the main try
             self.conn.rollback()
-            logging.error(f"DB integrity error creating group_class_membership for member {membership.member_id}, plan {membership.plan_id}: {ie}", exc_info=True)
-            raise # Re-raise the IntegrityError
-        except sqlite3.Error as e:
+            logging.error(
+                f"DB integrity error creating group_class_membership for member {membership.member_id}, plan {membership.plan_id}: {ie}",
+                exc_info=True,
+            )
+            raise  # Re-raise the IntegrityError to signal failure to caller
+        except sqlite3.Error as e:  # Aligned with the main try
             self.conn.rollback()
-            logging.error(f"DB error (type: {type(e)}) creating group_class_membership for member {membership.member_id}, plan {membership.plan_id}: {e}", exc_info=True)
-            return None
-        except ValueError: # Re-raise ValueError for date validation
-            raise
-
+            logging.error(
+                f"DB error (type: {type(e)}) creating group_class_membership for member {membership.member_id}, plan {membership.plan_id}: {e}",
+                exc_info=True,
+            )
+            return None  # Or raise an AppAPI specific exception
+        except (
+            ValueError
+        ) as ve:  # Catches the re-raised ValueError from date validation or any other new ValueError
+            # No rollback needed here if it's from date validation as it happens before DB ops.
+            # Logging is already done for date validation error.
+            raise  # Re-raise to the caller
 
     def get_all_group_class_memberships(
         self,
@@ -429,7 +579,7 @@ class DatabaseManager:
             #     conditions.append("m.name LIKE ?") # This would need 'm' alias from JOIN
             #     params.append(f"%{name_filter}%")
             if status_filter:
-                is_active_val = 1 if status_filter.lower() == 'active' else 0
+                is_active_val = 1 if status_filter.lower() == "active" else 0
                 conditions.append("gcm.is_active = ?")
                 params.append(is_active_val)
 
@@ -450,7 +600,9 @@ class DatabaseManager:
             )
             return []
 
-    def get_group_class_memberships_by_member_id(self, member_id: int) -> List[GroupClassMembership]:
+    def get_group_class_memberships_by_member_id(
+        self, member_id: int
+    ) -> List[GroupClassMembership]:
         """Retrieves all group class memberships for a specific member."""
         try:
             cursor = self.conn.cursor()
@@ -474,83 +626,100 @@ class DatabaseManager:
             rows = cursor.fetchall()
             return [GroupClassMembership(**row) for row in rows]
         except sqlite3.Error as e:
-            logging.error(f"Database error in get_group_class_memberships_by_member_id for member_id {member_id}: {e}", exc_info=True)
+            logging.error(
+                f"Database error in get_group_class_memberships_by_member_id for member_id {member_id}: {e}",
+                exc_info=True,
+            )
             return []
 
     def update_group_class_membership(self, membership: GroupClassMembership) -> bool:
         cursor = self.conn.cursor()
-        try:
+        try:  # Main try block
             # Date validation
-            datetime.strptime(membership.start_date, "%Y-%m-%d")
-            datetime.strptime(membership.end_date, "%Y-%m-%d")
-        except ValueError as ve:
-            logging.error(f"Invalid date format for membership ID {membership.id}: {ve}")
-            # Re-raise as a ValueError to be consistent with other validation errors
-            raise ValueError(f"Invalid date format for start_date or end_date. Expected YYYY-MM-DD.")
+            try:
+                datetime.strptime(membership.start_date, "%Y-%m-%d")
+                datetime.strptime(membership.end_date, "%Y-%m-%d")
+            except ValueError as ve:  # Specific to date validation
+                logging.error(
+                    f"Invalid date format for membership ID {membership.id}: {ve}"
+                )
+                raise ValueError(
+                    f"Invalid date format for start_date or end_date. Expected YYYY-MM-DD."
+                )
 
-        # purchase_date and membership_type are part of the dataclass but might not always be intended for update here.
-        # Current DB schema for group_class_memberships includes:
-        # member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active
-        # We will update all fields from the membership object except id.
-        # is_active is also updated.
-        sql_update = """
-        UPDATE group_class_memberships
-        SET
-            member_id = ?,
-            plan_id = ?,
-            start_date = ?,
-            end_date = ?,
-            amount_paid = ?,
-            purchase_date = ?,
-            membership_type = ?,
-            is_active = ?
-        WHERE id = ?
-        """
-        is_active_int = 1 if membership.is_active else 0
-        cursor.execute(
-            sql_update,
-            (
-                membership.member_id,
-                membership.plan_id,
-                membership.start_date,
-                membership.end_date,
-                membership.amount_paid,
-                membership.purchase_date, # Assuming purchase_date can be updated
-                membership.membership_type, # Assuming membership_type can be updated
-                is_active_int,
-                membership.id,
-            ),
-        )
-        self.conn.commit()
-
-        if cursor.rowcount == 0:
-            logging.warning(
-                f"No group_class_membership record found with id {membership.id} to update, or data was the same."
+            # purchase_date and membership_type are part of the dataclass but might not always be intended for update here.
+            # Current DB schema for group_class_memberships includes:
+            # member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active
+            # We will update all fields from the membership object except id.
+            # is_active is also updated.
+            sql_update = """
+            UPDATE group_class_memberships
+            SET
+                member_id = ?,
+                plan_id = ?,
+                start_date = ?,
+                end_date = ?,
+                amount_paid = ?,
+                purchase_date = ?,
+                membership_type = ?,
+                is_active = ?
+            WHERE id = ?
+            """
+            is_active_int = 1 if membership.is_active else 0
+            cursor.execute(
+                sql_update,
+                (
+                    membership.member_id,
+                    membership.plan_id,
+                    membership.start_date,
+                    membership.end_date,
+                    membership.amount_paid,
+                    membership.purchase_date,  # Assuming purchase_date can be updated
+                    membership.membership_type,  # Assuming membership_type can be updated
+                    is_active_int,
+                    membership.id,
+                ),
             )
-            # Check if the record actually exists to differentiate
-            cursor.execute("SELECT id FROM group_class_memberships WHERE id = ?", (membership.id,))
-            if not cursor.fetchone():
-                return False # Record not found
-            return True # Data was the same
+            self.conn.commit()
 
-        logging.info(f"Group Class Membership record {membership.id} updated successfully.")
-        return True
+            if cursor.rowcount == 0:
+                logging.warning(
+                    f"No group_class_membership record found with id {membership.id} to update, or data was the same."
+                )
+                # Check if the record actually exists to differentiate
+                cursor.execute(
+                    "SELECT id FROM group_class_memberships WHERE id = ?",
+                    (membership.id,),
+                )
+                if not cursor.fetchone():
+                    return False  # Record not found
+                return True  # Data was the same
 
-        except sqlite3.Error as e:
+            logging.info(
+                f"Group Class Membership record {membership.id} updated successfully."
+            )
+            return True
+
+        except sqlite3.Error as e:  # For DB errors
             self.conn.rollback()
             logging.error(
                 f"Database error while updating group_class_membership {membership.id}: {e}",
                 exc_info=True,
             )
             return False
-        except ValueError as ve: # Catch date validation errors
-            self.conn.rollback() # Rollback not strictly necessary for ValueError before execute, but good practice
-            logging.error(
-                f"Value error during update for membership ID {membership.id}: {ve}",
-                exc_info=True,
-            )
-            raise # Re-raise to signal invalid input to caller
-
+        except (
+            ValueError
+        ) as ve:  # For date validation errors (re-raised) or other ValueErrors
+            # If this ValueError is from our date validation, logging is already done.
+            # If other ValueErrors could occur after DB ops, consider rollback.
+            # For now, assume ValueErrors are pre-commit.
+            if "Invalid date format" not in str(ve):
+                logging.error(
+                    f"Value error during update for membership ID {membership.id}: {ve}",
+                    exc_info=True,
+                )
+            # If rollback is desired for all ValueErrors: self.conn.rollback()
+            raise  # Re-raise to signal invalid input or issue to caller
 
     def delete_group_class_membership(self, membership_id: int) -> bool:
         try:
@@ -563,9 +732,11 @@ class DatabaseManager:
                 logging.warning(
                     f"No group_class_membership record found with id {membership_id} to delete."
                 )
-                return False # No record found
+                return False  # No record found
 
-            logging.info(f"Group Class Membership record {membership_id} deleted successfully.")
+            logging.info(
+                f"Group Class Membership record {membership_id} deleted successfully."
+            )
             return True
 
         except sqlite3.Error as e:
@@ -596,19 +767,33 @@ class DatabaseManager:
             """
             cursor.execute(
                 sql_insert,
-                (pt_membership.member_id, pt_membership.purchase_date, pt_membership.amount_paid, pt_membership.sessions_total, sessions_remaining_to_insert),
+                (
+                    pt_membership.member_id,
+                    pt_membership.purchase_date,
+                    pt_membership.amount_paid,
+                    pt_membership.sessions_total,
+                    sessions_remaining_to_insert,
+                ),
             )
             self.conn.commit()
             pt_membership.id = cursor.lastrowid
-            logging.info(f"PT Membership record created for member ID {pt_membership.member_id} with ID {pt_membership.id}.")
+            logging.info(
+                f"PT Membership record created for member ID {pt_membership.member_id} with ID {pt_membership.id}."
+            )
             return pt_membership
         except sqlite3.IntegrityError as ie:
             self.conn.rollback()
-            logging.error(f"DB integrity error creating PT membership for member {pt_membership.member_id}: {ie}", exc_info=True)
-            raise # Re-raise the IntegrityError
+            logging.error(
+                f"DB integrity error creating PT membership for member {pt_membership.member_id}: {ie}",
+                exc_info=True,
+            )
+            raise  # Re-raise the IntegrityError
         except sqlite3.Error as e:
             self.conn.rollback()
-            logging.error(f"DB error creating PT membership for member {pt_membership.member_id}: {e}", exc_info=True)
+            logging.error(
+                f"DB error creating PT membership for member {pt_membership.member_id}: {e}",
+                exc_info=True,
+            )
             return None
 
     def get_all_pt_memberships(self) -> List[PTMembership]:
@@ -633,7 +818,9 @@ class DatabaseManager:
             # Map rows to PTMembership objects
             return [PTMembership(**row) for row in rows]
         except sqlite3.Error as e:
-            logging.error(f"Database error in get_all_pt_memberships: {e}", exc_info=True)
+            logging.error(
+                f"Database error in get_all_pt_memberships: {e}", exc_info=True
+            )
             return []
 
     def delete_pt_membership(self, membership_id: int) -> bool:
@@ -645,13 +832,18 @@ class DatabaseManager:
             cursor.execute("DELETE FROM pt_memberships WHERE id = ?", (membership_id,))
             self.conn.commit()
             if cursor.rowcount == 0:
-                logging.warning(f"No PT membership found with ID {membership_id} to delete.")
+                logging.warning(
+                    f"No PT membership found with ID {membership_id} to delete."
+                )
                 return False
             logging.info(f"PT Membership ID {membership_id} deleted successfully.")
             return True
         except sqlite3.Error as e:
             self.conn.rollback()
-            logging.error(f"Database error deleting PT membership ID {membership_id}: {e}", exc_info=True)
+            logging.error(
+                f"Database error deleting PT membership ID {membership_id}: {e}",
+                exc_info=True,
+            )
             return False
 
     def update_pt_membership(self, pt_membership: PTMembership) -> bool:
@@ -661,64 +853,99 @@ class DatabaseManager:
         """
         cursor = self.conn.cursor()
 
-        # Check if the PT membership exists
-        cursor.execute("SELECT id FROM pt_memberships WHERE id = ?", (pt_membership.id,))
-        if not cursor.fetchone():
-            logging.warning(f"PT Membership with ID {pt_membership.id} not found for update.")
-            return False
+        try:  # Main try block for all operations
+            # Check if the PT membership exists
+            cursor.execute(
+                "SELECT id FROM pt_memberships WHERE id = ?", (pt_membership.id,)
+            )
+            if not cursor.fetchone():
+                logging.warning(
+                    f"PT Membership with ID {pt_membership.id} not found for update."
+                )
+                return False  # Return False if not found, before other ops
 
-        try:
             # Date validation for purchase_date
-            datetime.strptime(pt_membership.purchase_date, "%Y-%m-%d")
-        except ValueError:
-            logging.error(f"Invalid purchase_date format: {pt_membership.purchase_date}. Expected YYYY-MM-DD.")
-            # As per instructions, update functions accept a dataclass object.
-            # If validation fails, it implies the object itself is invalid.
-            # Consider whether to raise ValueError here or let the caller handle it.
-            # For now, returning False as per original function's error handling for invalid dates.
-            return False # Or raise ValueError
+            try:
+                datetime.strptime(pt_membership.purchase_date, "%Y-%m-%d")
+            except ValueError:  # Handles date validation error specifically
+                logging.error(
+                    f"Invalid purchase_date format: {pt_membership.purchase_date}. Expected YYYY-MM-DD."
+                )
+                raise ValueError(
+                    f"Invalid purchase_date format: {pt_membership.purchase_date}. Expected YYYY-MM-DD."
+                )
 
-        if pt_membership.amount_paid < 0:
-            logging.error(f"Invalid amount_paid: {pt_membership.amount_paid}. Cannot be negative.")
-            return False # Or raise ValueError
+            if pt_membership.amount_paid < 0:
+                logging.error(
+                    f"Invalid amount_paid: {pt_membership.amount_paid}. Cannot be negative."
+                )
+                raise ValueError(
+                    f"Invalid amount_paid: {pt_membership.amount_paid}. Cannot be negative."
+                )
 
-        if pt_membership.sessions_total < 0: # sessions_total maps to sessions_purchased
-            logging.error(f"Invalid sessions_total: {pt_membership.sessions_total}. Cannot be negative.")
-            return False # Or raise ValueError
+            if pt_membership.sessions_total < 0:
+                logging.error(
+                    f"Invalid sessions_total: {pt_membership.sessions_total}. Cannot be negative."
+                )
+                raise ValueError(
+                    f"Invalid sessions_total: {pt_membership.sessions_total}. Cannot be negative."
+                )
 
-        if pt_membership.sessions_remaining < 0:
-            logging.error(f"Invalid sessions_remaining: {pt_membership.sessions_remaining}. Cannot be negative.")
-            return False # Or raise ValueError
+            if pt_membership.sessions_remaining < 0:
+                logging.error(
+                    f"Invalid sessions_remaining: {pt_membership.sessions_remaining}. Cannot be negative."
+                )
+                raise ValueError(
+                    f"Invalid sessions_remaining: {pt_membership.sessions_remaining}. Cannot be negative."
+                )
 
-        sql_update_stmt = """
-        UPDATE pt_memberships
-        SET purchase_date = ?, amount_paid = ?, sessions_total = ?, sessions_remaining = ?
-        WHERE id = ?
-        """
-        params = (
-            pt_membership.purchase_date,
-            pt_membership.amount_paid,
-            pt_membership.sessions_total, # sessions_total in dataclass maps to sessions_total in DB
-            pt_membership.sessions_remaining,
-            pt_membership.id
-        )
+            sql_update_stmt = """
+            UPDATE pt_memberships
+            SET purchase_date = ?, amount_paid = ?, sessions_total = ?, sessions_remaining = ?
+            WHERE id = ?
+            """
+            params = (
+                pt_membership.purchase_date,
+                pt_membership.amount_paid,
+                pt_membership.sessions_total,
+                pt_membership.sessions_remaining,
+                pt_membership.id,
+            )
 
-        try:
             cursor.execute(sql_update_stmt, params)
             self.conn.commit()
 
             if cursor.rowcount == 0:
-                # Data was same, or record did not exist (already checked).
-                logging.info(f"PT Membership ID {pt_membership.id} data was the same, no update performed.")
+                logging.info(
+                    f"PT Membership ID {pt_membership.id} data was the same, no update performed."
+                )
             else:
-                logging.info(f"PT Membership ID {pt_membership.id} updated successfully.")
+                logging.info(
+                    f"PT Membership ID {pt_membership.id} updated successfully."
+                )
             return True
-        except sqlite3.Error as e:
-            self.conn.rollback()
-            logging.error(f"Database error in update_pt_membership for ID {pt_membership.id}: {e}", exc_info=True)
-            return False
 
-    def generate_financial_report_data(self, start_date: str, end_date: str) -> List[Dict]:
+        except sqlite3.Error as e:  # For DB errors
+            self.conn.rollback()
+            logging.error(
+                f"Database error in update_pt_membership for ID {pt_membership.id}: {e}",
+                exc_info=True,
+            )
+            return False
+        except (
+            ValueError
+        ) as ve:  # For validation errors (re-raised from date or new ones)
+            # Logging already done for specific validation error.
+            # No rollback needed if error is before DB ops that change data.
+            # If ValueErrors could occur after commit, a rollback might be needed,
+            # but current ValueErrors are pre-DB-commit.
+            return (
+                False  # Or re-raise ve if API contract prefers exceptions for bad input
+            )
+
+    def generate_financial_report_data(
+        self, start_date: str, end_date: str
+    ) -> List[Dict]:
         """
         Fetches raw transaction data from both group_class_memberships and pt_memberships
         within the given date range.
@@ -767,7 +994,7 @@ class DatabaseManager:
                 transactions.append(dict(zip(column_names_pt, row)))
 
             # Sort all transactions by purchase_date
-            transactions.sort(key=lambda x: x['purchase_date'])
+            transactions.sort(key=lambda x: x["purchase_date"])
 
             return transactions
 
@@ -784,7 +1011,9 @@ class DatabaseManager:
             )
             return []
 
-    def generate_renewal_report_data(self, start_date_str: str, end_date_str: str) -> list:
+    def generate_renewal_report_data(
+        self, start_date_str: str, end_date_str: str
+    ) -> list:
         try:
             cursor = self.conn.cursor()
             # Removed internal date calculations
@@ -812,9 +1041,7 @@ class DatabaseManager:
             ORDER BY gcm.end_date ASC, m.name ASC;
             """
             # Parameters for the query: start_date_str and end_date_str
-            cursor.execute(
-                sql_select_renewals, (start_date_str, end_date_str)
-            )
+            cursor.execute(sql_select_renewals, (start_date_str, end_date_str))
 
             # Fetch as a list of dictionaries or tuples.
             column_names = [description[0] for description in cursor.description]

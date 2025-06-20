@@ -1,5 +1,5 @@
-import sqlite3
 import os
+import sqlite3
 
 DB_FILE = "reporter/data/kranos_data.db"
 
@@ -77,21 +77,23 @@ def create_database(db_name: str):
         )
         conn.commit()
     except sqlite3.Error as e:
-        if conn: # If connection was established before error, close it
+        if conn:  # If connection was established before error, close it
             conn.close()
-        return None # Return None if an error occurred
+        return None  # Return None if an error occurred
     return conn
 
 
 if __name__ == "__main__":
     initialize_database()
 
+
 def initialize_database():
-    conn = sqlite3.connect('kranos_data.db')
+    conn = sqlite3.connect("kranos_data.db")
     cursor = conn.cursor()
 
     # Create Members table
-    cursor.execute('''
+    cursor.execute(
+        """
     CREATE TABLE IF NOT EXISTS members (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -100,10 +102,12 @@ def initialize_database():
         join_date TEXT,
         is_active BOOLEAN DEFAULT TRUE
     )
-    ''')
+    """
+    )
 
     # Create Group Plans table
-    cursor.execute('''
+    cursor.execute(
+        """
     CREATE TABLE IF NOT EXISTS group_plans (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
@@ -112,10 +116,12 @@ def initialize_database():
         duration_days INTEGER,
         is_active BOOLEAN DEFAULT TRUE
     )
-    ''')
+    """
+    )
 
     # Create Group Class Memberships table
-    cursor.execute('''
+    cursor.execute(
+        """
     CREATE TABLE IF NOT EXISTS group_class_memberships (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         member_id INTEGER NOT NULL,
@@ -129,11 +135,13 @@ def initialize_database():
         FOREIGN KEY (member_id) REFERENCES members (id),
         FOREIGN KEY (plan_id) REFERENCES group_plans (id)
     )
-    ''')
+    """
+    )
 
     # Create PT Memberships table
     # Assuming 'membership_id' in PTMembershipView is the primary key for this table
-    cursor.execute('''
+    cursor.execute(
+        """
     CREATE TABLE IF NOT EXISTS pt_memberships (
         membership_id INTEGER PRIMARY KEY AUTOINCREMENT,
         member_id INTEGER NOT NULL,
@@ -143,7 +151,8 @@ def initialize_database():
         amount_paid REAL,
         FOREIGN KEY (member_id) REFERENCES members (id)
     )
-    ''')
+    """
+    )
 
     conn.commit()
     conn.close()

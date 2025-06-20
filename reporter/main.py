@@ -1,8 +1,9 @@
-import sys
-import subprocess
-import os
 import importlib.util
-from .database import initialize_database, DB_FILE  # Updated database import
+import os
+import subprocess
+import sys
+
+from .database import DB_FILE, initialize_database  # Updated database import
 from .migrate_historical_data import migrate_historical_data
 
 # Removed old imports:
@@ -20,7 +21,9 @@ def handle_database_migration():
         migrate_historical_data()
         print("Data migration function executed successfully.")
     except ImportError as e:
-        print(f"ImportError during migration: {e}. This might mean migrate_historical_data is not defined or importable.")
+        print(
+            f"ImportError during migration: {e}. This might mean migrate_historical_data is not defined or importable."
+        )
     except Exception as e:
         print(f"An exception occurred while trying to run the migration function: {e}")
 
@@ -114,5 +117,3 @@ if __name__ == "__main__":
     print(f"Database initialized at: {DB_FILE}")
 
     handle_database_migration()  # Call the refactored function
-
-    
