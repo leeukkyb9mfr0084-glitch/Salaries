@@ -75,6 +75,8 @@ if "member_phone" not in st.session_state:
     st.session_state.member_phone = ""
 if "member_is_active" not in st.session_state:
     st.session_state.member_is_active = True
+if "member_join_date" not in st.session_state:
+    st.session_state.member_join_date = date.today()
 if "member_form_key" not in st.session_state:
     st.session_state.member_form_key = "member_form_initial"
 if "confirm_delete_member_id" not in st.session_state:
@@ -280,10 +282,11 @@ def render_memberships_tab():
                                 record_id = api.create_group_class_membership(
                                     member_id=new_gc_member_id,
                                     plan_id=new_gc_plan_id,
-                                    start_date_str=new_gc_start_date.strftime(
+                                    start_date=new_gc_start_date.strftime( # Corrected keyword
                                         "%Y-%m-%d"
                                     ),
                                     amount_paid=new_gc_amount_paid,
+                                    purchase_date=date.today().strftime("%Y-%m-%d") # Added missing purchase_date
                                 )
                                 if record_id:
                                     st.success(
@@ -835,6 +838,7 @@ def render_members_tab():
         st.session_state.member_email = ""
         st.session_state.member_phone = ""
         st.session_state.member_is_active = True
+        st.session_state.member_join_date = date.today()
         st.session_state.member_form_key = f"member_form_{datetime.now().timestamp()}"
         st.session_state.confirm_delete_member_id = None
 
@@ -891,11 +895,39 @@ def render_members_tab():
                     st.session_state.member_is_active = bool(
                         selected_member_data.is_active
                     )
+                    join_date_val = selected_member_data.join_date
+                    if isinstance(join_date_val, str):
+                        try:
+                            st.session_state.member_join_date = datetime.strptime(join_date_val, "%Y-%m-%d").date()
+                        except ValueError:
+                            st.session_state.member_join_date = date.today() # Fallback
+                    elif isinstance(join_date_val, date):
+                        st.session_state.member_join_date = join_date_val
+                    else:
+                        st.session_state.member_join_date = date.today() # Fallback
                     st.session_state.member_form_key = (
                         f"member_form_{datetime.now().timestamp()}"
                     )
             else:
                 clear_member_form(clear_selection=False)
+
+        # Display all members in a table
+        if all_members:
+            member_data_for_table = [
+                {
+                    "ID": m.id,
+                    "Name": m.name,
+                    "Email": m.email,
+                    "Phone": m.phone,
+                    "Join Date": m.join_date, # Ensure this is a string or date object
+                    "Active": "Yes" if m.is_active else "No",
+                }
+                for m in all_members
+            ]
+            st.dataframe(member_data_for_table, use_container_width=True, hide_index=True)
+        # The 'st.info("No members found...")' is already present if all_members is empty,
+        # so no need to duplicate it here. The initial fetch handles the case of no members.
+
 
     with right_col:
         if st.session_state.member_selected_id is None:
@@ -912,6 +944,9 @@ def render_members_tab():
             )
             phone_form_val = st.text_input(
                 "Phone", value=st.session_state.member_phone, key="member_form_phone"
+            )
+            join_date_form_val = st.date_input(
+                "Join Date", value=st.session_state.member_join_date, key="member_form_join_date"
             )
             is_active_form_val = st.checkbox(
                 "Is Active",
@@ -943,6 +978,7 @@ def render_members_tab():
                             name=name_form_val,
                             phone=phone_form_val,
                             email=email_form_val,
+                            join_date=join_date_form_val.strftime("%Y-%m-%d")
                         )
                         if member_id:
                             st.success(
@@ -966,6 +1002,7 @@ def render_members_tab():
                             phone=phone_form_val,
                             email=email_form_val,
                             is_active=is_active_form_val,
+                            join_date=join_date_form_val.strftime("%Y-%m-%d")
                         )
                         if success_member_update:
                             st.success(
