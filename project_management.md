@@ -11,10 +11,10 @@ Of course. Here is the complete, consolidated set of instructions for Jules to e
 ### **Phase 1: Refactor Foundational Layers**
 
 **Task 1.1: Update `reporter/database.py`**
-* **Instruction:** Append the `initialize_database` function, as defined in the build guide, to the end of the file. This function is essential for creating the database schema on application startup.
+* **Instruction:** Append the `initialize_database` function, as defined in the build guide, to the end of the file. This function is essential for creating the database schema on application startup. - DONE
 
 **Task 1.2: Update `reporter/main.py`**
-* **Instruction:** Modify the `main` function. Before the `app.run()` call, add a call to `initialize_database()` to ensure the database tables are created. The function should now have two lines in it.
+* **Instruction:** Modify the `main` function. Before the `app.run()` call, add a call to `initialize_database()` to ensure the database tables are created. The function should now have two lines in it. - DONE
 
 ---
 
