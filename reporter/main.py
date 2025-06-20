@@ -1,7 +1,17 @@
-import importlib.util
-import os
-import subprocess
 import sys
+import os
+# Add the project root to sys.path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Ensure other necessary imports like importlib.util, subprocess are also present at the top.
+# The original script already had import os, subprocess, sys, importlib.util
+# So the primary change is the sys.path manipulation.
+
+import importlib.util
+import subprocess
+# os and sys were already imported by the new snippet
 
 from .database import DB_FILE, initialize_database  # Updated database import
 from .migrate_historical_data import migrate_historical_data
@@ -117,3 +127,46 @@ if __name__ == "__main__":
     print(f"Database initialized at: {DB_FILE}")
 
     handle_database_migration()  # Call the refactored function
+
+    print("Launching Streamlit app...")
+    # Construct the absolute path to streamlit_ui/app.py
+    # __file__ in main.py is reporter/main.py
+    # os.path.dirname(__file__) is reporter/
+    # project_root was defined at the top as os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    # So, streamlit_app_path should be constructed carefully.
+    # The project_root variable should already be available if the first step was applied correctly.
+    # If not, it might need to be re-defined or ensure it's in scope.
+    # For simplicity, let's re-evaluate path based on __file__ for this specific subprocess call.
+
+    # Path to the streamlit app, relative to the project root
+    streamlit_app_module_path = "reporter.streamlit_ui.app"
+
+    # The 'project_root' variable should be defined from the snippet added in step 1.
+    # If it's not in the scope of if __name__ == "__main__":, we might need to pass it
+    # or re-calculate it. Assuming it is available or can be recalculated.
+    # For robustness, let's use the previously defined project_root.
+    # The first part of the plan adds:
+    # project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    # So it should be available in the global scope of main.py
+
+    streamlit_app_path = os.path.join(os.path.dirname(__file__), "streamlit_ui", "app.py")
+
+
+    # Use sys.executable to ensure we're using the python from the current environment
+    # Using -m streamlit run is generally preferred.
+    command_to_run = [sys.executable, "-m", "streamlit", "run", streamlit_app_path]
+
+    print(f"Project root for Streamlit app: {project_root}")
+    print(f"Running command: {' '.join(command_to_run)}")
+
+    try:
+        # subprocess.run is generally preferred over subprocess.call for more control.
+        # check=True will raise a CalledProcessError if streamlit returns a non-zero exit code.
+        subprocess.run(command_to_run, cwd=project_root, check=True)
+    except FileNotFoundError:
+        print(f"Error: Streamlit command not found. Ensure Streamlit is installed and in PATH.")
+        print(f"Attempted to run from: {sys.executable}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error running Streamlit app: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred while trying to launch Streamlit: {e}")
