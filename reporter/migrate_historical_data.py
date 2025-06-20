@@ -78,13 +78,20 @@ def migrate_gc_data(
                         # name from CSV is row.get('Client Name', '').strip()
                         # email can be None
                         member_join_date = earliest_start_dates.get(phone)
-                        member_id = db_mngr.add_member(
+                        # Create a Member object
+                        from .models import Member # Ensure Member is imported
+                        new_member_obj = Member(
+                            id=None, # id is None for new members
                             name=name,
-                            phone_number=phone,
+                            phone=phone, # field name is 'phone' in Member dataclass
                             email=row.get("Email"),
-                            join_date=member_join_date,
-                        )  # Use phone_number to match new signature
-                        if member_id:
+                            join_date=member_join_date, # This will be used or overridden by add_member if None
+                            is_active=True # Default to active for migrated members
+                        )
+                        # logging.info(f"GC Member to add: {name}, Phone: {phone}, Raw Join Date from CSV: {row.get('Plan Start Date')}, Calculated Join Date: {member_join_date}, Member Obj: {new_member_obj}")
+                        added_member_obj = db_mngr.add_member(new_member_obj)
+                        if added_member_obj and added_member_obj.id is not None:
+                            member_id = added_member_obj.id
                             processed_members[phone] = member_id
                         else:
                             logging.warning(
@@ -145,13 +152,13 @@ def migrate_gc_data(
                     continue
 
                 amount_str = (
-                    str(row.get(" Amount ")).strip().replace("₹", "").replace(",", "")
+                    str(row.get("Amount", "")).strip().replace("₹", "").replace(",", "") # Corrected key to "Amount"
                 )
                 try:
                     plan_price = float(amount_str)
                 except (ValueError, TypeError):
                     logging.warning(
-                        f"Could not parse price for row {line_count}. Setting price to 0.0. Value was: '{row.get(' Amount ')}'"
+                        f"Could not parse price for row {line_count}. Setting price to 0.0. Value was: '{row.get('Amount')}'" # Corrected key
                     )
                     plan_price = 0.0
 
@@ -181,7 +188,7 @@ def migrate_gc_data(
 
                 purchase_date_csv = row.get("Payment Date", "").strip()
                 start_date_csv = row.get("Plan Start Date", "").strip()
-                amount_csv = row.get(" Amount ", "").strip()
+                amount_csv = row.get("Amount", "").strip() # Corrected key to "Amount"
                 membership_type_csv = row.get("Membership Type", "Fresh").strip()
                 # plan_status_csv = row.get('Plan Status', 'EXPIRED').strip() # Removed
 
@@ -286,13 +293,20 @@ def migrate_pt_data(
                 else:
                     try:
                         member_join_date = earliest_start_dates.get(phone)
-                        member_id = db_mngr.add_member(
+                        # Create a Member object
+                        from .models import Member # Ensure Member is imported (already imported in the other block, but good for clarity)
+                        new_member_obj_pt = Member(
+                            id=None,
                             name=name,
-                            phone_number=phone,
+                            phone=phone, # field name is 'phone'
                             email=row.get("Email"),
                             join_date=member_join_date,
-                        )  # Use phone_number
-                        if member_id:
+                            is_active=True
+                        )
+                        # logging.info(f"PT Member to add: {name}, Phone: {phone}, Raw Join Date from CSV: {row.get('Payment Date')}, Calculated Join Date: {member_join_date}, Member Obj: {new_member_obj_pt}")
+                        added_member_obj_pt = db_mngr.add_member(new_member_obj_pt)
+                        if added_member_obj_pt and added_member_obj_pt.id is not None:
+                            member_id = added_member_obj_pt.id
                             processed_members[phone] = member_id
                         else:
                             logging.warning(
@@ -369,14 +383,14 @@ def migrate_pt_data(
                 cursor_check.execute(
                     """
                     SELECT id FROM pt_memberships
-                    WHERE member_id = ? AND purchase_date = ? AND amount_paid = ? AND sessions_total = ? AND notes = ? AND sessions_remaining = ?
+                    WHERE member_id = ? AND purchase_date = ? AND amount_paid = ? AND sessions_total = ? AND sessions_remaining = ?
                 """,
                     (
                         member_id,
                         purchase_date,
                         amount_paid,
-                        sessions_purchased,
-                        sessions_purchased,
+                        sessions_purchased, # For sessions_total
+                        sessions_purchased, # For sessions_remaining (as it's a new membership)
                     ),
                 )
                 if cursor_check.fetchone():
@@ -387,13 +401,17 @@ def migrate_pt_data(
 
                 # Call the updated method. DatabaseManager.add_pt_membership now handles setting
                 # sessions_total and sessions_remaining internally.
-                pt_id = db_mngr.add_pt_membership(
+                from .models import PTMembership # Ensure PTMembership is imported
+                new_pt_obj = PTMembership(
+                    id=None,
                     member_id=member_id,
                     purchase_date=purchase_date,
                     amount_paid=amount_paid,
-                    sessions_purchased=sessions_purchased,
+                    sessions_total=sessions_purchased,
+                    sessions_remaining=sessions_purchased # For new memberships, remaining is total
                 )
-                if pt_id:
+                added_pt_obj = db_mngr.add_pt_membership(new_pt_obj)
+                if added_pt_obj and added_pt_obj.id is not None:
                     success_count += 1
                 else:
                     failed_rows.append(
@@ -451,10 +469,10 @@ def migrate_historical_data():
             earliest_start_dates = {}
 
             if os.path.exists(gc_csv_path):
-                df_gc = pd.read_csv(gc_csv_path)
+                df_gc = pd.read_csv(gc_csv_path, dtype={"Phone": str}) # Ensure Phone is read as string
                 for index, row in df_gc.iterrows():
                     phone = str(
-                        row.get("Phone", "")
+                        row.get("Phone", "") # row.get should be fine now as dtype is str
                     ).strip()  # Changed 'Phone Number' to 'Phone'
                     if not phone:
                         continue  # Skip if phone is empty
@@ -482,10 +500,10 @@ def migrate_historical_data():
                 )
 
             if os.path.exists(pt_csv_path):
-                df_pt = pd.read_csv(pt_csv_path)
+                df_pt = pd.read_csv(pt_csv_path, dtype={"Phone": str}) # Ensure Phone is read as string
                 for index, row in df_pt.iterrows():
                     phone = str(
-                        row.get("Phone", "")
+                        row.get("Phone", "") # row.get should be fine now as dtype is str
                     ).strip()  # Changed 'Phone Number' to 'Phone'
                     if not phone:
                         continue
@@ -508,6 +526,8 @@ def migrate_historical_data():
                 logging.warning(
                     f"PT CSV file not found at {pt_csv_path} for earliest date processing."
                 )
+
+            # logging.info(f"Earliest start dates collected: {earliest_start_dates}") # Log the dictionary
             # --- End of new logic for earliest_start_dates ---
 
             processed_members = {}

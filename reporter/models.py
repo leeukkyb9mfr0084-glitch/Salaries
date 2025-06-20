@@ -50,8 +50,8 @@ class GroupClassMembership:
     start_date: str  # Assuming YYYY-MM-DD
     end_date: str  # Assuming YYYY-MM-DD
     amount_paid: float
+    membership_type: str # Moved before fields with default values
     purchase_date: Optional[str] = None  # Should be set on creation
-    membership_type: str
     is_active: bool = True
     # These fields are not in the DB table but were in function params
     payment_method: Optional[str] = None
