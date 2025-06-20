@@ -83,26 +83,67 @@ def create_database(db_name: str):
     return conn
 
 
-def initialize_database():
-    """
-    Initializes the database: creates the directory, database, tables, and seeds initial data.
-    """
-    # Get the directory path from DB_FILE
-    data_dir = os.path.dirname(DB_FILE)
-
-    # If the directory doesn't exist, create it
-    if not os.path.exists(data_dir):
-        try:
-            os.makedirs(data_dir)
-        except OSError as e:
-            return  # Stop if directory creation fails
-
-    # Call create_database(DB_FILE)
-    # This function already prints success or error messages.
-    # It also handles its own connection opening and closing for file-based DBs.
-    create_database(DB_FILE)
-
-    # Seeding was removed, so no need to establish a separate connection here.
-
 if __name__ == "__main__":
     initialize_database()
+
+def initialize_database():
+    conn = sqlite3.connect('kranos_data.db')
+    cursor = conn.cursor()
+
+    # Create Members table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS members (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        phone TEXT,
+        email TEXT,
+        join_date TEXT,
+        is_active BOOLEAN DEFAULT TRUE
+    )
+    ''')
+
+    # Create Group Plans table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS group_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        display_name TEXT,
+        default_amount REAL,
+        duration_days INTEGER,
+        is_active BOOLEAN DEFAULT TRUE
+    )
+    ''')
+
+    # Create Group Class Memberships table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS group_class_memberships (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        member_id INTEGER NOT NULL,
+        plan_id INTEGER NOT NULL,
+        start_date TEXT,
+        end_date TEXT,
+        purchase_date TEXT,
+        membership_type TEXT,  -- e.g., 'new', 'renewal'
+        amount_paid REAL,
+        is_active BOOLEAN DEFAULT TRUE, -- Added based on model
+        FOREIGN KEY (member_id) REFERENCES members (id),
+        FOREIGN KEY (plan_id) REFERENCES group_plans (id)
+    )
+    ''')
+
+    # Create PT Memberships table
+    # Assuming 'membership_id' in PTMembershipView is the primary key for this table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS pt_memberships (
+        membership_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        member_id INTEGER NOT NULL,
+        purchase_date TEXT,
+        sessions_total INTEGER,
+        sessions_remaining INTEGER,
+        amount_paid REAL,
+        FOREIGN KEY (member_id) REFERENCES members (id)
+    )
+    ''')
+
+    conn.commit()
+    conn.close()
