@@ -44,6 +44,7 @@ def create_database(db_name: str):
         )
 
         # Create group_class_memberships table
+        cursor.execute("DROP TABLE IF EXISTS group_class_memberships;") # Added this line
         cursor.execute(
             """
         CREATE TABLE IF NOT EXISTS group_class_memberships (
