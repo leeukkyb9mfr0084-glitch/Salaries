@@ -35,7 +35,25 @@ With your virtual environment active, install the required Python packages using
 pip install -r requirements.txt
 ```
 
+### Simplified Setup and Launch (Recommended)
+
+A shell script `run_app.sh` is provided to automate the entire setup and launch process. This script will:
+1. Create a virtual environment (if it doesn't exist).
+2. Activate the virtual environment.
+3. Install all required dependencies.
+4. Run the data migration (initial setup).
+5. Launch the Streamlit application.
+
+To use the script, navigate to the project's root directory in your terminal and run:
+
+```bash
+./run_app.sh
+```
+This is the recommended way to run the application.
+
 ## Data Migration (First-Time Setup)
+
+**Note:** If you are using the `run_app.sh` script, it handles this step automatically. These instructions are for manual setup.
 
 Before running the application for the first time, you must migrate the historical data from the provided CSV files into the application's database.
 
@@ -53,6 +71,8 @@ python -m reporter.migrate_historical_data
 You only need to run this command once during the initial setup.
 
 ## Running the Application
+
+**Note:** If you are using the `run_app.sh` script, it handles this step automatically. These instructions are for manual setup.
 
 Once the setup and data migration are complete, you can run the application.
 

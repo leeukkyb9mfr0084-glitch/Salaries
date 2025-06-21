@@ -68,14 +68,31 @@ def test_create_group_class_membership_success(db_manager: DatabaseManager):
     db_manager.conn.commit()
     start_date_val = today_str()
     amount_paid_val = 100.0
-    membership_id = db_manager.create_group_class_membership(
+
+    # Fetch plan duration to calculate end_date
+    cursor.execute("SELECT duration_days FROM group_plans WHERE id = ?", (plan_id,))
+    plan_duration_days = cursor.fetchone()[0]
+    start_date_obj = datetime.strptime(start_date_val, "%Y-%m-%d").date()
+    end_date_obj = start_date_obj + timedelta(days=plan_duration_days - 1)
+    end_date_val = end_date_obj.strftime("%Y-%m-%d")
+
+    membership_data = GroupClassMembership(
+        id=None,
         member_id=member_id,
         plan_id=plan_id,
-        start_date_str=start_date_val,
+        start_date=start_date_val,
+        end_date=end_date_val,
         amount_paid=amount_paid_val,
+        purchase_date=today_str(), # Assuming purchase is today for new memberships
+        membership_type="New",
+        is_active=True
     )
-    assert membership_id is not None
-    assert isinstance(membership_id, int)
+    created_membership = db_manager.add_group_class_membership(membership_data)
+    assert created_membership is not None
+    assert created_membership.id is not None
+    membership_id = created_membership.id
+
+    # Verify by fetching from DB
     cursor.execute(
         "SELECT member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active FROM group_class_memberships WHERE id = ?",
         (membership_id,),
@@ -85,20 +102,14 @@ def test_create_group_class_membership_success(db_manager: DatabaseManager):
     assert record[0] == member_id
     assert record[1] == plan_id
     assert record[2] == start_date_val
-    # Duration is 30 days. If start is day 1, end is day 30. timedelta(days=30-1) is correct.
-    expected_end_date = (
-        datetime.strptime(start_date_val, "%Y-%m-%d").date() + timedelta(days=30 - 1)
-    ).strftime("%Y-%m-%d")
-    assert record[3] == expected_end_date
+    assert record[3] == end_date_val # Compare with calculated end_date_val
     assert record[4] == amount_paid_val
-    assert (
-        date.fromisoformat(record[5].split(" ")[0]) == date.today()
-    )  # purchase_date is datetime, compare date part
-    assert record[6] == "New"  # membership_type default
-    assert record[7] == 1  # is_active default
+    assert date.fromisoformat(record[5].split(" ")[0]) == date.today() # purchase_date check
+    assert record[6] == "New"
+    assert record[7] == 1
 
 
-def test_create_group_class_membership_missing_member(db_manager: DatabaseManager):
+def test_add_group_class_membership_missing_member(db_manager: DatabaseManager):
     cursor = db_manager.conn.cursor()
     cursor.execute(
         "INSERT INTO group_plans (name, duration_days, default_amount, is_active) VALUES (?, ?, ?, ?)",  # Removed display_name
@@ -107,14 +118,23 @@ def test_create_group_class_membership_missing_member(db_manager: DatabaseManage
     plan_id = cursor.lastrowid
     db_manager.conn.commit()
     non_existent_member_id = 99999
+
+    # Dummy end_date as plan duration is not relevant here, focusing on member FK constraint
+    dummy_end_date = (datetime.strptime(today_str(), "%Y-%m-%d").date() + timedelta(days=29)).strftime("%Y-%m-%d")
+    membership_data = GroupClassMembership(
+        id=None,
+        member_id=non_existent_member_id,
+        plan_id=plan_id,
+        start_date=today_str(),
+        end_date=dummy_end_date,
+        amount_paid=100.0,
+        purchase_date=today_str(),
+        membership_type="New",
+        is_active=True
+    )
     with pytest.raises(sqlite3.IntegrityError) as excinfo:
-        db_manager.create_group_class_membership(
-            member_id=non_existent_member_id,
-            plan_id=plan_id,
-            start_date_str=today_str(),
-            amount_paid=100.0,
-        )
-    assert "FOREIGN KEY constraint failed" in str(excinfo.value)
+        db_manager.add_group_class_membership(membership_data)
+    assert "foreign key constraint failed" == str(excinfo.value).lower() # check exact lowercase message
     new_cursor = db_manager.conn.cursor()
     new_cursor.execute(
         "SELECT COUNT(*) FROM group_class_memberships WHERE member_id = ?",
@@ -124,7 +144,7 @@ def test_create_group_class_membership_missing_member(db_manager: DatabaseManage
     assert count == 0
 
 
-def test_create_group_class_membership_missing_plan(db_manager: DatabaseManager):
+def test_add_group_class_membership_missing_plan(db_manager: DatabaseManager):
     cursor = db_manager.conn.cursor()
     cursor.execute(
         "INSERT INTO members (name, phone, email, join_date, is_active) VALUES (?, ?, ?, ?, ?)",
@@ -133,14 +153,24 @@ def test_create_group_class_membership_missing_plan(db_manager: DatabaseManager)
     member_id = cursor.lastrowid
     db_manager.conn.commit()
     non_existent_plan_id = 99998
-    with pytest.raises(ValueError) as excinfo:
-        db_manager.create_group_class_membership(
-            member_id=member_id,
-            plan_id=non_existent_plan_id,
-            start_date_str=today_str(),
-            amount_paid=100.0,
-        )
-    assert f"Group Plan with ID {non_existent_plan_id} not found." in str(excinfo.value)
+
+    # Dummy end_date as plan duration is not relevant here, focusing on plan FK constraint
+    dummy_end_date = (datetime.strptime(today_str(), "%Y-%m-%d").date() + timedelta(days=29)).strftime("%Y-%m-%d")
+    membership_data = GroupClassMembership(
+        id=None,
+        member_id=member_id,
+        plan_id=non_existent_plan_id,
+        start_date=today_str(),
+        end_date=dummy_end_date, # Actual end_date calculation relies on valid plan_id
+        amount_paid=100.0,
+        purchase_date=today_str(),
+        membership_type="New",
+        is_active=True
+    )
+    # Expecting IntegrityError due to FOREIGN KEY constraint on plan_id
+    with pytest.raises(sqlite3.IntegrityError) as excinfo:
+        db_manager.add_group_class_membership(membership_data)
+    assert "foreign key constraint failed" == str(excinfo.value).lower() # check exact lowercase message
     cursor.execute(
         "SELECT COUNT(*) FROM group_class_memberships WHERE plan_id = ?",
         (non_existent_plan_id,),
@@ -149,7 +179,7 @@ def test_create_group_class_membership_missing_plan(db_manager: DatabaseManager)
     assert count == 0
 
 
-def test_create_group_class_membership_invalid_data(db_manager: DatabaseManager):
+def test_add_group_class_membership_invalid_date_format(db_manager: DatabaseManager):
     cursor = db_manager.conn.cursor()
     cursor.execute(
         "INSERT INTO members (name, phone, email, join_date, is_active) VALUES (?, ?, ?, ?, ?)",
@@ -162,27 +192,33 @@ def test_create_group_class_membership_invalid_data(db_manager: DatabaseManager)
     )
     plan_id = cursor.lastrowid
     db_manager.conn.commit()
-    with pytest.raises(ValueError) as excinfo:
-        db_manager.create_group_class_membership(
-            member_id=member_id,
-            plan_id=plan_id,
-            start_date_str="invalid-date-format",
-            amount_paid=50.0,
-        )
-    assert (
-        "Invalid start_date format: invalid-date-format. Expected YYYY-MM-DD."
-        in str(excinfo.value)
+
+    membership_data_invalid_date = GroupClassMembership(
+        id=None,
+        member_id=member_id,
+        plan_id=plan_id,
+        start_date="invalid-date-format", # Invalid date
+        end_date=today_str(), # Valid dummy end_date
+        amount_paid=50.0,
+        purchase_date=today_str(),
+        membership_type="New",
+        is_active=True
     )
-    with pytest.raises(TypeError):
-        db_manager.create_group_class_membership(member_id=member_id, plan_id=plan_id)
+    with pytest.raises(ValueError) as excinfo:
+        db_manager.add_group_class_membership(membership_data_invalid_date)
+    assert "Invalid date format for start_date" in str(excinfo.value) # Error from model or DB manager
+
+    # Test for missing arguments if add_group_class_membership was called directly with kwargs (not applicable anymore)
+    # with pytest.raises(TypeError):
+    #    db_manager.add_group_class_membership(member_id=member_id, plan_id=plan_id)
 
 
 def test_generate_financial_report_empty(db_manager: DatabaseManager):
     start_period = past_date_str(30)
     end_period = today_str()
+    # generate_financial_report_data returns a list of transactions, not a dict with summary
     report_data = db_manager.generate_financial_report_data(start_period, end_period)
-    assert report_data["summary"]["total_revenue"] == 0.0
-    assert report_data["details"] == []
+    assert report_data == []
 
 
 def test_generate_financial_report_with_data(db_manager: DatabaseManager):
@@ -361,30 +397,51 @@ def test_generate_renewal_report_empty(db_manager: DatabaseManager):
     )
     plan_id = cursor.lastrowid
     db_manager.conn.commit()
-    start_date_val = today_str()
-    db_manager.create_group_class_membership(member_id, plan_id, start_date_val, 10.0)
-    cursor.execute(
-        "UPDATE group_class_memberships SET end_date = ? WHERE member_id = ? AND plan_id = ?",
-        (future_date_str(60), member_id, plan_id),
+
+    # Create a membership that is active but its end_date is outside the typical renewal window
+    start_date_val = past_date_str(10) # Started 10 days ago
+    # Fetch plan duration
+    cursor.execute("SELECT duration_days FROM group_plans WHERE id = ?", (plan_id,))
+    plan_duration_days = cursor.fetchone()[0] # Should be 30
+
+    end_date_val = (datetime.strptime(start_date_val, "%Y-%m-%d").date() + timedelta(days=plan_duration_days -1)).strftime("%Y-%m-%d")
+    # This end_date_val will be past_date_str(10) + 29 days = future_date_str(19)
+
+    membership_data = GroupClassMembership(
+        id=None, member_id=member_id, plan_id=plan_id,
+        start_date=start_date_val, end_date=end_date_val,
+        amount_paid=10.0, purchase_date=start_date_val,
+        membership_type="New", is_active=True
     )
-    start_date_past = past_date_str(60)
-    end_date_past = past_date_str(30)
-    db_manager.conn.execute(
-        "INSERT INTO group_class_memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            member_id,
-            plan_id,
-            start_date_past,
-            end_date_past,
-            10.0,
-            past_date_str(60),
-            "Renewal",
-            0,
-        ),
+    db_manager.add_group_class_membership(membership_data)
+
+    # Create another membership that is already expired and inactive
+    expired_start_date = past_date_str(60)
+    expired_end_date = past_date_str(31) # Ended 31 days ago
+    expired_membership_data = GroupClassMembership(
+        id=None, member_id=member_id, plan_id=plan_id,
+        start_date=expired_start_date, end_date=expired_end_date,
+        amount_paid=10.0, purchase_date=expired_start_date,
+        membership_type="Renewal", is_active=False # Inactive
+    )
+    db_manager.add_group_class_membership(expired_membership_data)
+
+    # Update the first GCM to end far in the future, so it's not "upcoming" for a 0-30 day window
+    # This simulates a long membership that is not due for renewal soon.
+    # However, the original test logic was "UPDATE ... SET end_date = future_date_str(60)"
+    # Let's make one that ends in 60 days, so it's outside a 0-30 day window.
+    far_future_end_date = future_date_str(60)
+    cursor.execute(
+        "UPDATE group_class_memberships SET end_date = ? WHERE member_id = ? AND plan_id = ? AND start_date = ?",
+        (far_future_end_date, member_id, plan_id, start_date_val),
     )
     db_manager.conn.commit()
-    report_data = db_manager.generate_renewal_report_data()
-    assert report_data == []
+
+    # Define renewal window for the report (e.g., next 30 days from today)
+    report_start_date = today_str()
+    report_end_date = future_date_str(30)
+    report_data = db_manager.generate_renewal_report_data(report_start_date, report_end_date)
+    assert report_data == [] # Expect empty as the active GCM ends in 60 days, and the other is inactive
 
 
 def test_generate_renewal_report_with_upcoming_renewals(db_manager: DatabaseManager):
@@ -476,60 +533,102 @@ def test_generate_renewal_report_with_upcoming_renewals(db_manager: DatabaseMana
     ).strftime("%Y-%m-%d")
     cursor.execute(
         "INSERT INTO group_class_memberships (member_id, plan_id, start_date, end_date, amount_paid, purchase_date, membership_type, is_active) VALUES (?,?,?,?,?,?,?,?)",
-        (m7_id, p2_id, start_m7, future_date_str(10), 60, start_m7, "New", 0),
+        (m7_id, p2_id, start_m7, future_date_str(10), 60, start_m7, "New", 0), # Inactive GCM
     )
     db_manager.conn.commit()
-    report_data = db_manager.generate_renewal_report_data()
+
+    # Define renewal window for the report (e.g., next 30 days from today)
+    report_start_date = today_str()
+    report_end_date = future_date_str(30)
+    report_data = db_manager.generate_renewal_report_data(report_start_date, report_end_date)
+
+    # Based on the generate_renewal_report_data logic:
+    # It selects GCMs that are active (gcm.is_active = 1) AND
+    # current date is within GCM's start/end (date('now') BETWEEN gcm.start_date AND gcm.end_date) AND
+    # GCM's end_date falls within the report_start_date and report_end_date window.
+
+    # Expected to be included:
+    # M1: end_date = future_date_str(15) -> YES (active, current, ends in window)
+    # M2: end_date = future_date_str(29) -> YES (active, current, ends in window)
+    # M3: end_date = today_str()         -> YES (active, current, ends in window)
+    # M4: end_date = future_date_str(30) -> YES (active, current, ends in window)
+
+    # Expected to be excluded:
+    # M5: end_date = future_date_str(31) -> NO (ends outside window)
+    # M6: end_date = past_date_str(5)    -> NO (not current or ends outside window, likely not active by end_date)
+    # M7: gcm.is_active = 0             -> NO (GCM itself is inactive)
+
     assert len(report_data) == 4
     report_data_sorted = sorted(report_data, key=lambda x: x["end_date"])
+
     assert report_data_sorted[0]["member_name"] == "Today Member"
-    assert (
-        report_data_sorted[0]["plan_name"] == "Renewal Plan B"
-    )  # plan_name from group_plans.name
+    assert report_data_sorted[0]["plan_name"] == "Renewal Plan B" # plan_name from group_plans.name
     assert report_data_sorted[0]["end_date"] == today_str()
     assert report_data_sorted[0]["member_phone"] == "200000003"
+
     assert report_data_sorted[1]["member_name"] == "Upcoming Member"
     assert report_data_sorted[1]["plan_name"] == "Renewal Plan A"
     assert report_data_sorted[1]["end_date"] == future_date_str(15)
+
     assert report_data_sorted[2]["member_name"] == "Soon Member"
     assert report_data_sorted[2]["plan_name"] == "Renewal Plan A"
     assert report_data_sorted[2]["end_date"] == future_date_str(29)
+
     assert report_data_sorted[3]["member_name"] == "Edge Case Member"
     assert report_data_sorted[3]["plan_name"] == "Renewal Plan B"
     assert report_data_sorted[3]["end_date"] == future_date_str(30)
 
 
-# --- PT Membership Stubs ---
-def test_add_pt_membership_stub(db_manager: DatabaseManager):
+# --- PT Membership Tests ---
+def test_add_pt_membership(db_manager: DatabaseManager):
     cursor = db_manager.conn.cursor()
     m_id = cursor.execute(
         "INSERT INTO members (name, phone, email, join_date, is_active) VALUES ('PT User', '7778889999', 'pt@example.com', ?, 1)",
         (today_str(),),
     ).lastrowid
     db_manager.conn.commit()
-    pt_id = db_manager.add_pt_membership(m_id, today_str(), 150.0, 10)
-    assert pt_id is not None
+
+    pt_data = PTMembership(
+        id=None,
+        member_id=m_id,
+        purchase_date=today_str(),
+        amount_paid=150.0,
+        sessions_total=10,
+        sessions_remaining=10 # Default to total for new
+        # notes="Initial PT package" # Removed: PTMembership model does not have 'notes'
+    )
+    created_pt_membership = db_manager.add_pt_membership(pt_data)
+    assert created_pt_membership is not None
+    assert created_pt_membership.id is not None
+    pt_id = created_pt_membership.id
+
     record = cursor.execute(
-        "SELECT member_id, sessions_total, sessions_remaining, amount_paid FROM pt_memberships WHERE id = ?",
+        "SELECT member_id, sessions_total, sessions_remaining, amount_paid FROM pt_memberships WHERE id = ?", # Removed 'notes'
         (pt_id,),
-    ).fetchone()  # Check amount_paid too
+    ).fetchone()
     assert record is not None
     assert record[0] == m_id
     assert record[1] == 10  # sessions_total
     assert record[2] == 10  # sessions_remaining
     assert record[3] == 150.0  # amount_paid
+    # assert record[4] == "Initial PT package" # Notes check already removed
 
 
-def test_add_member_null_phone(db_manager: DatabaseManager):
-    with pytest.raises(sqlite3.IntegrityError):
-        db_manager.add_member(
-            name="Test Null Phone", phone=None, email="null_phone@example.com"
-        )
+def test_add_member_null_phone_violates_constraint(db_manager: DatabaseManager):
+    member_data = Member(
+        id=None,
+        name="Test Null Phone",
+        phone=None, # This should cause IntegrityError due to NOT NULL constraint in DB schema
+        email="null_phone@example.com",
+        join_date=today_str(),
+        is_active=True
+    )
+    # db_manager.add_member catches sqlite3.IntegrityError and returns None
+    result = db_manager.add_member(member_data)
+    assert result is None
 
 
-def test_get_all_pt_memberships_for_view(
-    db_manager: DatabaseManager,
-):  # Renamed from test_get_all_pt_memberships_stub and updated
+def test_get_all_pt_memberships_for_view(db_manager: DatabaseManager):
     cursor = db_manager.conn.cursor()
     m_id = cursor.execute(
         "INSERT INTO members (name, phone, email, join_date, is_active) VALUES ('PT User View', '7778889900', 'pt_view@example.com', ?, 1)",
@@ -537,35 +636,30 @@ def test_get_all_pt_memberships_for_view(
     ).lastrowid
     db_manager.conn.commit()
 
-    # Add sample data using the updated add_pt_membership
-    db_manager.add_pt_membership(
-        m_id, today_str(), 150.0, 10
-    )  # sessions_total=10, sessions_remaining=10 initially
-    db_manager.add_pt_membership(
-        m_id, past_date_str(5), 70.0, 5
-    )  # sessions_total=5, sessions_remaining=5 initially
+    pt_data1 = PTMembership(id=None, member_id=m_id, purchase_date=today_str(), amount_paid=150.0, sessions_total=10, sessions_remaining=10)
+    db_manager.add_pt_membership(pt_data1)
+
+    pt_data2 = PTMembership(id=None, member_id=m_id, purchase_date=past_date_str(5), amount_paid=70.0, sessions_total=5, sessions_remaining=5)
+    db_manager.add_pt_membership(pt_data2)
 
     all_pt_memberships_view = db_manager.get_all_pt_memberships_for_view()
-    assert len(all_pt_memberships_view) == 2
+    assert len(all_pt_memberships_view) == 2 # Assuming the fixture creates a clean DB for each test
 
-    # Results are ordered by purchase_date DESC, then id DESC
-    # So, the one created with today_str() should be first.
-    latest_membership = all_pt_memberships_view[0]
-    older_membership = all_pt_memberships_view[1]
+    # Results are ordered by purchase_date DESC, then id DESC by default in get_all_pt_memberships_for_view
+    latest_membership_view = all_pt_memberships_view[0]
+    older_membership_view = all_pt_memberships_view[1]
 
-    assert latest_membership.member_name == "PT User View"
-    assert latest_membership.sessions_total == 10
-    assert (
-        latest_membership.sessions_remaining == 10
-    )  # Should be equal to total as per add_pt_membership
-    assert latest_membership.purchase_date == today_str()
-    assert latest_membership.amount_paid == 150.0
+    assert latest_membership_view.member_name == "PT User View"
+    assert latest_membership_view.sessions_total == 10
+    assert latest_membership_view.sessions_remaining == 10
+    assert latest_membership_view.purchase_date == today_str()
+    assert latest_membership_view.amount_paid == 150.0
 
-    assert older_membership.member_name == "PT User View"
-    assert older_membership.sessions_total == 5
-    assert older_membership.sessions_remaining == 5  # Should be equal to total
-    assert older_membership.purchase_date == past_date_str(5)
-    assert older_membership.amount_paid == 70.0
+    assert older_membership_view.member_name == "PT User View"
+    assert older_membership_view.sessions_total == 5
+    assert older_membership_view.sessions_remaining == 5
+    assert older_membership_view.purchase_date == past_date_str(5)
+    assert older_membership_view.amount_paid == 70.0
 
 
 # Test for simplified MemberView
@@ -720,34 +814,31 @@ def test_get_all_group_class_memberships_for_view(db_manager: DatabaseManager):
     assert alpha_membership_view.end_date == gcm1_end
     assert alpha_membership_view.purchase_date == gcm1_purchase
     assert alpha_membership_view.membership_type == "New"
-    assert alpha_membership_view.is_active is True
+    assert alpha_membership_view.is_active is True # This is gcm.is_active
     assert alpha_membership_view.amount_paid == 95.0
 
 
-def test_delete_pt_membership_stub(
-    db_manager: DatabaseManager,
-):  # Kept stub name, but updated call
+def test_delete_pt_membership(db_manager: DatabaseManager):
     cursor = db_manager.conn.cursor()
     m_id = cursor.execute(
         "INSERT INTO members (name, phone, email, join_date, is_active) VALUES ('PT User 3', '7778889901', 'pt3@example.com', ?, 1)",
         (today_str(),),
     ).lastrowid
     db_manager.conn.commit()
-    pt_id = db_manager.add_pt_membership(m_id, today_str(), 150.0, 10)
-    assert pt_id is not None
 
-    deleted = db_manager.delete_pt_membership(pt_id)
+    pt_data = PTMembership(id=None, member_id=m_id, purchase_date=today_str(), amount_paid=150.0, sessions_total=10, sessions_remaining=10)
+    created_pt_membership = db_manager.add_pt_membership(pt_data)
+    assert created_pt_membership is not None
+    assert created_pt_membership.id is not None
+    pt_id_to_delete = created_pt_membership.id
+
+    deleted = db_manager.delete_pt_membership(pt_id_to_delete)
     assert deleted is True
 
     record = cursor.execute(
-        "SELECT * FROM pt_memberships WHERE id = ?", (pt_id,)
+        "SELECT * FROM pt_memberships WHERE id = ?", (pt_id_to_delete,)
     ).fetchone()
     assert record is None
 
     not_deleted = db_manager.delete_pt_membership(9999)  # Non-existent ID
     assert not_deleted is False
-
-
-# TODO: Add tests for renamed plan functions (add_group_plan etc.)
-# TODO: Add tests for other member and membership functions (get_all, update status etc.)
-# TODO: Update financial report tests more thoroughly for new structure (type, item_name) and PT data. (Partially done)
