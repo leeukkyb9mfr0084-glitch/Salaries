@@ -261,7 +261,7 @@ def render_memberships_tab():
                 plan_options_for_select = {
                     plan.id: f"{plan.name} ({plan.duration_days} days, ₹{plan.default_amount or 0:.2f})"
                     for plan in all_group_plans_gc_form_data
-                    if plan.is_active
+                    if plan.status == 'Active'  # BUG: using non-existent status attribute
                 }
             except Exception as e:
                 st.error(f"Error fetching group plans for GC form: {e}")
